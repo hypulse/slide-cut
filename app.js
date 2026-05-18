@@ -46,6 +46,7 @@ let activeShapeDraft = null;
 let historyStack = [];
 let historyIndex = -1;
 let isRestoringHistory = false;
+let statusTimer = null;
 const textMeasureCanvas = document.createElement("canvas");
 const textMeasureContext = textMeasureCanvas.getContext("2d");
 let canvasViewScale = 1;
@@ -71,7 +72,14 @@ const HISTORY_LIMIT = 80;
 const IS_MAC_PLATFORM = /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent || "");
 
 function setStatus(message) {
+  window.clearTimeout(statusTimer);
   statusText.textContent = message;
+  statusText.classList.toggle("is-visible", Boolean(message));
+  if (message) {
+    statusTimer = window.setTimeout(() => {
+      statusText.classList.remove("is-visible");
+    }, 2200);
+  }
 }
 
 function clamp(value, min, max) {

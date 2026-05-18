@@ -53,10 +53,79 @@ button.danger {
   color: var(--danger);
 }
 
+.app-frame {
+  display: grid;
+  grid-template-rows: 42px minmax(0, 1fr);
+  height: 100vh;
+}
+
+.top-menu {
+  display: grid;
+  grid-template-columns: 220px minmax(0, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  overflow: hidden;
+  border-bottom: 1px solid #cfd4dd;
+  background: #ffffff;
+  padding: 0 12px 0 16px;
+}
+
+.top-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.top-actions button {
+  height: 28px;
+  border-radius: 5px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.menu-divider {
+  width: 1px;
+  height: 22px;
+  margin: 0 3px;
+  background: #d9dde5;
+}
+
 .app-shell {
   display: grid;
   grid-template-columns: 260px minmax(0, 1fr) 184px;
-  height: 100vh;
+  height: 100%;
+  min-height: 0;
+}
+
+.status-toast {
+  position: fixed;
+  right: 16px;
+  bottom: 14px;
+  z-index: 50;
+  max-width: min(520px, calc(100vw - 32px));
+  min-height: 28px;
+  border-radius: 4px;
+  padding: 7px 12px;
+  background: rgba(12, 15, 20, 0.92);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(6px);
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease;
+  white-space: nowrap;
+}
+
+.status-toast.is-visible {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .toolbar {
@@ -173,13 +242,14 @@ button.danger {
 }
 
 .brand h1 {
-  margin: 0 0 2px;
-  font-size: 22px;
+  margin: 0;
+  font-size: 17px;
   font-weight: 800;
+  white-space: nowrap;
 }
 
 .brand {
-  order: 0;
+  min-width: 0;
 }
 
 .selected-panel {
@@ -190,16 +260,8 @@ button.danger {
   order: 2;
 }
 
-.toolbar section[aria-labelledby="paste-title"] {
-  order: 3;
-}
-
 .toolbar section[aria-labelledby="canvas-settings-title"] {
-  order: 4;
-}
-
-.toolbar section[aria-labelledby="export-title"] {
-  order: 5;
+  order: 3;
 }
 
 .panel {
@@ -207,6 +269,11 @@ button.danger {
   gap: 10px;
   border-top: 1px solid var(--panel-border);
   padding-top: 14px;
+}
+
+.toolbar .selected-panel {
+  border-top: 0;
+  padding-top: 0;
 }
 
 .panel h2 {
@@ -323,17 +390,10 @@ input[type="color"] {
 
 .workspace {
   display: grid;
-  grid-template-rows: 44px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   min-width: 0;
-}
-
-.workspace-bar {
-  display: flex;
-  align-items: center;
-  border-bottom: 1px solid #d0d4dc;
-  padding: 0 18px;
-  color: var(--muted);
-  font-size: 13px;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .canvas-scroll {

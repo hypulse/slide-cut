@@ -6,14 +6,27 @@
     <title>Simple Slide</title>
     <link rel="preconnect" href="https://cdn.jsdelivr.net" />
     <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
-    <link rel="stylesheet" href="./styles.css?v=20260518-simple-slide" />
+    <link rel="stylesheet" href="./styles.css?v=20260518-toast" />
   </head>
   <body>
-    <main class="app-shell">
-      <aside class="toolbar" aria-label="도구">
+    <div class="app-frame">
+      <header class="top-menu" aria-label="상단 메뉴">
         <div class="brand">
           <h1>Simple Slide</h1>
         </div>
+        <div class="top-actions" aria-label="빠른 작업">
+          <button id="pasteImage" type="button">Paste Image</button>
+          <button id="addTextBox" type="button">Add Text Box</button>
+          <span class="menu-divider" aria-hidden="true"></span>
+          <button id="savePng" type="button">Save PNG</button>
+          <button id="saveProject" type="button">Save Project</button>
+          <button id="openProject" type="button">Open Project</button>
+          <input id="projectFileInput" type="file" accept=".simpleslide.json,application/json,.json" hidden />
+        </div>
+      </header>
+
+      <main class="app-shell">
+        <aside class="toolbar" aria-label="도구">
 
         <section class="panel" aria-labelledby="canvas-settings-title">
           <h2 id="canvas-settings-title">Canvas</h2>
@@ -32,12 +45,6 @@
           <button id="applyCanvas" type="button">Apply</button>
         </section>
 
-        <section class="panel" aria-labelledby="paste-title">
-          <h2 id="paste-title">Paste</h2>
-          <button id="pasteImage" type="button">Paste Image</button>
-          <button id="addTextBox" type="button">Add Text Box</button>
-        </section>
-
         <section class="panel" aria-labelledby="draw-title">
           <h2 id="draw-title">Draw</h2>
           <div id="drawTools" class="draw-tool-buttons" role="group" aria-label="그리기 도구">
@@ -54,14 +61,6 @@
             <span>Width</span>
             <input id="strokeWidth" type="number" min="1" max="32" step="1" value="4" />
           </label>
-        </section>
-
-        <section class="panel" aria-labelledby="export-title">
-          <h2 id="export-title">Export</h2>
-          <button id="savePng" type="button">Save PNG</button>
-          <button id="saveProject" type="button">Save Project</button>
-          <button id="openProject" type="button">Open Project</button>
-          <input id="projectFileInput" type="file" accept=".simpleslide.json,application/json,.json" hidden />
         </section>
 
         <section class="panel selected-panel" aria-labelledby="selected-title">
@@ -113,9 +112,6 @@
       </aside>
 
       <section class="workspace" aria-label="작업 영역">
-        <div class="workspace-bar">
-          <span id="statusText">Cmd+V로 이미지 또는 텍스트를 붙여넣을 수 있습니다.</span>
-        </div>
         <div class="canvas-scroll">
           <div id="canvas" class="canvas" tabindex="0" aria-label="편집 캔버스"></div>
         </div>
@@ -128,7 +124,8 @@
         </div>
         <div id="slideList" class="slide-list"></div>
       </aside>
-    </main>
+      </main>
+    </div>
 
     <template id="imageTemplate">
       <div class="object image-object" data-type="image">
@@ -170,6 +167,8 @@
       </div>
     </template>
 
-    <script src="./app.js?v=20260518-simple-slide" defer></script>
+    <div id="statusText" class="status-toast" role="status" aria-live="polite"></div>
+
+    <script src="./app.js?v=20260518-toast" defer></script>
   </body>
 </html>
