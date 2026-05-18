@@ -3,7 +3,19 @@ const imageTemplate = document.querySelector("#imageTemplate");
 const textTemplate = document.querySelector("#textTemplate");
 const shapeTemplate = document.querySelector("#shapeTemplate");
 const statusText = document.querySelector("#statusText");
-const nativeApi = window.simpleSlideNative || null;
+const tauriInvoke = window.__TAURI__?.core?.invoke || null;
+const nativeApi = window.simpleSlideNative || (tauriInvoke ? {
+  isNative: true,
+  platform: window.__TAURI__?.os?.platform?.() || navigator.platform || "",
+  listProjects: () => tauriInvoke("list_projects"),
+  saveProject: (payload) => tauriInvoke("save_project", { payload }),
+  loadProject: (id) => tauriInvoke("load_project", { id }),
+  renameProject: (payload) => tauriInvoke("rename_project", { payload }),
+  duplicateProject: (id) => tauriInvoke("duplicate_project", { id }),
+  deleteProject: (id) => tauriInvoke("delete_project", { id }),
+  exportProjectFile: (suggestedName, data) => tauriInvoke("export_project_file", { suggestedName, data }),
+  importProjectFile: () => tauriInvoke("import_project_file"),
+} : null);
 
 const projectNameInput = document.querySelector("#projectNameInput");
 const newProject = document.querySelector("#newProject");
@@ -1845,6 +1857,17 @@ function isRedoShortcut(event) {
 }
 
 async function saveProjectFile() {
+  if (nativeApi?.exportProjectFile) {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    const project = createProjectData();
+    const baseName = getProjectName().replace(/[\\/:*?"<>|]/g, "-") || "simple-slide";
+    const savedPath = await nativeApi.exportProjectFile(`${baseName}-${timestamp}.simpleslide.json`, project);
+    if (savedPath) {
+      setStatus("선택한 경로에 프로젝트 파일을 저장했습니다.");
+    }
+    return;
+  }
+
   if (nativeApi) {
     await saveActiveNativeProject({ showStatus: true });
     return;
@@ -1962,6 +1985,28 @@ async function openProjectFile(file) {
     setStatus(error.message || "프로젝트 파일을 열지 못했습니다.");
   } finally {
     projectFileInput.value = "";
+  }
+}
+
+async function importNativeProjectFile() {
+  if (!nativeApi?.importProjectFile) {
+    projectFileInput.click();
+    return;
+  }
+
+  try {
+    const record = await nativeApi.importProjectFile();
+    if (!record) {
+      return;
+    }
+    const project = normalizeProjectData(record.data);
+    activeProjectId = null;
+    activeProjectName = record.meta?.name || "Imported Project";
+    projectNameInput.value = activeProjectName;
+    applyProjectState(project);
+    await saveActiveNativeProject({ showStatus: true });
+  } catch (error) {
+    setStatus(error?.message || "프로젝트 파일을 가져오지 못했습니다.");
   }
 }
 
@@ -2299,7 +2344,7 @@ editSelectedText.addEventListener("click", () => {
 });
 savePng.addEventListener("click", saveCanvasAsPng);
 saveProject.addEventListener("click", saveProjectFile);
-openProject.addEventListener("click", () => projectFileInput.click());
+openProject.addEventListener("click", importNativeProjectFile);
 projectFileInput.addEventListener("change", () => {
   const [file] = projectFileInput.files;
   if (file) {
