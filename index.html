@@ -16,15 +16,21 @@
           <input id="projectNameInput" class="project-name-input" type="text" value="Untitled" aria-label="프로젝트 이름" />
         </div>
         <div class="top-actions" aria-label="빠른 작업">
-          <button id="newProject" type="button">New</button>
-          <button id="projectLibraryButton" type="button">Projects</button>
+          <span class="menu-group" aria-label="프로젝트">
+            <button id="newProject" type="button">New</button>
+            <button id="projectLibraryButton" type="button">Projects</button>
+            <button id="saveProject" type="button">Save Project</button>
+            <button id="openProject" type="button">Import Project</button>
+          </span>
           <span class="menu-divider native-divider" aria-hidden="true"></span>
-          <button id="pasteImage" type="button">Paste Image</button>
-          <button id="addTextBox" type="button">Add Text Box</button>
+          <span class="menu-group" aria-label="삽입">
+            <button id="pasteImage" type="button">Paste Image</button>
+            <button id="addTextBox" type="button">Add Text Box</button>
+          </span>
           <span class="menu-divider" aria-hidden="true"></span>
-          <button id="savePng" type="button">Save PNG</button>
-          <button id="saveProject" type="button">Save Project</button>
-          <button id="openProject" type="button">Import Project</button>
+          <span class="menu-group" aria-label="내보내기">
+            <button id="savePng" type="button">Save PNG</button>
+          </span>
           <input id="projectFileInput" type="file" accept=".simpleslide.json,application/json,.json" hidden />
         </div>
       </header>
@@ -75,7 +81,10 @@
         </section>
 
         <section class="panel selected-panel" aria-labelledby="selected-title">
-          <h2 id="selected-title">Selected</h2>
+          <div class="panel-title-row">
+            <h2 id="selected-title">Selected</h2>
+            <span id="selectionSummary" class="panel-summary">None</span>
+          </div>
           <label>
             <span>X</span>
             <input id="selectedX" type="number" step="1" />
@@ -117,8 +126,17 @@
             <button type="button" data-align="middle">Middle</button>
             <button type="button" data-align="bottom">Bottom</button>
           </div>
-          <button id="editSelectedText" type="button">Edit Text</button>
-          <button id="deleteSelected" class="danger" type="button">Delete</button>
+          <div class="arrange-controls" aria-label="레이어 순서">
+            <button id="sendBackward" type="button">Backward</button>
+            <button id="bringForward" type="button">Forward</button>
+            <button id="sendToBack" type="button">Back</button>
+            <button id="bringToFront" type="button">Front</button>
+          </div>
+          <div class="selected-actions">
+            <button id="duplicateSelected" type="button">Duplicate</button>
+            <button id="editSelectedText" type="button">Edit Text</button>
+            <button id="deleteSelected" class="danger" type="button">Delete</button>
+          </div>
         </section>
       </aside>
 
@@ -130,13 +148,26 @@
 
       <aside class="slides-sidebar" aria-label="슬라이드">
         <div class="slides-header">
-          <h2>Slides</h2>
+          <div>
+            <h2>Slides</h2>
+            <span id="slideSummary" class="slide-summary">1 / 1</span>
+          </div>
           <button id="duplicateSlide" type="button">Duplicate</button>
         </div>
         <div id="slideList" class="slide-list"></div>
-        <button id="addSlide" class="add-slide-button" type="button">Add Slide</button>
+        <div class="slide-footer-actions">
+          <button id="deleteSlide" class="danger" type="button">Delete</button>
+          <button id="addSlide" class="add-slide-button" type="button">Add Slide</button>
+        </div>
       </aside>
       </main>
+
+      <footer class="status-bar" aria-label="상태">
+        <span id="saveStateText">Ready</span>
+        <span id="selectionStateText">No selection</span>
+        <span id="slideStateText">Slide 1 of 1</span>
+        <span id="canvasStateText">1280 x 720 · 100%</span>
+      </footer>
     </div>
 
     <template id="imageTemplate">

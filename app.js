@@ -48,13 +48,27 @@ const selectedR = document.querySelector("#selectedR");
 const selectedTextSize = document.querySelector("#selectedTextSize");
 const textSizeButtons = [...document.querySelectorAll("[data-text-size]")];
 const selectedTextColor = document.querySelector("#selectedTextColor");
+const duplicateSelected = document.querySelector("#duplicateSelected");
 const editSelectedText = document.querySelector("#editSelectedText");
 const deleteSelected = document.querySelector("#deleteSelected");
 const alignButtons = [...document.querySelectorAll("[data-align]")];
+const arrangeButtons = {
+  backward: document.querySelector("#sendBackward"),
+  forward: document.querySelector("#bringForward"),
+  back: document.querySelector("#sendToBack"),
+  front: document.querySelector("#bringToFront"),
+};
 const projectLibrary = document.querySelector("#projectLibrary");
 const closeProjectLibrary = document.querySelector("#closeProjectLibrary");
 const libraryNewProject = document.querySelector("#libraryNewProject");
 const projectLibraryList = document.querySelector("#projectLibraryList");
+const selectionSummary = document.querySelector("#selectionSummary");
+const slideSummary = document.querySelector("#slideSummary");
+const deleteSlide = document.querySelector("#deleteSlide");
+const saveStateText = document.querySelector("#saveStateText");
+const selectionStateText = document.querySelector("#selectionStateText");
+const slideStateText = document.querySelector("#slideStateText");
+const canvasStateText = document.querySelector("#canvasStateText");
 
 let selectedObject = null;
 let selectedObjects = [];
@@ -78,6 +92,7 @@ let nativeSaveTimer = null;
 let nativeSavePromise = null;
 let nativeSaveQueued = false;
 let isLoadingNativeProject = false;
+let lastSaveState = "Ready";
 const textMeasureCanvas = document.createElement("canvas");
 const textMeasureContext = textMeasureCanvas.getContext("2d");
 let canvasViewScale = 1;
@@ -126,6 +141,51 @@ function numberOr(value, fallback) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function getObjectLabel(object) {
+  if (!object) {
+    return "No selection";
+  }
+  if (object.dataset.type === "image") {
+    return "Image";
+  }
+  if (object.dataset.type === "text") {
+    return "Text";
+  }
+  const kind = object.dataset.shapeKind || "shape";
+  return kind.charAt(0).toUpperCase() + kind.slice(1);
+}
+
+function setSaveState(message) {
+  lastSaveState = message;
+  updateStatusBar();
+}
+
+function updateStatusBar() {
+  if (!saveStateText) {
+    return;
+  }
+
+  const selectionLabel =
+    selectedObjects.length === 0
+      ? "No selection"
+      : selectedObjects.length === 1
+        ? getObjectLabel(selectedObject)
+        : `${selectedObjects.length} selected`;
+  const slideLabel = `Slide ${Math.min(activeSlideIndex + 1, slides.length || 1)} of ${slides.length || 1}`;
+  const canvasLabel = `${roundedCanvasSize(canvas.style.width || canvas.clientWidth)} x ${roundedCanvasSize(canvas.style.height || canvas.clientHeight)} · ${Math.round(canvasViewScale * 100)}%`;
+
+  saveStateText.textContent = lastSaveState;
+  selectionStateText.textContent = selectionLabel;
+  slideStateText.textContent = slideLabel;
+  canvasStateText.textContent = canvasLabel;
+  if (selectionSummary) {
+    selectionSummary.textContent = selectedObjects.length === 0 ? "None" : selectionLabel;
+  }
+  if (slideSummary) {
+    slideSummary.textContent = `${Math.min(activeSlideIndex + 1, slides.length || 1)} / ${slides.length || 1}`;
+  }
+}
+
 function getTextPreset(elementOrKey) {
   const key = typeof elementOrKey === "string" ? elementOrKey : elementOrKey?.dataset.textSize;
   return TEXT_SIZE_PRESETS[key] || TEXT_SIZE_PRESETS.h3;
@@ -139,6 +199,7 @@ function fitCanvasToWorkspace() {
   const scaleY = availableHeight / canvas.offsetHeight;
   canvasViewScale = clamp(Math.min(scaleX, scaleY, 1), 0.05, 1);
   canvas.style.setProperty("--canvas-scale", canvasViewScale);
+  updateStatusBar();
 }
 
 function getState(element) {
@@ -257,6 +318,19 @@ function selectObject(element, options = {}) {
   syncSelectedInputs();
 }
 
+function selectObjects(elements) {
+  for (const selected of selectedObjects) {
+    stopTextEdit(selected);
+    selected.classList.remove("is-selected");
+  }
+  selectedObjects = elements.filter(Boolean);
+  selectedObject = selectedObjects[selectedObjects.length - 1] || null;
+  for (const element of selectedObjects) {
+    element.classList.add("is-selected");
+  }
+  syncSelectedInputs();
+}
+
 function syncSelectedInputs() {
   const hasSelection = selectedObjects.length > 0;
   const hasTextSelection = selectedObject?.dataset.type === "text";
@@ -267,9 +341,13 @@ function syncSelectedInputs() {
   for (const button of alignButtons) {
     button.disabled = selectedObjects.length < 2;
   }
+  for (const button of Object.values(arrangeButtons)) {
+    button.disabled = !hasSelection;
+  }
   for (const button of textSizeButtons) {
     button.disabled = !hasTextSelection;
   }
+  duplicateSelected.disabled = !hasSelection;
   selectedTextColor.disabled = !hasTextSelection;
   editSelectedText.disabled = !hasTextSelection;
   deleteSelected.disabled = !hasSelection;
@@ -282,6 +360,7 @@ function syncSelectedInputs() {
     selectedR.value = "";
     setActiveTextSizeButton("h3");
     selectedTextColor.value = defaultTextColor;
+    updateStatusBar();
     return;
   }
 
@@ -297,6 +376,7 @@ function syncSelectedInputs() {
     strokeColor.value = sanitizeColor(selectedObject.dataset.strokeColor, DEFAULT_STROKE_COLOR);
     strokeWidth.value = String(clamp(numberOr(selectedObject.dataset.strokeWidth, DEFAULT_STROKE_WIDTH), 1, 32));
   }
+  updateStatusBar();
 }
 
 function setActiveTextSizeButton(sizeKey) {
@@ -1200,6 +1280,7 @@ function addImageObjectFromData(data) {
   canvas.append(element);
   attachObjectEvents(element);
   applyState(element, data);
+  return element;
 }
 
 function addTextObjectFromData(data) {
@@ -1212,6 +1293,7 @@ function addTextObjectFromData(data) {
   attachObjectEvents(element);
   wireTextEditor(element);
   applyState(element, data);
+  return element;
 }
 
 function addShapeObjectFromData(data) {
@@ -1222,6 +1304,19 @@ function addShapeObjectFromData(data) {
   attachObjectEvents(element);
   applyState(element, data);
   return element;
+}
+
+function addObjectFromData(data) {
+  if (data.type === "image") {
+    return addImageObjectFromData(data);
+  }
+  if (data.type === "text") {
+    return addTextObjectFromData(data);
+  }
+  if (data.type === "shape") {
+    return addShapeObjectFromData(data);
+  }
+  return null;
 }
 
 function loadSlide(index, shouldSaveCurrent = true) {
@@ -1367,6 +1462,8 @@ function renderSlideList() {
     card.append(thumbButton);
     slideList.append(card);
   });
+  deleteSlide.disabled = slides.length <= 1;
+  updateStatusBar();
 }
 
 function reorderSlide(fromIndex, toIndex) {
@@ -1412,6 +1509,123 @@ function duplicateCurrentSlide() {
   slides.splice(activeSlideIndex + 1, 0, duplicatedSlide);
   loadSlide(activeSlideIndex + 1, false);
   setStatus("현재 슬라이드를 복제했습니다.");
+  recordHistory();
+}
+
+function duplicateSelectedObjects() {
+  if (selectedObjects.length === 0) {
+    return false;
+  }
+
+  const offset = 18;
+  const copies = selectedObjects
+    .map((object) => ({
+      ...serializeObject(object),
+      x: getState(object).x + offset,
+      y: getState(object).y + offset,
+    }))
+    .map(addObjectFromData)
+    .filter(Boolean);
+
+  if (copies.length === 0) {
+    return false;
+  }
+
+  selectObjects(copies);
+  renderSlideList();
+  setStatus(`${copies.length}개 오브젝트를 복제했습니다.`);
+  recordHistory();
+  return true;
+}
+
+function orderedSelectedObjects() {
+  const selectedSet = new Set(selectedObjects);
+  return [...canvas.querySelectorAll(".object")].filter((object) => selectedSet.has(object));
+}
+
+function moveSelectedLayer(mode) {
+  const ordered = orderedSelectedObjects();
+  if (ordered.length === 0) {
+    return;
+  }
+  const selectedSet = new Set(ordered);
+
+  if (mode === "front") {
+    canvas.append(...ordered);
+  } else if (mode === "back") {
+    canvas.prepend(...ordered);
+  } else if (mode === "forward") {
+    for (const object of [...ordered].reverse()) {
+      let next = object.nextElementSibling;
+      while (next && selectedSet.has(next)) {
+        next = next.nextElementSibling;
+      }
+      if (next) {
+        next.after(object);
+      }
+    }
+  } else if (mode === "backward") {
+    for (const object of ordered) {
+      let previous = object.previousElementSibling;
+      while (previous && selectedSet.has(previous)) {
+        previous = previous.previousElementSibling;
+      }
+      if (previous) {
+        previous.before(object);
+      }
+    }
+  }
+
+  selectObjects(ordered);
+  renderSlideList();
+  setStatus("오브젝트 순서를 변경했습니다.");
+  recordHistory();
+}
+
+function nudgeSelectedObjects(deltaX, deltaY) {
+  if (selectedObjects.length === 0) {
+    return false;
+  }
+  for (const object of selectedObjects) {
+    const state = getState(object);
+    applyState(object, {
+      ...state,
+      x: state.x + deltaX,
+      y: state.y + deltaY,
+    });
+  }
+  renderSlideList();
+  recordHistory();
+  return true;
+}
+
+function deleteSelectedObjects() {
+  if (selectedObjects.length === 0) {
+    return false;
+  }
+  for (const object of selectedObjects) {
+    stopTextEdit(object, false);
+    object.remove();
+  }
+  selectedObject = null;
+  selectedObjects = [];
+  syncSelectedInputs();
+  setStatus("선택한 오브젝트를 삭제했습니다.");
+  renderSlideList();
+  recordHistory();
+  return true;
+}
+
+function deleteCurrentSlide() {
+  if (slides.length <= 1) {
+    setStatus("마지막 슬라이드는 삭제할 수 없습니다.");
+    return;
+  }
+  serializeCurrentSlide();
+  slides.splice(activeSlideIndex, 1);
+  activeSlideIndex = clamp(activeSlideIndex, 0, slides.length - 1);
+  loadSlide(activeSlideIndex, false);
+  setStatus("현재 슬라이드를 삭제했습니다.");
   recordHistory();
 }
 
@@ -1493,12 +1707,14 @@ async function saveActiveNativeProject(options = {}) {
     .then(async (meta) => {
       setActiveProjectMeta(meta);
       await refreshNativeProjectList();
+      setSaveState("Saved");
       if (options.showStatus) {
         setStatus("프로젝트를 앱 내부에 저장했습니다.");
       }
       return meta;
     })
     .catch((error) => {
+      setSaveState("Save failed");
       setStatus(error?.message || "프로젝트 저장에 실패했습니다.");
       return null;
     })
@@ -1517,6 +1733,7 @@ function scheduleNativeProjectSave() {
   if (!nativeApi || isLoadingNativeProject) {
     return;
   }
+  setSaveState("Saving...");
   window.clearTimeout(nativeSaveTimer);
   nativeSaveTimer = window.setTimeout(() => {
     saveActiveNativeProject();
@@ -1589,7 +1806,7 @@ function renderNativeProjectList() {
 
     const copyButton = document.createElement("button");
     copyButton.type = "button";
-    copyButton.textContent = "Copy";
+    copyButton.textContent = "Duplicate";
     copyButton.addEventListener("click", () => duplicateNativeProject(project.id));
 
     const deleteButton = document.createElement("button");
@@ -1741,6 +1958,7 @@ async function initializeNativeMode() {
     newProject.hidden = true;
     projectLibraryButton.hidden = true;
     nativeDivider.hidden = true;
+    setSaveState("File mode");
     return;
   }
 
@@ -1863,6 +2081,7 @@ async function saveProjectFile() {
     const baseName = getProjectName().replace(/[\\/:*?"<>|]/g, "-") || "simple-slide";
     const savedPath = await nativeApi.exportProjectFile(`${baseName}-${timestamp}.simpleslide.json`, project);
     if (savedPath) {
+      setSaveState("Exported");
       setStatus("선택한 경로에 프로젝트 파일을 저장했습니다.");
     }
     return;
@@ -1880,6 +2099,7 @@ async function saveProjectFile() {
     JSON.stringify(project, null, 2),
     "application/json"
   );
+  setSaveState("Exported");
   setStatus("프로젝트 파일로 저장했습니다.");
 }
 
@@ -2300,6 +2520,10 @@ for (const button of colorPresetButtons) {
 for (const button of drawToolButtons) {
   button.addEventListener("click", () => setDrawTool(button.dataset.drawTool));
 }
+arrangeButtons.backward.addEventListener("click", () => moveSelectedLayer("backward"));
+arrangeButtons.forward.addEventListener("click", () => moveSelectedLayer("forward"));
+arrangeButtons.back.addEventListener("click", () => moveSelectedLayer("back"));
+arrangeButtons.front.addEventListener("click", () => moveSelectedLayer("front"));
 projectNameInput.addEventListener("change", () => {
   activeProjectName = getProjectName();
   projectNameInput.value = activeProjectName;
@@ -2342,6 +2566,7 @@ addTextBox.addEventListener("click", () => {
 editSelectedText.addEventListener("click", () => {
   startTextEdit(selectedObject);
 });
+duplicateSelected.addEventListener("click", duplicateSelectedObjects);
 savePng.addEventListener("click", saveCanvasAsPng);
 saveProject.addEventListener("click", saveProjectFile);
 openProject.addEventListener("click", importNativeProjectFile);
@@ -2353,6 +2578,7 @@ projectFileInput.addEventListener("change", () => {
 });
 addSlide.addEventListener("click", addNewSlide);
 duplicateSlide.addEventListener("click", duplicateCurrentSlide);
+deleteSlide.addEventListener("click", deleteCurrentSlide);
 
 for (const input of [selectedX, selectedY, selectedW, selectedH, selectedR]) {
   input.addEventListener("input", applySelectedInputChange);
@@ -2373,19 +2599,7 @@ for (const button of alignButtons) {
 }
 
 deleteSelected.addEventListener("click", () => {
-  if (selectedObjects.length === 0) {
-    return;
-  }
-  for (const object of selectedObjects) {
-    stopTextEdit(object, false);
-    object.remove();
-  }
-  selectedObject = null;
-  selectedObjects = [];
-  syncSelectedInputs();
-  setStatus("선택한 오브젝트를 삭제했습니다.");
-  renderSlideList();
-  recordHistory();
+  deleteSelectedObjects();
 });
 
 canvas.addEventListener("pointerdown", (event) => {
@@ -2403,6 +2617,33 @@ document.addEventListener("pointerup", handlePointerEnd);
 document.addEventListener("pointercancel", handlePointerEnd);
 document.addEventListener("paste", handlePaste);
 document.addEventListener("keydown", (event) => {
+  const key = event.key.toLowerCase();
+  const isEditableTarget = isEditableShortcutTarget(event.target);
+  if (isPrimaryShortcut(event) && key === "s") {
+    event.preventDefault();
+    saveProjectFile();
+    return;
+  }
+  if (!isEditableTarget && isPrimaryShortcut(event) && key === "o") {
+    event.preventDefault();
+    importNativeProjectFile();
+    return;
+  }
+  if (!isEditableTarget && isPrimaryShortcut(event) && key === "d") {
+    event.preventDefault();
+    if (!duplicateSelectedObjects()) {
+      duplicateCurrentSlide();
+    }
+    return;
+  }
+  if (!isEditableTarget && selectedObjects.length > 0 && ["arrowleft", "arrowright", "arrowup", "arrowdown"].includes(key)) {
+    event.preventDefault();
+    const amount = event.shiftKey ? 10 : 1;
+    const deltaX = key === "arrowleft" ? -amount : key === "arrowright" ? amount : 0;
+    const deltaY = key === "arrowup" ? -amount : key === "arrowdown" ? amount : 0;
+    nudgeSelectedObjects(deltaX, deltaY);
+    return;
+  }
   if (!isEditableShortcutTarget(event.target) && isUndoShortcut(event)) {
     event.preventDefault();
     undoChange();
@@ -2425,15 +2666,7 @@ document.addEventListener("keydown", (event) => {
   }
   if ((event.key === "Delete" || event.key === "Backspace") && selectedObjects.length > 0 && !event.target.matches("input, textarea")) {
     event.preventDefault();
-    for (const object of selectedObjects) {
-      stopTextEdit(object, false);
-      object.remove();
-    }
-    selectedObject = null;
-    selectedObjects = [];
-    syncSelectedInputs();
-    renderSlideList();
-    recordHistory();
+    deleteSelectedObjects();
   }
 });
 
