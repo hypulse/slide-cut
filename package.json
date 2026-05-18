@@ -1,0 +1,36 @@
+{
+  "name": "simple-slide",
+  "version": "0.1.0",
+  "description": "A small desktop slide compositor for arranging images, text, and simple vector-like marks.",
+  "author": "seungjae",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder",
+    "build:mac": "electron-builder --mac",
+    "build:win": "electron-builder --win"
+  },
+  "devDependencies": {
+    "electron": "^37.0.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.seungjae.simpleslide",
+    "productName": "Simple Slide",
+    "files": [
+      "index.html",
+      "styles.css",
+      "app.js",
+      "main.js",
+      "preload.js",
+      "README.md"
+    ],
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.graphics-design"
+    },
+    "win": {
+      "target": "nsis"
+    }
+  }
+}

@@ -3,11 +3,17 @@ const imageTemplate = document.querySelector("#imageTemplate");
 const textTemplate = document.querySelector("#textTemplate");
 const shapeTemplate = document.querySelector("#shapeTemplate");
 const statusText = document.querySelector("#statusText");
+const nativeApi = window.simpleSlideNative || null;
 
+const projectNameInput = document.querySelector("#projectNameInput");
+const newProject = document.querySelector("#newProject");
+const projectLibraryButton = document.querySelector("#projectLibraryButton");
+const nativeDivider = document.querySelector(".native-divider");
 const canvasWidth = document.querySelector("#canvasWidth");
 const canvasHeight = document.querySelector("#canvasHeight");
 const canvasColor = document.querySelector("#canvasColor");
 const applyCanvas = document.querySelector("#applyCanvas");
+const colorPresetButtons = [...document.querySelectorAll("[data-color-preset]")];
 const pasteImage = document.querySelector("#pasteImage");
 const addTextBox = document.querySelector("#addTextBox");
 const savePng = document.querySelector("#savePng");
@@ -15,6 +21,7 @@ const saveProject = document.querySelector("#saveProject");
 const openProject = document.querySelector("#openProject");
 const projectFileInput = document.querySelector("#projectFileInput");
 const addSlide = document.querySelector("#addSlide");
+const duplicateSlide = document.querySelector("#duplicateSlide");
 const slideList = document.querySelector("#slideList");
 const drawToolButtons = [...document.querySelectorAll("[data-draw-tool]")];
 const strokeColor = document.querySelector("#strokeColor");
@@ -32,6 +39,10 @@ const selectedTextColor = document.querySelector("#selectedTextColor");
 const editSelectedText = document.querySelector("#editSelectedText");
 const deleteSelected = document.querySelector("#deleteSelected");
 const alignButtons = [...document.querySelectorAll("[data-align]")];
+const projectLibrary = document.querySelector("#projectLibrary");
+const closeProjectLibrary = document.querySelector("#closeProjectLibrary");
+const libraryNewProject = document.querySelector("#libraryNewProject");
+const projectLibraryList = document.querySelector("#projectLibraryList");
 
 let selectedObject = null;
 let selectedObjects = [];
@@ -47,6 +58,14 @@ let historyStack = [];
 let historyIndex = -1;
 let isRestoringHistory = false;
 let statusTimer = null;
+let defaultTextColor = "#111827";
+let activeProjectId = null;
+let activeProjectName = "Untitled";
+let nativeProjects = [];
+let nativeSaveTimer = null;
+let nativeSavePromise = null;
+let nativeSaveQueued = false;
+let isLoadingNativeProject = false;
 const textMeasureCanvas = document.createElement("canvas");
 const textMeasureContext = textMeasureCanvas.getContext("2d");
 let canvasViewScale = 1;
@@ -60,6 +79,10 @@ const TEXT_SIZE_PRESETS = {
   h1: { fontSize: 56, lineHeight: 70 },
 };
 const DEFAULT_TEXT_COLOR = "#111827";
+const COLOR_PRESETS = {
+  light: { canvasColor: "#ffffff", textColor: "#111827" },
+  dark: { canvasColor: "#000000", textColor: "#ffffff" },
+};
 const DEFAULT_STROKE_COLOR = "#111827";
 const DEFAULT_STROKE_WIDTH = 4;
 const SHAPE_KINDS = new Set(["line", "arrow", "pen"]);
@@ -246,7 +269,7 @@ function syncSelectedInputs() {
     selectedH.value = "";
     selectedR.value = "";
     setActiveTextSizeButton("h3");
-    selectedTextColor.value = DEFAULT_TEXT_COLOR;
+    selectedTextColor.value = defaultTextColor;
     return;
   }
 
@@ -257,7 +280,7 @@ function syncSelectedInputs() {
   selectedH.value = Math.round(state.height);
   selectedR.value = Math.round(state.rotation);
   setActiveTextSizeButton(selectedObject.dataset.textSize || "h3");
-  selectedTextColor.value = selectedObject.dataset.textColor || DEFAULT_TEXT_COLOR;
+  selectedTextColor.value = selectedObject.dataset.textColor || defaultTextColor;
   if (selectedObject.dataset.type === "shape") {
     strokeColor.value = sanitizeColor(selectedObject.dataset.strokeColor, DEFAULT_STROKE_COLOR);
     strokeWidth.value = String(clamp(numberOr(selectedObject.dataset.strokeWidth, DEFAULT_STROKE_WIDTH), 1, 32));
@@ -268,6 +291,27 @@ function setActiveTextSizeButton(sizeKey) {
   for (const button of textSizeButtons) {
     button.classList.toggle("is-active", button.dataset.textSize === sizeKey);
   }
+}
+
+function setActiveColorPresetButton(presetKey) {
+  for (const button of colorPresetButtons) {
+    button.classList.toggle("is-active", button.dataset.colorPreset === presetKey);
+  }
+}
+
+function detectColorPreset(canvasValue = canvasColor.value, textValue = defaultTextColor) {
+  const normalizedCanvas = sanitizeColor(canvasValue, "#ffffff").toLowerCase();
+  const normalizedText = sanitizeColor(textValue, DEFAULT_TEXT_COLOR).toLowerCase();
+  for (const [key, preset] of Object.entries(COLOR_PRESETS)) {
+    if (preset.canvasColor === normalizedCanvas && preset.textColor === normalizedText) {
+      return key;
+    }
+  }
+  return "";
+}
+
+function syncColorPresetButtons() {
+  setActiveColorPresetButton(detectColorPreset());
 }
 
 function attachObjectEvents(element) {
@@ -348,7 +392,7 @@ function addTextObject(text, statusMessage = "텍스트를 붙여넣었습니다
   element.dataset.id = `object-${++objectSeed}`;
   element.dataset.text = cleanText;
   element.dataset.textSize = "h3";
-  element.dataset.textColor = DEFAULT_TEXT_COLOR;
+  element.dataset.textColor = defaultTextColor;
   canvas.append(element);
   attachObjectEvents(element);
   wireTextEditor(element);
@@ -1186,6 +1230,8 @@ function loadSlide(index, shouldSaveCurrent = true) {
   canvas.style.width = `${slide.width}px`;
   canvas.style.height = `${slide.height}px`;
   canvas.style.backgroundColor = slide.color;
+  defaultTextColor = slide.color?.toLowerCase?.() === COLOR_PRESETS.dark.canvasColor ? COLOR_PRESETS.dark.textColor : DEFAULT_TEXT_COLOR;
+  syncColorPresetButtons();
 
   for (const object of slide.objects) {
     if (object.type === "image") {
@@ -1343,6 +1389,20 @@ function addNewSlide() {
   recordHistory();
 }
 
+function duplicateCurrentSlide() {
+  serializeCurrentSlide();
+  const sourceSlide = slides[activeSlideIndex];
+  if (!sourceSlide) {
+    return;
+  }
+  const duplicatedSlide = cloneProjectValue(sourceSlide);
+  duplicatedSlide.id = `slide-${++slideSeed}`;
+  slides.splice(activeSlideIndex + 1, 0, duplicatedSlide);
+  loadSlide(activeSlideIndex + 1, false);
+  setStatus("현재 슬라이드를 복제했습니다.");
+  recordHistory();
+}
+
 function downloadTextFile(filename, content, mimeType) {
   const blob = new Blob([content], { type: mimeType });
   const url = URL.createObjectURL(blob);
@@ -1362,6 +1422,325 @@ function createProjectData() {
     activeSlideIndex,
     slides,
   };
+}
+
+function getProjectName() {
+  return projectNameInput.value.trim() || "Untitled";
+}
+
+function setActiveProjectMeta(meta) {
+  activeProjectId = meta?.id || null;
+  activeProjectName = meta?.name || "Untitled";
+  projectNameInput.value = activeProjectName;
+}
+
+function createProjectThumbnailDataUrl() {
+  try {
+    const project = createProjectData();
+    const slide = project.slides[project.activeSlideIndex] || project.slides[0];
+    if (!slide) {
+      return "";
+    }
+    const preview = document.createElement("canvas");
+    renderSlidePreview(slide, preview);
+    return preview.toDataURL("image/png");
+  } catch {
+    return "";
+  }
+}
+
+async function refreshNativeProjectList() {
+  if (!nativeApi) {
+    return [];
+  }
+  nativeProjects = await nativeApi.listProjects();
+  renderNativeProjectList();
+  return nativeProjects;
+}
+
+async function saveActiveNativeProject(options = {}) {
+  if (!nativeApi || isLoadingNativeProject) {
+    return null;
+  }
+
+  window.clearTimeout(nativeSaveTimer);
+  if (nativeSavePromise) {
+    nativeSaveQueued = true;
+    return nativeSavePromise;
+  }
+
+  const payload = {
+    id: activeProjectId,
+    name: getProjectName(),
+    data: createProjectData(),
+    thumbnail: createProjectThumbnailDataUrl(),
+  };
+
+  nativeSavePromise = nativeApi
+    .saveProject(payload)
+    .then(async (meta) => {
+      setActiveProjectMeta(meta);
+      await refreshNativeProjectList();
+      if (options.showStatus) {
+        setStatus("프로젝트를 앱 내부에 저장했습니다.");
+      }
+      return meta;
+    })
+    .catch((error) => {
+      setStatus(error?.message || "프로젝트 저장에 실패했습니다.");
+      return null;
+    })
+    .finally(() => {
+      nativeSavePromise = null;
+      if (nativeSaveQueued) {
+        nativeSaveQueued = false;
+        scheduleNativeProjectSave();
+      }
+    });
+
+  return nativeSavePromise;
+}
+
+function scheduleNativeProjectSave() {
+  if (!nativeApi || isLoadingNativeProject) {
+    return;
+  }
+  window.clearTimeout(nativeSaveTimer);
+  nativeSaveTimer = window.setTimeout(() => {
+    saveActiveNativeProject();
+  }, 700);
+}
+
+function formatProjectTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  return new Intl.DateTimeFormat("ko-KR", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function renderNativeProjectList() {
+  if (!projectLibraryList) {
+    return;
+  }
+
+  projectLibraryList.replaceChildren();
+  if (nativeProjects.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "project-empty";
+    empty.textContent = "저장된 프로젝트가 없습니다.";
+    projectLibraryList.append(empty);
+    return;
+  }
+
+  for (const project of nativeProjects) {
+    const item = document.createElement("article");
+    item.className = `project-item${project.id === activeProjectId ? " is-active" : ""}`;
+
+    let thumb;
+    if (project.thumbnail) {
+      thumb = document.createElement("img");
+      thumb.src = project.thumbnail;
+      thumb.alt = "";
+    } else {
+      thumb = document.createElement("div");
+    }
+    thumb.className = "project-item-thumb";
+
+    const details = document.createElement("div");
+    details.className = "project-item-details";
+
+    const nameInput = document.createElement("input");
+    nameInput.className = "project-item-name";
+    nameInput.type = "text";
+    nameInput.value = project.name;
+    nameInput.addEventListener("change", () => renameNativeProject(project.id, nameInput.value));
+
+    const time = document.createElement("div");
+    time.className = "project-item-time";
+    time.textContent = `Updated ${formatProjectTime(project.updatedAt)}`;
+
+    details.append(nameInput, time);
+
+    const actions = document.createElement("div");
+    actions.className = "project-item-actions";
+
+    const openButton = document.createElement("button");
+    openButton.type = "button";
+    openButton.textContent = "Open";
+    openButton.addEventListener("click", () => openNativeProject(project.id));
+
+    const copyButton = document.createElement("button");
+    copyButton.type = "button";
+    copyButton.textContent = "Copy";
+    copyButton.addEventListener("click", () => duplicateNativeProject(project.id));
+
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.className = "danger";
+    deleteButton.textContent = "Delete";
+    deleteButton.addEventListener("click", () => deleteNativeProject(project.id));
+
+    actions.append(openButton, copyButton, deleteButton);
+    item.append(thumb, details, actions);
+    projectLibraryList.append(item);
+  }
+}
+
+async function showProjectLibrary() {
+  if (!nativeApi) {
+    setStatus("프로젝트 목록은 데스크톱 앱에서 사용할 수 있습니다.");
+    return;
+  }
+  await refreshNativeProjectList();
+  projectLibrary.hidden = false;
+}
+
+function hideProjectLibrary() {
+  projectLibrary.hidden = true;
+}
+
+function resetToBlankProject() {
+  slideSeed = 0;
+  objectSeed = 0;
+  activePointer = null;
+  activeShapeDraft = null;
+  selectedObject = null;
+  selectedObjects = [];
+  setDrawTool("select", { silent: true });
+  slides = [createDefaultSlide()];
+  activeSlideIndex = 0;
+  loadSlide(0, false);
+  resetHistory();
+}
+
+function applyProjectState(project) {
+  slides = project.slides;
+  activeSlideIndex = project.activeSlideIndex;
+  slideSeed = slides.length;
+  objectSeed = 0;
+  activePointer = null;
+  activeShapeDraft = null;
+  selectedObject = null;
+  selectedObjects = [];
+  setDrawTool("select", { silent: true });
+  loadSlide(activeSlideIndex, false);
+  resetHistory();
+}
+
+async function createNewNativeProject(options = {}) {
+  if (nativeApi && activeProjectId) {
+    await saveActiveNativeProject();
+  }
+  isLoadingNativeProject = true;
+  activeProjectId = null;
+  activeProjectName = "Untitled";
+  projectNameInput.value = activeProjectName;
+  resetToBlankProject();
+  isLoadingNativeProject = false;
+  await saveActiveNativeProject({ showStatus: !options.silent });
+  if (!options.silent) {
+    hideProjectLibrary();
+  }
+}
+
+async function openNativeProject(projectId, options = {}) {
+  if (!nativeApi) {
+    return;
+  }
+  if (!options.skipSave) {
+    await saveActiveNativeProject();
+  }
+  isLoadingNativeProject = true;
+  try {
+    const record = await nativeApi.loadProject(projectId);
+    const project = normalizeProjectData(record.data);
+    setActiveProjectMeta(record.meta);
+    applyProjectState(project);
+    hideProjectLibrary();
+    setStatus(`${activeProjectName} 프로젝트를 열었습니다.`);
+  } catch (error) {
+    setStatus(error?.message || "프로젝트를 열지 못했습니다.");
+  } finally {
+    isLoadingNativeProject = false;
+  }
+}
+
+async function renameNativeProject(projectId, name) {
+  if (!nativeApi) {
+    return;
+  }
+  try {
+    const meta = await nativeApi.renameProject({ id: projectId, name });
+    if (projectId === activeProjectId) {
+      setActiveProjectMeta(meta);
+    }
+    await refreshNativeProjectList();
+    setStatus("프로젝트 이름을 변경했습니다.");
+  } catch (error) {
+    setStatus(error?.message || "프로젝트 이름 변경에 실패했습니다.");
+  }
+}
+
+async function duplicateNativeProject(projectId) {
+  if (!nativeApi) {
+    return;
+  }
+  try {
+    await saveActiveNativeProject();
+    await nativeApi.duplicateProject(projectId);
+    await refreshNativeProjectList();
+    setStatus("프로젝트를 복제했습니다.");
+  } catch (error) {
+    setStatus(error?.message || "프로젝트 복제에 실패했습니다.");
+  }
+}
+
+async function deleteNativeProject(projectId) {
+  if (!nativeApi || !window.confirm("이 프로젝트를 삭제할까요?")) {
+    return;
+  }
+  try {
+    await nativeApi.deleteProject(projectId);
+    await refreshNativeProjectList();
+    if (projectId === activeProjectId) {
+      activeProjectId = null;
+      if (nativeProjects.length > 0) {
+        await openNativeProject(nativeProjects[0].id, { skipSave: true });
+        projectLibrary.hidden = false;
+      } else {
+        await createNewNativeProject({ silent: true });
+      }
+    }
+    setStatus("프로젝트를 삭제했습니다.");
+  } catch (error) {
+    setStatus(error?.message || "프로젝트 삭제에 실패했습니다.");
+  }
+}
+
+async function initializeNativeMode() {
+  if (!nativeApi) {
+    projectNameInput.hidden = true;
+    newProject.hidden = true;
+    projectLibraryButton.hidden = true;
+    nativeDivider.hidden = true;
+    return;
+  }
+
+  document.body.classList.add("is-native-app");
+  saveProject.textContent = "Save";
+  openProject.textContent = "Import";
+  await refreshNativeProjectList();
+  if (nativeProjects.length === 0) {
+    await createNewNativeProject({ silent: true });
+    return;
+  }
+  projectLibrary.hidden = false;
 }
 
 function cloneProjectValue(value) {
@@ -1407,6 +1786,7 @@ function recordHistory() {
     historyStack.shift();
   }
   historyIndex = historyStack.length - 1;
+  scheduleNativeProjectSave();
 }
 
 function applyHistorySnapshot(snapshot) {
@@ -1464,7 +1844,12 @@ function isRedoShortcut(event) {
   return IS_MAC_PLATFORM ? event.shiftKey && key === "z" : key === "y" || (event.shiftKey && key === "z");
 }
 
-function saveProjectFile() {
+async function saveProjectFile() {
+  if (nativeApi) {
+    await saveActiveNativeProject({ showStatus: true });
+    return;
+  }
+
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
   const project = createProjectData();
   downloadTextFile(
@@ -1562,13 +1947,17 @@ async function openProjectFile(file) {
     const text = await file.text();
     const parsed = JSON.parse(text);
     const project = normalizeProjectData(parsed);
-    slides = project.slides;
-    activeSlideIndex = project.activeSlideIndex;
-    slideSeed = slides.length;
-    objectSeed = 0;
-    loadSlide(activeSlideIndex, false);
-    resetHistory();
-    setStatus(`${file.name} 프로젝트를 열었습니다.`);
+    if (nativeApi) {
+      activeProjectId = null;
+      activeProjectName = file.name.replace(/\.simpleslide\.json$|\.json$/i, "") || "Imported Project";
+      projectNameInput.value = activeProjectName;
+    }
+    applyProjectState(project);
+    if (nativeApi) {
+      await saveActiveNativeProject({ showStatus: true });
+    } else {
+      setStatus(`${file.name} 프로젝트를 열었습니다.`);
+    }
   } catch (error) {
     setStatus(error.message || "프로젝트 파일을 열지 못했습니다.");
   } finally {
@@ -1679,15 +2068,42 @@ function applySelectedTextColorChange(shouldRecord = false) {
     return;
   }
 
+  defaultTextColor = selectedTextColor.value;
   selectedObject.dataset.textColor = selectedTextColor.value;
   const editor = selectedObject.querySelector(".text-editor");
   editor.style.color = selectedTextColor.value;
   renderTextObject(selectedObject);
+  syncColorPresetButtons();
   setStatus(`텍스트 색상을 ${selectedTextColor.value}로 변경했습니다.`);
   renderSlideList();
   if (shouldRecord) {
     recordHistory();
   }
+}
+
+function applyColorPreset(presetKey) {
+  const preset = COLOR_PRESETS[presetKey];
+  if (!preset) {
+    return;
+  }
+
+  canvasColor.value = preset.canvasColor;
+  canvas.style.backgroundColor = preset.canvasColor;
+  defaultTextColor = preset.textColor;
+  selectedTextColor.value = preset.textColor;
+
+  for (const object of canvas.querySelectorAll(".text-object")) {
+    object.dataset.textColor = preset.textColor;
+    const editor = object.querySelector(".text-editor");
+    editor.style.color = preset.textColor;
+    renderTextObject(object);
+  }
+
+  syncColorPresetButtons();
+  syncSelectedInputs();
+  renderSlideList();
+  recordHistory();
+  setStatus(`${preset.canvasColor === "#000000" ? "검정 배경 / 흰색 글씨" : "흰색 배경 / 검정 글씨"}로 변경했습니다.`);
 }
 
 function applySelectedShapeStyleChange(shouldRecord = false) {
@@ -1814,6 +2230,7 @@ applyCanvas.addEventListener("click", () => {
   canvas.style.width = `${width}px`;
   canvas.style.height = `${height}px`;
   canvas.style.backgroundColor = canvasColor.value;
+  syncColorPresetButtons();
   fitCanvasToWorkspace();
   setStatus(`캔버스 크기를 ${width} x ${height}로 변경했습니다.`);
   renderSlideList();
@@ -1822,16 +2239,47 @@ applyCanvas.addEventListener("click", () => {
 
 canvasColor.addEventListener("input", () => {
   canvas.style.backgroundColor = canvasColor.value;
+  syncColorPresetButtons();
 });
 canvasColor.addEventListener("change", () => {
   canvas.style.backgroundColor = canvasColor.value;
+  syncColorPresetButtons();
   renderSlideList();
   recordHistory();
 });
 
+for (const button of colorPresetButtons) {
+  button.addEventListener("click", () => applyColorPreset(button.dataset.colorPreset));
+}
+
 for (const button of drawToolButtons) {
   button.addEventListener("click", () => setDrawTool(button.dataset.drawTool));
 }
+projectNameInput.addEventListener("change", () => {
+  activeProjectName = getProjectName();
+  projectNameInput.value = activeProjectName;
+  if (nativeApi && activeProjectId) {
+    renameNativeProject(activeProjectId, activeProjectName);
+  } else {
+    scheduleNativeProjectSave();
+  }
+});
+newProject.addEventListener("click", () => {
+  if (nativeApi) {
+    createNewNativeProject();
+    return;
+  }
+  resetToBlankProject();
+  setStatus("새 프로젝트를 만들었습니다.");
+});
+projectLibraryButton.addEventListener("click", showProjectLibrary);
+closeProjectLibrary.addEventListener("click", hideProjectLibrary);
+projectLibrary.addEventListener("click", (event) => {
+  if (event.target === projectLibrary) {
+    hideProjectLibrary();
+  }
+});
+libraryNewProject.addEventListener("click", () => createNewNativeProject());
 strokeColor.addEventListener("input", () => applySelectedShapeStyleChange());
 strokeColor.addEventListener("change", () => applySelectedShapeStyleChange(true));
 strokeWidth.addEventListener("input", () => applySelectedShapeStyleChange());
@@ -1859,6 +2307,7 @@ projectFileInput.addEventListener("change", () => {
   }
 });
 addSlide.addEventListener("click", addNewSlide);
+duplicateSlide.addEventListener("click", duplicateCurrentSlide);
 
 for (const input of [selectedX, selectedY, selectedW, selectedH, selectedR]) {
   input.addEventListener("input", applySelectedInputChange);
@@ -1948,3 +2397,6 @@ setDrawTool("select", { silent: true });
 slides = [createDefaultSlide()];
 loadSlide(0, false);
 resetHistory();
+initializeNativeMode().catch((error) => {
+  setStatus(error?.message || "프로젝트 목록을 초기화하지 못했습니다.");
+});

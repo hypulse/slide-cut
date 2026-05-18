@@ -6,21 +6,25 @@
     <title>Simple Slide</title>
     <link rel="preconnect" href="https://cdn.jsdelivr.net" />
     <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
-    <link rel="stylesheet" href="./styles.css?v=20260518-toast" />
+    <link rel="stylesheet" href="./styles.css?v=20260518-theme-toggle" />
   </head>
   <body>
     <div class="app-frame">
       <header class="top-menu" aria-label="상단 메뉴">
         <div class="brand">
           <h1>Simple Slide</h1>
+          <input id="projectNameInput" class="project-name-input" type="text" value="Untitled" aria-label="프로젝트 이름" />
         </div>
         <div class="top-actions" aria-label="빠른 작업">
+          <button id="newProject" type="button">New</button>
+          <button id="projectLibraryButton" type="button">Projects</button>
+          <span class="menu-divider native-divider" aria-hidden="true"></span>
           <button id="pasteImage" type="button">Paste Image</button>
           <button id="addTextBox" type="button">Add Text Box</button>
           <span class="menu-divider" aria-hidden="true"></span>
           <button id="savePng" type="button">Save PNG</button>
           <button id="saveProject" type="button">Save Project</button>
-          <button id="openProject" type="button">Open Project</button>
+          <button id="openProject" type="button">Import Project</button>
           <input id="projectFileInput" type="file" accept=".simpleslide.json,application/json,.json" hidden />
         </div>
       </header>
@@ -41,6 +45,13 @@
           <label>
             <span>Color</span>
             <input id="canvasColor" type="color" value="#ffffff" />
+          </label>
+          <label>
+            <span>Theme</span>
+            <div id="colorPresets" class="color-preset-buttons" role="group" aria-label="색상 조합">
+              <button type="button" data-color-preset="light" class="is-active">White</button>
+              <button type="button" data-color-preset="dark">Black</button>
+            </div>
           </label>
           <button id="applyCanvas" type="button">Apply</button>
         </section>
@@ -120,6 +131,7 @@
       <aside class="slides-sidebar" aria-label="슬라이드">
         <div class="slides-header">
           <h2>Slides</h2>
+          <button id="duplicateSlide" type="button">Copy</button>
           <button id="addSlide" type="button">Add</button>
         </div>
         <div id="slideList" class="slide-list"></div>
@@ -169,6 +181,22 @@
 
     <div id="statusText" class="status-toast" role="status" aria-live="polite"></div>
 
-    <script src="./app.js?v=20260518-toast" defer></script>
+    <div id="projectLibrary" class="project-library" hidden>
+      <section class="project-library-panel" aria-labelledby="project-library-title">
+        <header class="project-library-header">
+          <div>
+            <h2 id="project-library-title">Projects</h2>
+            <p>앱 내부에 자동 저장된 Simple Slide 프로젝트</p>
+          </div>
+          <button id="closeProjectLibrary" type="button">Close</button>
+        </header>
+        <div class="project-library-actions">
+          <button id="libraryNewProject" type="button">New Project</button>
+        </div>
+        <div id="projectLibraryList" class="project-library-list"></div>
+      </section>
+    </div>
+
+    <script src="./app.js?v=20260518-theme-toggle" defer></script>
   </body>
 </html>
