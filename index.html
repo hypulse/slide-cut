@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Simple Slide</title>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
+    <link rel="stylesheet" href="./styles.css?v=20260518-simple-slide" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <aside class="toolbar" aria-label="도구">
+        <div class="brand">
+          <h1>Simple Slide</h1>
+        </div>
+
+        <section class="panel" aria-labelledby="canvas-settings-title">
+          <h2 id="canvas-settings-title">Canvas</h2>
+          <label>
+            <span>Width</span>
+            <input id="canvasWidth" type="number" min="80" max="4096" step="10" value="1280" />
+          </label>
+          <label>
+            <span>Height</span>
+            <input id="canvasHeight" type="number" min="80" max="4096" step="10" value="720" />
+          </label>
+          <label>
+            <span>Color</span>
+            <input id="canvasColor" type="color" value="#ffffff" />
+          </label>
+          <button id="applyCanvas" type="button">Apply</button>
+        </section>
+
+        <section class="panel" aria-labelledby="paste-title">
+          <h2 id="paste-title">Paste</h2>
+          <button id="pasteImage" type="button">Paste Image</button>
+          <button id="addTextBox" type="button">Add Text Box</button>
+        </section>
+
+        <section class="panel" aria-labelledby="draw-title">
+          <h2 id="draw-title">Draw</h2>
+          <div id="drawTools" class="draw-tool-buttons" role="group" aria-label="그리기 도구">
+            <button type="button" data-draw-tool="select" class="is-active">Select</button>
+            <button type="button" data-draw-tool="line">Line</button>
+            <button type="button" data-draw-tool="arrow">Arrow</button>
+            <button type="button" data-draw-tool="pen">Pen</button>
+          </div>
+          <label>
+            <span>Stroke</span>
+            <input id="strokeColor" type="color" value="#111827" />
+          </label>
+          <label>
+            <span>Width</span>
+            <input id="strokeWidth" type="number" min="1" max="32" step="1" value="4" />
+          </label>
+        </section>
+
+        <section class="panel" aria-labelledby="export-title">
+          <h2 id="export-title">Export</h2>
+          <button id="savePng" type="button">Save PNG</button>
+          <button id="saveProject" type="button">Save Project</button>
+          <button id="openProject" type="button">Open Project</button>
+          <input id="projectFileInput" type="file" accept=".simpleslide.json,application/json,.json" hidden />
+        </section>
+
+        <section class="panel selected-panel" aria-labelledby="selected-title">
+          <h2 id="selected-title">Selected</h2>
+          <label>
+            <span>X</span>
+            <input id="selectedX" type="number" step="1" />
+          </label>
+          <label>
+            <span>Y</span>
+            <input id="selectedY" type="number" step="1" />
+          </label>
+          <label>
+            <span>W</span>
+            <input id="selectedW" type="number" min="8" step="1" />
+          </label>
+          <label>
+            <span>H</span>
+            <input id="selectedH" type="number" min="8" step="1" />
+          </label>
+          <label>
+            <span>Rotate</span>
+            <input id="selectedR" type="number" step="1" />
+          </label>
+          <label>
+            <span>Size</span>
+            <div id="selectedTextSize" class="text-size-buttons" role="group" aria-label="텍스트 크기">
+              <button type="button" data-text-size="h4">H4</button>
+              <button type="button" data-text-size="h3" class="is-active">H3</button>
+              <button type="button" data-text-size="h2">H2</button>
+              <button type="button" data-text-size="h1">H1</button>
+            </div>
+          </label>
+          <label>
+            <span>Color</span>
+            <input id="selectedTextColor" type="color" value="#111827" />
+          </label>
+          <div class="align-controls" aria-label="선택 정렬">
+            <button type="button" data-align="left">Left</button>
+            <button type="button" data-align="center">Center</button>
+            <button type="button" data-align="right">Right</button>
+            <button type="button" data-align="top">Top</button>
+            <button type="button" data-align="middle">Middle</button>
+            <button type="button" data-align="bottom">Bottom</button>
+          </div>
+          <button id="editSelectedText" type="button">Edit Text</button>
+          <button id="deleteSelected" class="danger" type="button">Delete</button>
+        </section>
+      </aside>
+
+      <section class="workspace" aria-label="작업 영역">
+        <div class="workspace-bar">
+          <span id="statusText">Cmd+V로 이미지 또는 텍스트를 붙여넣을 수 있습니다.</span>
+        </div>
+        <div class="canvas-scroll">
+          <div id="canvas" class="canvas" tabindex="0" aria-label="편집 캔버스"></div>
+        </div>
+      </section>
+
+      <aside class="slides-sidebar" aria-label="슬라이드">
+        <div class="slides-header">
+          <h2>Slides</h2>
+          <button id="addSlide" type="button">Add</button>
+        </div>
+        <div id="slideList" class="slide-list"></div>
+      </aside>
+    </main>
+
+    <template id="imageTemplate">
+      <div class="object image-object" data-type="image">
+        <img alt="" draggable="false" />
+        <div class="selection-box" aria-hidden="true">
+          <span class="handle rotate" data-handle="rotate"></span>
+          <span class="handle nw" data-handle="nw"></span>
+          <span class="handle ne" data-handle="ne"></span>
+          <span class="handle sw" data-handle="sw"></span>
+          <span class="handle se" data-handle="se"></span>
+        </div>
+      </div>
+    </template>
+
+    <template id="textTemplate">
+      <div class="object text-object" data-type="text">
+        <canvas class="text-canvas" aria-hidden="true"></canvas>
+        <textarea class="text-editor" spellcheck="false" wrap="soft"></textarea>
+        <div class="selection-box" aria-hidden="true">
+          <span class="handle rotate" data-handle="rotate"></span>
+          <span class="handle nw" data-handle="nw"></span>
+          <span class="handle ne" data-handle="ne"></span>
+          <span class="handle sw" data-handle="sw"></span>
+          <span class="handle se" data-handle="se"></span>
+        </div>
+      </div>
+    </template>
+
+    <template id="shapeTemplate">
+      <div class="object shape-object" data-type="shape">
+        <svg class="shape-svg" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"></svg>
+        <div class="selection-box" aria-hidden="true">
+          <span class="handle rotate" data-handle="rotate"></span>
+          <span class="handle nw" data-handle="nw"></span>
+          <span class="handle ne" data-handle="ne"></span>
+          <span class="handle sw" data-handle="sw"></span>
+          <span class="handle se" data-handle="se"></span>
+        </div>
+      </div>
+    </template>
+
+    <script src="./app.js?v=20260518-simple-slide" defer></script>
+  </body>
+</html>
