@@ -5,8 +5,7 @@ use std::{
     path::PathBuf,
     time::{SystemTime, UNIX_EPOCH},
 };
-use tauri::{AppHandle, Manager, Runtime};
-use tauri_plugin_dialog::DialogExt;
+use tauri::{AppHandle, Manager};
 
 const PROJECTS_DIRNAME: &str = "projects";
 const PROJECT_FILE: &str = "project.json";
@@ -125,12 +124,6 @@ fn read_project_meta(app: &AppHandle, project_id: &str) -> Result<ProjectMeta, S
     Ok(meta)
 }
 
-fn project_file_filter<R: Runtime>(
-    dialog: tauri_plugin_dialog::FileDialogBuilder<R>,
-) -> tauri_plugin_dialog::FileDialogBuilder<R> {
-    dialog.add_filter("Simple Slide Project", &["json"])
-}
-
 #[tauri::command]
 fn list_projects(app: AppHandle) -> Result<Vec<ProjectMeta>, String> {
     let root = ensure_projects_root(&app)?;
@@ -225,36 +218,20 @@ fn delete_project(app: AppHandle, id: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn export_project_file(app: AppHandle, suggested_name: String, data: Value) -> Result<Option<String>, String> {
-    let filename = if suggested_name.trim().is_empty() {
-        "simple-slide.simpleslide.json".to_string()
-    } else {
-        suggested_name
-    };
-    let selected_path = project_file_filter(app.dialog().file())
-        .set_file_name(&filename)
-        .blocking_save_file();
-
-    let Some(file_path) = selected_path else {
-        return Ok(None);
-    };
-    let Some(path) = file_path.as_path() else {
+fn write_project_file(path: String, data: Value) -> Result<(), String> {
+    if path.trim().is_empty() {
         return Err("저장 경로를 읽지 못했습니다.".to_string());
-    };
-    write_json(path.to_path_buf(), &data)?;
-    Ok(Some(path.to_string_lossy().to_string()))
+    }
+    write_json(PathBuf::from(path), &data)
 }
 
 #[tauri::command]
-fn import_project_file(app: AppHandle) -> Result<Option<ProjectRecord>, String> {
-    let selected_path = project_file_filter(app.dialog().file()).blocking_pick_file();
-    let Some(file_path) = selected_path else {
-        return Ok(None);
-    };
-    let Some(path) = file_path.as_path() else {
+fn read_project_file(path: String) -> Result<ProjectRecord, String> {
+    if path.trim().is_empty() {
         return Err("파일 경로를 읽지 못했습니다.".to_string());
-    };
-    let data: Value = read_json(path.to_path_buf())?;
+    }
+    let path = PathBuf::from(path);
+    let data: Value = read_json(path.clone())?;
     let name = path
         .file_name()
         .and_then(|name| name.to_str())
@@ -269,7 +246,7 @@ fn import_project_file(app: AppHandle) -> Result<Option<ProjectRecord>, String> 
         updated_at: timestamp,
         thumbnail: String::new(),
     };
-    Ok(Some(ProjectRecord { meta, data }))
+    Ok(ProjectRecord { meta, data })
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -283,8 +260,8 @@ pub fn run() {
             rename_project,
             duplicate_project,
             delete_project,
-            export_project_file,
-            import_project_file
+            write_project_file,
+            read_project_file
         ])
         .run(tauri::generate_context!())
         .expect("error while running Simple Slide");

@@ -1,9 +1,12 @@
 const canvas = document.querySelector("#canvas");
+const slideNotes = document.querySelector("#slideNotes");
 const imageTemplate = document.querySelector("#imageTemplate");
 const textTemplate = document.querySelector("#textTemplate");
 const shapeTemplate = document.querySelector("#shapeTemplate");
 const statusText = document.querySelector("#statusText");
 const tauriInvoke = window.__TAURI__?.core?.invoke || null;
+const tauriDialog = window.__TAURI__?.dialog || null;
+const PROJECT_FILE_FILTER = [{ name: "Simple Slide Project", extensions: ["json"] }];
 const nativeApi = window.simpleSlideNative || (tauriInvoke ? {
   isNative: true,
   platform: window.__TAURI__?.os?.platform?.() || navigator.platform || "",
@@ -13,8 +16,34 @@ const nativeApi = window.simpleSlideNative || (tauriInvoke ? {
   renameProject: (payload) => tauriInvoke("rename_project", { payload }),
   duplicateProject: (id) => tauriInvoke("duplicate_project", { id }),
   deleteProject: (id) => tauriInvoke("delete_project", { id }),
-  exportProjectFile: (suggestedName, data) => tauriInvoke("export_project_file", { suggestedName, data }),
-  importProjectFile: () => tauriInvoke("import_project_file"),
+  exportProjectFile: async (suggestedName, data) => {
+    if (!tauriDialog?.save) {
+      throw new Error("Tauri 파일 저장 대화상자를 사용할 수 없습니다.");
+    }
+    const path = await tauriDialog.save({
+      defaultPath: suggestedName,
+      filters: PROJECT_FILE_FILTER,
+    });
+    if (!path) {
+      return null;
+    }
+    await tauriInvoke("write_project_file", { path, data });
+    return path;
+  },
+  importProjectFile: async () => {
+    if (!tauriDialog?.open) {
+      throw new Error("Tauri 파일 선택 대화상자를 사용할 수 없습니다.");
+    }
+    const path = await tauriDialog.open({
+      multiple: false,
+      directory: false,
+      filters: PROJECT_FILE_FILTER,
+    });
+    if (!path || Array.isArray(path)) {
+      return null;
+    }
+    return tauriInvoke("read_project_file", { path });
+  },
 } : null);
 
 const projectNameInput = document.querySelector("#projectNameInput");
@@ -1197,6 +1226,7 @@ function createDefaultSlide() {
     width: 1280,
     height: 720,
     color: "#ffffff",
+    notes: "",
     objects: [],
   };
 }
@@ -1260,6 +1290,7 @@ function serializeCurrentSlide() {
   slides[activeSlideIndex] = {
     ...slides[activeSlideIndex],
     ...getCanvasState(),
+    notes: slideNotes.value,
     objects: [...canvas.querySelectorAll(".object")].map(serializeObject),
   };
 }
@@ -1337,6 +1368,7 @@ function loadSlide(index, shouldSaveCurrent = true) {
   canvas.style.width = `${slide.width}px`;
   canvas.style.height = `${slide.height}px`;
   canvas.style.backgroundColor = slide.color;
+  slideNotes.value = typeof slide.notes === "string" ? slide.notes : "";
   defaultTextColor = slide.color?.toLowerCase?.() === COLOR_PRESETS.dark.canvasColor ? COLOR_PRESETS.dark.textColor : DEFAULT_TEXT_COLOR;
   syncColorPresetButtons();
 
@@ -2172,6 +2204,7 @@ function normalizeProjectData(data) {
     width: sanitizeNumber(slide.width, 1280, 80, 4096),
     height: sanitizeNumber(slide.height, 720, 80, 4096),
     color: sanitizeColor(slide.color),
+    notes: typeof slide.notes === "string" ? slide.notes : "",
     objects: Array.isArray(slide.objects) ? slide.objects.map(normalizeProjectObject).filter(Boolean) : [],
   }));
 
@@ -2511,6 +2544,19 @@ canvasColor.addEventListener("change", () => {
   syncColorPresetButtons();
   renderSlideList();
   recordHistory();
+});
+
+slideNotes.addEventListener("input", () => {
+  if (slides[activeSlideIndex]) {
+    slides[activeSlideIndex].notes = slideNotes.value;
+    scheduleNativeProjectSave();
+  }
+});
+slideNotes.addEventListener("change", () => {
+  if (slides[activeSlideIndex]) {
+    slides[activeSlideIndex].notes = slideNotes.value;
+    recordHistory();
+  }
 });
 
 for (const button of colorPresetButtons) {
