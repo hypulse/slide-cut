@@ -20,6 +20,7 @@ const nativeApi = window.simpleSlideNative || (tauriInvoke ? {
   renameProject: (payload) => tauriInvoke("rename_project", { payload }),
   duplicateProject: (id) => tauriInvoke("duplicate_project", { id }),
   deleteProject: (id) => tauriInvoke("delete_project", { id }),
+  importProjectAsset: (projectId, path) => tauriInvoke("import_project_asset", { projectId, path }),
   getAppSettings: () => tauriInvoke("get_app_settings"),
   getDefaultExportDir: () => tauriInvoke("get_default_export_dir"),
   saveAppSettings: (settings) => tauriInvoke("save_app_settings", { settings }),
@@ -336,6 +337,18 @@ function joinNativePath(directory, filename) {
   }
   const separator = safeDirectory.includes("\\") && !safeDirectory.includes("/") ? "\\" : "/";
   return `${safeDirectory}${separator}${filename}`;
+}
+
+function isExternalUrl(value) {
+  return /^(data:|blob:|https?:|asset:)/i.test(String(value || ""));
+}
+
+function getDisplayAssetUrl(value) {
+  const path = String(value || "");
+  if (!path || isExternalUrl(path)) {
+    return path;
+  }
+  return nativeApi?.toAssetUrl ? nativeApi.toAssetUrl(path) : path;
 }
 
 function sanitizeSlideKind(value) {
@@ -1791,7 +1804,7 @@ function loadImageForRender(src) {
     const image = new Image();
     image.onload = () => resolve(image);
     image.onerror = () => reject(new Error("이미지를 렌더링하지 못했습니다."));
-    image.src = src;
+    image.src = getDisplayAssetUrl(src);
   });
 }
 
@@ -2133,7 +2146,7 @@ function addImageObjectFromData(data) {
   const element = imageTemplate.content.firstElementChild.cloneNode(true);
   const image = element.querySelector("img");
   element.dataset.id = `object-${++objectSeed}`;
-  image.src = data.src;
+  image.src = getDisplayAssetUrl(data.src);
   image.dataset.src = data.src;
   canvas.append(element);
   attachObjectEvents(element);
@@ -2579,6 +2592,64 @@ async function refreshNativeProjectList() {
   return nativeProjects;
 }
 
+function normalizeProjectSaveRecord(result, fallbackData) {
+  if (result?.meta) {
+    return {
+      meta: result.meta,
+      data: result.data || fallbackData,
+    };
+  }
+  return {
+    meta: result,
+    data: fallbackData,
+  };
+}
+
+function applyMaterializedAssetPaths(savedData) {
+  if (!savedData || !Array.isArray(savedData.slides)) {
+    return;
+  }
+
+  let shouldRefreshActiveVideo = false;
+  let shouldRefreshSlides = false;
+  for (const [index, savedSlide] of savedData.slides.entries()) {
+    if (!slides[index]) {
+      continue;
+    }
+    const savedVideo = normalizeSlideVideo(savedSlide.video);
+    const currentVideo = normalizeSlideVideo(slides[index].video);
+    if ((savedVideo?.path || "") !== (currentVideo?.path || "")) {
+      slides[index].video = savedVideo;
+      shouldRefreshSlides = true;
+      if (index === activeSlideIndex) {
+        shouldRefreshActiveVideo = true;
+      }
+    }
+
+    if (Array.isArray(savedSlide.objects) && Array.isArray(slides[index].objects)) {
+      for (const [objectIndex, savedObject] of savedSlide.objects.entries()) {
+        const currentObject = slides[index].objects[objectIndex];
+        if (
+          savedObject?.type === "image" &&
+          currentObject?.type === "image" &&
+          typeof savedObject.src === "string" &&
+          savedObject.src !== currentObject.src
+        ) {
+          currentObject.src = savedObject.src;
+          shouldRefreshSlides = true;
+        }
+      }
+    }
+  }
+
+  if (shouldRefreshActiveVideo) {
+    updateSlideVideoView();
+  }
+  if (shouldRefreshSlides) {
+    renderSlideList();
+  }
+}
+
 async function saveActiveNativeProject(options = {}) {
   if (!nativeApi || isLoadingNativeProject) {
     return null;
@@ -2599,14 +2670,16 @@ async function saveActiveNativeProject(options = {}) {
 
   nativeSavePromise = nativeApi
     .saveProject(payload)
-    .then(async (meta) => {
-      setActiveProjectMeta(meta);
+    .then(async (result) => {
+      const record = normalizeProjectSaveRecord(result, payload.data);
+      setActiveProjectMeta(record.meta);
+      applyMaterializedAssetPaths(record.data);
       await refreshNativeProjectList();
       setSaveState("Saved");
       if (options.showStatus) {
         setStatus("프로젝트를 앱 내부에 저장했습니다.");
       }
-      return meta;
+      return record;
     })
     .catch((error) => {
       setSaveState("Save failed");
@@ -3163,17 +3236,24 @@ async function chooseVideoForCurrentSlide() {
       if (!path || !slides[activeSlideIndex]) {
         return;
       }
+      if (!activeProjectId) {
+        await saveActiveNativeProject();
+      }
+      const importedAsset =
+        activeProjectId && nativeApi.importProjectAsset
+          ? await nativeApi.importProjectAsset(activeProjectId, path)
+          : { path, name: getFileNameFromPath(path) };
       slides[activeSlideIndex].video = {
-        path,
-        name: getFileNameFromPath(path),
+        path: importedAsset.path,
+        name: importedAsset.name || getFileNameFromPath(path),
         fit: "fill",
       };
       updateSlideVideoView();
       renderSlideList();
-      setStatus("현재 슬라이드에 fill 모드 영상 소스를 연결했습니다.");
+      setStatus("현재 슬라이드에 fill 모드 영상 소스를 복사해 연결했습니다.");
       recordHistory();
     } catch (error) {
-      setStatus(error?.message || "영상 파일을 선택하지 못했습니다.");
+      setStatus(error?.message || "영상 파일을 프로젝트에 복사하지 못했습니다.");
     }
     return;
   }

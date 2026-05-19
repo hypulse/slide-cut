@@ -16,6 +16,7 @@ use tauri::{AppHandle, Emitter, Manager};
 const PROJECTS_DIRNAME: &str = "projects";
 const PROJECT_FILE: &str = "project.json";
 const META_FILE: &str = "meta.json";
+const ASSETS_DIR: &str = "assets";
 const APP_SETTINGS_FILE: &str = "settings.json";
 const DEFAULT_PROJECT_NAME: &str = "Untitled";
 const VIDEO_EXPORT_PROGRESS_EVENT: &str = "video-export-progress";
@@ -50,6 +51,13 @@ struct RenameProjectPayload {
 struct ProjectRecord {
     meta: ProjectMeta,
     data: Value,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ProjectAsset {
+    path: String,
+    name: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -305,6 +313,10 @@ fn project_dir(app: &AppHandle, project_id: &str) -> Result<PathBuf, String> {
     Ok(projects_root(app)?.join(project_id))
 }
 
+fn project_assets_dir(app: &AppHandle, project_id: &str) -> Result<PathBuf, String> {
+    Ok(project_dir(app, project_id)?.join(ASSETS_DIR))
+}
+
 fn read_json<T: for<'de> Deserialize<'de>>(path: PathBuf) -> Result<T, String> {
     let text = fs::read_to_string(path).map_err(|error| error.to_string())?;
     serde_json::from_str(&text).map_err(|error| error.to_string())
@@ -318,6 +330,146 @@ fn write_json<T: Serialize>(path: PathBuf, value: &T) -> Result<(), String> {
     let text = serde_json::to_string_pretty(value).map_err(|error| error.to_string())?;
     fs::write(&temp_path, format!("{text}\n")).map_err(|error| error.to_string())?;
     fs::rename(temp_path, path).map_err(|error| error.to_string())
+}
+
+fn is_copyable_asset_path(value: &str) -> bool {
+    let value = value.trim();
+    !value.is_empty()
+        && !value.starts_with("data:")
+        && !value.starts_with("blob:")
+        && !value.starts_with("http://")
+        && !value.starts_with("https://")
+        && !value.starts_with("asset:")
+}
+
+fn clean_asset_file_name(path: &Path) -> String {
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("asset");
+    let cleaned = file_name
+        .chars()
+        .map(|character| match character {
+            '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '-',
+            _ => character,
+        })
+        .collect::<String>()
+        .trim()
+        .trim_matches('.')
+        .to_string();
+    if cleaned.is_empty() {
+        "asset".to_string()
+    } else {
+        cleaned
+    }
+}
+
+fn asset_hash_key(source_path: &Path, metadata: &fs::Metadata) -> String {
+    let modified_millis = metadata
+        .modified()
+        .ok()
+        .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
+        .map(|duration| duration.as_millis())
+        .unwrap_or(0);
+    let key = format!(
+        "{}:{}:{}",
+        source_path.to_string_lossy(),
+        metadata.len(),
+        modified_millis
+    );
+    let hash = hex::encode(Sha256::digest(key.as_bytes()));
+    hash.chars().take(16).collect()
+}
+
+fn copy_asset_into_project(
+    app: &AppHandle,
+    project_id: &str,
+    source: &str,
+    require_existing: bool,
+) -> Result<Option<PathBuf>, String> {
+    if !is_copyable_asset_path(source) {
+        return Ok(None);
+    }
+
+    let source_path = PathBuf::from(source.trim());
+    if !source_path.is_file() {
+        if require_existing {
+            return Err(format!(
+                "첨부 파일을 찾지 못했습니다: {}",
+                source_path.display()
+            ));
+        }
+        return Ok(None);
+    }
+
+    let assets_dir = project_assets_dir(app, project_id)?;
+    fs::create_dir_all(&assets_dir).map_err(|error| error.to_string())?;
+    let assets_root = assets_dir
+        .canonicalize()
+        .unwrap_or_else(|_| assets_dir.clone());
+    if let Ok(source_root) = source_path.canonicalize() {
+        if source_root.starts_with(&assets_root) {
+            return Ok(Some(source_path));
+        }
+    }
+
+    let metadata = fs::metadata(&source_path).map_err(|error| error.to_string())?;
+    let file_name = clean_asset_file_name(&source_path);
+    let asset_name = format!("{}-{}", asset_hash_key(&source_path, &metadata), file_name);
+    let destination = assets_dir.join(asset_name);
+    if !destination.exists() {
+        fs::copy(&source_path, &destination).map_err(|error| {
+            format!(
+                "첨부 파일을 프로젝트 assets로 복사하지 못했습니다: {}",
+                error
+            )
+        })?;
+    }
+    Ok(Some(destination))
+}
+
+fn materialize_project_assets(
+    app: &AppHandle,
+    project_id: &str,
+    mut data: Value,
+) -> Result<Value, String> {
+    let Some(slides) = data.get_mut("slides").and_then(Value::as_array_mut) else {
+        return Ok(data);
+    };
+
+    for slide in slides {
+        if let Some(video) = slide.get_mut("video").and_then(Value::as_object_mut) {
+            if let Some(path_value) = video.get_mut("path") {
+                if let Some(path) = path_value.as_str() {
+                    if let Some(copied) = copy_asset_into_project(app, project_id, path, false)? {
+                        *path_value = Value::String(copied.to_string_lossy().to_string());
+                    }
+                }
+            }
+        }
+
+        if let Some(objects) = slide.get_mut("objects").and_then(Value::as_array_mut) {
+            for object in objects {
+                let is_image = object
+                    .get("type")
+                    .and_then(Value::as_str)
+                    .is_some_and(|value| value == "image");
+                if !is_image {
+                    continue;
+                }
+                if let Some(src_value) = object.get_mut("src") {
+                    if let Some(src) = src_value.as_str() {
+                        if let Some(copied) = copy_asset_into_project(app, project_id, src, false)?
+                        {
+                            *src_value = Value::String(copied.to_string_lossy().to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(data)
 }
 
 fn create_project_id(app: &AppHandle) -> Result<String, String> {
@@ -364,7 +516,7 @@ fn list_projects(app: AppHandle) -> Result<Vec<ProjectMeta>, String> {
 }
 
 #[tauri::command]
-fn save_project(app: AppHandle, payload: SaveProjectPayload) -> Result<ProjectMeta, String> {
+fn save_project(app: AppHandle, payload: SaveProjectPayload) -> Result<ProjectRecord, String> {
     ensure_projects_root(&app)?;
     let id = match payload.id.as_deref() {
         Some(id) if is_project_id(id) => id.to_string(),
@@ -386,9 +538,10 @@ fn save_project(app: AppHandle, payload: SaveProjectPayload) -> Result<ProjectMe
             .unwrap_or_default(),
     };
     let dir = project_dir(&app, &id)?;
-    write_json(dir.join(PROJECT_FILE), &payload.data)?;
+    let data = materialize_project_assets(&app, &id, payload.data)?;
+    write_json(dir.join(PROJECT_FILE), &data)?;
     write_json(dir.join(META_FILE), &meta)?;
-    Ok(meta)
+    Ok(ProjectRecord { meta, data })
 }
 
 #[tauri::command]
@@ -421,9 +574,29 @@ fn duplicate_project(app: AppHandle, id: String) -> Result<ProjectMeta, String> 
         thumbnail: source_meta.thumbnail,
     };
     let dir = project_dir(&app, &copy_id)?;
-    write_json(dir.join(PROJECT_FILE), &source_data)?;
+    let copy_data = materialize_project_assets(&app, &copy_id, source_data)?;
+    write_json(dir.join(PROJECT_FILE), &copy_data)?;
     write_json(dir.join(META_FILE), &copy_meta)?;
     Ok(copy_meta)
+}
+
+#[tauri::command]
+fn import_project_asset(
+    app: AppHandle,
+    project_id: String,
+    path: String,
+) -> Result<ProjectAsset, String> {
+    let copied = copy_asset_into_project(&app, &project_id, &path, true)?
+        .ok_or_else(|| "복사할 첨부 파일 경로가 아닙니다.".to_string())?;
+    let name = PathBuf::from(path)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("asset")
+        .to_string();
+    Ok(ProjectAsset {
+        path: copied.to_string_lossy().to_string(),
+        name,
+    })
 }
 
 #[tauri::command]
@@ -1319,6 +1492,7 @@ pub fn run() {
             rename_project,
             duplicate_project,
             delete_project,
+            import_project_asset,
             write_project_file,
             read_project_file,
             get_app_settings,
