@@ -156,7 +156,8 @@ button.danger {
   transform: translateY(0);
 }
 
-.project-library {
+.project-library,
+.app-settings {
   position: fixed;
   inset: 0;
   z-index: 80;
@@ -166,11 +167,13 @@ button.danger {
   padding: 32px;
 }
 
-.project-library[hidden] {
+.project-library[hidden],
+.app-settings[hidden] {
   display: none;
 }
 
-.project-library-panel {
+.project-library-panel,
+.app-settings-panel {
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
   gap: 14px;
@@ -184,20 +187,28 @@ button.danger {
   padding: 18px;
 }
 
-.project-library-header {
+.app-settings-panel {
+  grid-template-rows: auto auto auto auto;
+  width: min(560px, 100%);
+}
+
+.project-library-header,
+.app-settings-header {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 72px;
   align-items: start;
   gap: 12px;
 }
 
-.project-library-header h2 {
+.project-library-header h2,
+.app-settings-header h2 {
   margin: 0;
   font-size: 18px;
   font-weight: 800;
 }
 
-.project-library-header p {
+.project-library-header p,
+.app-settings-header p {
   margin: 5px 0 0;
   color: var(--muted);
   font-size: 12px;
@@ -205,11 +216,14 @@ button.danger {
 }
 
 .project-library-header button,
-.project-library-actions button {
+.project-library-actions button,
+.app-settings-header button,
+.app-settings-actions button {
   height: 32px;
 }
 
-.project-library-actions {
+.project-library-actions,
+.app-settings-actions {
   display: flex;
   justify-content: flex-end;
 }

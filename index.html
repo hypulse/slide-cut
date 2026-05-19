@@ -6,7 +6,7 @@
     <title>Simple Slide</title>
     <link rel="preconnect" href="https://cdn.jsdelivr.net" />
     <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
-    <link rel="stylesheet" href="./styles.css?v=20260519-video-export" />
+    <link rel="stylesheet" href="./styles.css?v=20260519-tts-settings" />
   </head>
   <body>
     <div class="app-frame">
@@ -19,6 +19,7 @@
           <span class="menu-group" aria-label="프로젝트">
             <button id="newProject" type="button">New</button>
             <button id="projectLibraryButton" type="button">Projects</button>
+            <button id="appSettingsButton" type="button">Settings</button>
             <button id="saveProject" type="button">Save Project</button>
             <button id="openProject" type="button">Import Project</button>
           </span>
@@ -94,8 +95,11 @@
         <section class="panel" aria-labelledby="mp4-export-title">
           <h2 id="mp4-export-title">MP4 Export</h2>
           <label>
-            <span>API Key</span>
-            <input id="ttsApiKey" type="password" autocomplete="off" placeholder="OPENAI_API_KEY" />
+            <span>Preset</span>
+            <select id="ttsPreset">
+              <option value="animeCute">여성 활발하고 귀여운 애니메이션 여캐</option>
+              <option value="animeTsundere">여성 츤데레 애니메이션 여캐</option>
+            </select>
           </label>
           <label>
             <span>Model</span>
@@ -291,6 +295,32 @@
       </section>
     </div>
 
-    <script src="./app.js?v=20260519-video-export" defer></script>
+    <div id="appSettings" class="app-settings" hidden>
+      <section class="app-settings-panel" aria-labelledby="app-settings-title">
+        <header class="app-settings-header">
+          <div>
+            <h2 id="app-settings-title">Settings</h2>
+            <p>Simple Slide 앱 전역 설정</p>
+          </div>
+          <button id="closeAppSettings" type="button">Close</button>
+        </header>
+        <label>
+          <span>OpenAI Key</span>
+          <input id="settingsOpenAiApiKey" type="password" autocomplete="off" placeholder="sk-..." />
+        </label>
+        <label>
+          <span>TTS Preset</span>
+          <select id="settingsTtsPreset">
+            <option value="animeCute">여성 활발하고 귀여운 애니메이션 여캐</option>
+            <option value="animeTsundere">여성 츤데레 애니메이션 여캐</option>
+          </select>
+        </label>
+        <div class="app-settings-actions">
+          <button id="saveAppSettings" type="button">Save Settings</button>
+        </div>
+      </section>
+    </div>
+
+    <script src="./app.js?v=20260519-tts-settings" defer></script>
   </body>
 </html>

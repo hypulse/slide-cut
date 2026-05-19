@@ -20,6 +20,8 @@ const nativeApi = window.simpleSlideNative || (tauriInvoke ? {
   renameProject: (payload) => tauriInvoke("rename_project", { payload }),
   duplicateProject: (id) => tauriInvoke("duplicate_project", { id }),
   deleteProject: (id) => tauriInvoke("delete_project", { id }),
+  getAppSettings: () => tauriInvoke("get_app_settings"),
+  saveAppSettings: (settings) => tauriInvoke("save_app_settings", { settings }),
   exportProjectFile: async (suggestedName, data) => {
     if (!tauriDialog?.save) {
       throw new Error("Tauri 파일 저장 대화상자를 사용할 수 없습니다.");
@@ -77,6 +79,7 @@ const nativeApi = window.simpleSlideNative || (tauriInvoke ? {
 const projectNameInput = document.querySelector("#projectNameInput");
 const newProject = document.querySelector("#newProject");
 const projectLibraryButton = document.querySelector("#projectLibraryButton");
+const appSettingsButton = document.querySelector("#appSettingsButton");
 const nativeDivider = document.querySelector(".native-divider");
 const canvasWidth = document.querySelector("#canvasWidth");
 const canvasHeight = document.querySelector("#canvasHeight");
@@ -100,12 +103,17 @@ const strokeWidth = document.querySelector("#strokeWidth");
 const chooseSlideVideo = document.querySelector("#chooseSlideVideo");
 const clearSlideVideo = document.querySelector("#clearSlideVideo");
 const slideVideoInfo = document.querySelector("#slideVideoInfo");
-const ttsApiKey = document.querySelector("#ttsApiKey");
+const ttsPreset = document.querySelector("#ttsPreset");
 const ttsModel = document.querySelector("#ttsModel");
 const ttsVoice = document.querySelector("#ttsVoice");
 const ttsSpeed = document.querySelector("#ttsSpeed");
 const ttsInstructions = document.querySelector("#ttsInstructions");
 const exportStatus = document.querySelector("#exportStatus");
+const appSettings = document.querySelector("#appSettings");
+const closeAppSettings = document.querySelector("#closeAppSettings");
+const saveAppSettingsButton = document.querySelector("#saveAppSettings");
+const settingsOpenAiApiKey = document.querySelector("#settingsOpenAiApiKey");
+const settingsTtsPreset = document.querySelector("#settingsTtsPreset");
 
 const selectedPanel = document.querySelector(".selected-panel");
 const selectedX = document.querySelector("#selectedX");
@@ -166,6 +174,10 @@ let textEditButtonHandledPointer = false;
 const textMeasureCanvas = document.createElement("canvas");
 const textMeasureContext = textMeasureCanvas.getContext("2d");
 let canvasViewScale = 1;
+let appSettingsState = {
+  openAiApiKey: "",
+  ttsPreset: "animeCute",
+};
 
 const TEXT_PADDING_X = 10;
 const TEXT_PADDING_Y = 8;
@@ -190,11 +202,28 @@ const PROJECT_FORMAT = "simple-slide-project";
 const PROJECT_VERSION = 2;
 const HISTORY_LIMIT = 80;
 const IS_MAC_PLATFORM = /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent || "");
+const TTS_PRESETS = {
+  animeCute: {
+    label: "여성 활발하고 귀여운 애니메이션 여캐",
+    model: "gpt-4o-mini-tts",
+    voice: "nova",
+    speed: 1.12,
+    instructions: "밝고 활발하며 귀여운 애니메이션 여성 캐릭터처럼 말해 주세요. 목소리는 에너지 있고 친근하게, 문장 끝은 산뜻하게 처리해 주세요.",
+  },
+  animeTsundere: {
+    label: "여성 츤데레 애니메이션 여캐",
+    model: "gpt-4o-mini-tts",
+    voice: "coral",
+    speed: 1.04,
+    instructions: "여성 츤데레 애니메이션 캐릭터처럼 말해 주세요. 살짝 퉁명스럽고 자신감 있게 시작하되, 중간중간 귀엽고 부끄러운 느낌이 드러나게 읽어 주세요.",
+  },
+};
 const DEFAULT_TTS_SETTINGS = {
+  preset: "animeCute",
   model: "gpt-4o-mini-tts",
-  voice: "marin",
-  speed: 1,
-  instructions: "",
+  voice: TTS_PRESETS.animeCute.voice,
+  speed: TTS_PRESETS.animeCute.speed,
+  instructions: TTS_PRESETS.animeCute.instructions,
 };
 const TTS_SETTINGS_STORAGE_KEY = "simpleSlideTtsSettings";
 const VIDEO_EXPORT_FPS = 30;
@@ -215,6 +244,14 @@ function setExportStatus(message) {
   if (exportStatus) {
     exportStatus.textContent = message;
   }
+}
+
+function normalizeTtsPresetKey(value) {
+  return TTS_PRESETS[value] ? value : DEFAULT_TTS_SETTINGS.preset;
+}
+
+function getTtsPreset(presetKey) {
+  return TTS_PRESETS[normalizeTtsPresetKey(presetKey)];
 }
 
 function clamp(value, min, max) {
@@ -2589,41 +2626,123 @@ async function saveCanvasAsPng() {
 }
 
 function loadTtsSettings() {
+  const defaultPresetKey = normalizeTtsPresetKey(appSettingsState.ttsPreset);
   try {
     const saved = JSON.parse(localStorage.getItem(TTS_SETTINGS_STORAGE_KEY) || "{}");
-    ttsModel.value = saved.model || DEFAULT_TTS_SETTINGS.model;
-    ttsVoice.value = saved.voice || DEFAULT_TTS_SETTINGS.voice;
-    ttsSpeed.value = String(clamp(numberOr(saved.speed, DEFAULT_TTS_SETTINGS.speed), 0.25, 4));
-    ttsInstructions.value = typeof saved.instructions === "string" ? saved.instructions : DEFAULT_TTS_SETTINGS.instructions;
+    const presetKey = normalizeTtsPresetKey(saved.preset || defaultPresetKey);
+    ttsPreset.value = presetKey;
+    if (saved.customized) {
+      ttsModel.value = saved.model || getTtsPreset(presetKey).model;
+      ttsVoice.value = saved.voice || getTtsPreset(presetKey).voice;
+      ttsSpeed.value = String(clamp(numberOr(saved.speed, getTtsPreset(presetKey).speed), 0.25, 4));
+      ttsInstructions.value = typeof saved.instructions === "string" ? saved.instructions : getTtsPreset(presetKey).instructions;
+    } else {
+      applyTtsPreset(presetKey, { silent: true, persist: false });
+    }
   } catch {
-    ttsModel.value = DEFAULT_TTS_SETTINGS.model;
-    ttsVoice.value = DEFAULT_TTS_SETTINGS.voice;
-    ttsSpeed.value = String(DEFAULT_TTS_SETTINGS.speed);
-    ttsInstructions.value = DEFAULT_TTS_SETTINGS.instructions;
+    applyTtsPreset(defaultPresetKey, { silent: true, persist: false });
   }
 }
 
-function saveTtsSettings() {
+function saveTtsSettings(options = {}) {
   const settings = {
+    preset: normalizeTtsPresetKey(ttsPreset.value),
     model: ttsModel.value,
     voice: ttsVoice.value,
     speed: clamp(numberOr(ttsSpeed.value, DEFAULT_TTS_SETTINGS.speed), 0.25, 4),
     instructions: ttsInstructions.value.trim(),
+    customized: Boolean(options.customized),
   };
   localStorage.setItem(TTS_SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+}
+
+function applyTtsPreset(presetKey, options = {}) {
+  const safePresetKey = normalizeTtsPresetKey(presetKey);
+  const preset = getTtsPreset(safePresetKey);
+  ttsPreset.value = safePresetKey;
+  ttsModel.value = preset.model;
+  ttsVoice.value = preset.voice;
+  ttsSpeed.value = String(preset.speed);
+  ttsInstructions.value = preset.instructions;
+  if (options.persist !== false) {
+    saveTtsSettings();
+  }
+  if (!options.silent) {
+    setStatus(`${preset.label} 프리셋을 적용했습니다. Voice는 ${preset.voice}입니다.`);
+  }
 }
 
 function getTtsSettings() {
   const speed = clamp(numberOr(ttsSpeed.value, DEFAULT_TTS_SETTINGS.speed), 0.25, 4);
   ttsSpeed.value = String(speed);
-  saveTtsSettings();
+  saveTtsSettings({ customized: true });
   return {
-    apiKey: ttsApiKey.value.trim(),
+    apiKey: appSettingsState.openAiApiKey,
+    preset: normalizeTtsPresetKey(ttsPreset.value),
     model: ttsModel.value || DEFAULT_TTS_SETTINGS.model,
     voice: ttsVoice.value || DEFAULT_TTS_SETTINGS.voice,
     speed,
     instructions: ttsInstructions.value.trim(),
   };
+}
+
+function normalizeAppSettings(value = {}) {
+  return {
+    openAiApiKey: typeof value.openAiApiKey === "string" ? value.openAiApiKey.trim() : "",
+    ttsPreset: normalizeTtsPresetKey(value.ttsPreset),
+  };
+}
+
+async function loadAppSettings() {
+  let settings = null;
+  if (nativeApi?.getAppSettings) {
+    settings = await nativeApi.getAppSettings();
+  } else {
+    try {
+      settings = JSON.parse(localStorage.getItem("simpleSlideAppSettings") || "{}");
+    } catch {
+      settings = {};
+    }
+  }
+
+  appSettingsState = normalizeAppSettings(settings);
+  settingsOpenAiApiKey.value = appSettingsState.openAiApiKey;
+  settingsTtsPreset.value = appSettingsState.ttsPreset;
+  applyTtsPreset(appSettingsState.ttsPreset, { silent: true, persist: false });
+  loadTtsSettings();
+}
+
+async function saveGlobalAppSettings() {
+  const nextSettings = normalizeAppSettings({
+    openAiApiKey: settingsOpenAiApiKey.value,
+    ttsPreset: settingsTtsPreset.value,
+  });
+
+  try {
+    if (nativeApi?.saveAppSettings) {
+      appSettingsState = normalizeAppSettings(await nativeApi.saveAppSettings(nextSettings));
+    } else {
+      localStorage.setItem("simpleSlideAppSettings", JSON.stringify(nextSettings));
+      appSettingsState = nextSettings;
+    }
+    settingsOpenAiApiKey.value = appSettingsState.openAiApiKey;
+    settingsTtsPreset.value = appSettingsState.ttsPreset;
+    applyTtsPreset(appSettingsState.ttsPreset, { silent: true });
+    setStatus("앱 전역 TTS 설정을 저장했습니다.");
+    hideAppSettings();
+  } catch (error) {
+    setStatus(error?.message || "앱 설정 저장에 실패했습니다.");
+  }
+}
+
+function showAppSettings() {
+  settingsOpenAiApiKey.value = appSettingsState.openAiApiKey;
+  settingsTtsPreset.value = appSettingsState.ttsPreset;
+  appSettings.hidden = false;
+}
+
+function hideAppSettings() {
+  appSettings.hidden = true;
 }
 
 async function exportProjectAsMp4() {
@@ -2973,6 +3092,14 @@ projectLibrary.addEventListener("click", (event) => {
     hideProjectLibrary();
   }
 });
+appSettingsButton.addEventListener("click", showAppSettings);
+closeAppSettings.addEventListener("click", hideAppSettings);
+saveAppSettingsButton.addEventListener("click", saveGlobalAppSettings);
+appSettings.addEventListener("click", (event) => {
+  if (event.target === appSettings) {
+    hideAppSettings();
+  }
+});
 libraryNewProject.addEventListener("click", () => createNewNativeProject());
 strokeColor.addEventListener("input", () => applySelectedShapeStyleChange());
 strokeColor.addEventListener("change", () => applySelectedShapeStyleChange(true));
@@ -2990,12 +3117,13 @@ videoFileInput.addEventListener("change", () => {
     openBrowserVideoFile(file);
   }
 });
+ttsPreset.addEventListener("change", () => applyTtsPreset(ttsPreset.value));
 for (const input of [ttsModel, ttsVoice, ttsSpeed, ttsInstructions]) {
-  input.addEventListener("change", saveTtsSettings);
+  input.addEventListener("change", () => saveTtsSettings({ customized: true }));
 }
 ttsSpeed.addEventListener("blur", () => {
   ttsSpeed.value = String(clamp(numberOr(ttsSpeed.value, DEFAULT_TTS_SETTINGS.speed), 0.25, 4));
-  saveTtsSettings();
+  saveTtsSettings({ customized: true });
 });
 
 pasteImage.addEventListener("click", pasteImageFromClipboard);
@@ -3124,7 +3252,10 @@ document.addEventListener("keydown", (event) => {
 });
 
 window.addEventListener("resize", fitCanvasToWorkspace);
-loadTtsSettings();
+loadAppSettings().catch((error) => {
+  setStatus(error?.message || "앱 설정을 불러오지 못했습니다.");
+  loadTtsSettings();
+});
 setDrawTool("select", { silent: true });
 slides = [createDefaultSlide()];
 loadSlide(0, false);

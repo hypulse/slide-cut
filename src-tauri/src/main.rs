@@ -13,6 +13,7 @@ use tauri::{AppHandle, Manager};
 const PROJECTS_DIRNAME: &str = "projects";
 const PROJECT_FILE: &str = "project.json";
 const META_FILE: &str = "meta.json";
+const APP_SETTINGS_FILE: &str = "settings.json";
 const DEFAULT_PROJECT_NAME: &str = "Untitled";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -44,6 +45,22 @@ struct RenameProjectPayload {
 struct ProjectRecord {
     meta: ProjectMeta,
     data: Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AppSettings {
+    open_ai_api_key: String,
+    tts_preset: String,
+}
+
+impl Default for AppSettings {
+    fn default() -> Self {
+        Self {
+            open_ai_api_key: String::new(),
+            tts_preset: "animeCute".to_string(),
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -126,10 +143,25 @@ fn projects_root(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(app_data_dir(app)?.join(PROJECTS_DIRNAME))
 }
 
+fn app_settings_path(app: &AppHandle) -> Result<PathBuf, String> {
+    Ok(app_data_dir(app)?.join(APP_SETTINGS_FILE))
+}
+
 fn ensure_projects_root(app: &AppHandle) -> Result<PathBuf, String> {
     let root = projects_root(app)?;
     fs::create_dir_all(&root).map_err(|error| error.to_string())?;
     Ok(root)
+}
+
+fn clean_app_settings(settings: AppSettings) -> AppSettings {
+    let preset = match settings.tts_preset.as_str() {
+        "animeTsundere" => "animeTsundere",
+        _ => "animeCute",
+    };
+    AppSettings {
+        open_ai_api_key: settings.open_ai_api_key.trim().to_string(),
+        tts_preset: preset.to_string(),
+    }
 }
 
 fn project_dir(app: &AppHandle, project_id: &str) -> Result<PathBuf, String> {
@@ -301,6 +333,23 @@ fn read_project_file(path: String) -> Result<ProjectRecord, String> {
     Ok(ProjectRecord { meta, data })
 }
 
+#[tauri::command]
+fn get_app_settings(app: AppHandle) -> Result<AppSettings, String> {
+    let path = app_settings_path(&app)?;
+    if !path.exists() {
+        return Ok(AppSettings::default());
+    }
+    let settings: AppSettings = read_json(path)?;
+    Ok(clean_app_settings(settings))
+}
+
+#[tauri::command]
+fn save_app_settings(app: AppHandle, settings: AppSettings) -> Result<AppSettings, String> {
+    let settings = clean_app_settings(settings);
+    write_json(app_settings_path(&app)?, &settings)?;
+    Ok(settings)
+}
+
 fn app_cache_dir(app: &AppHandle) -> Result<PathBuf, String> {
     app.path()
         .app_cache_dir()
@@ -407,7 +456,7 @@ fn tts_value(settings: &TtsSettings, notes: &str) -> Value {
         .voice
         .as_deref()
         .filter(|value| !value.trim().is_empty())
-        .unwrap_or("marin");
+        .unwrap_or("nova");
     let speed = settings.speed.unwrap_or(1.0).clamp(0.25, 4.0);
     let mut value = serde_json::json!({
         "model": model,
@@ -432,10 +481,16 @@ fn tts_cache_path(app: &AppHandle, settings: &TtsSettings, notes: &str) -> Resul
     Ok(cache_root.join(format!("{}.mp3", hex::encode(digest))))
 }
 
-fn resolve_api_key(settings: &TtsSettings) -> Result<String, String> {
+fn resolve_api_key(app: &AppHandle, settings: &TtsSettings) -> Result<String, String> {
     let direct_key = settings.api_key.as_deref().unwrap_or("").trim();
     if !direct_key.is_empty() {
         return Ok(direct_key.to_string());
+    }
+    if let Ok(app_settings) = get_app_settings(app.clone()) {
+        let saved_key = app_settings.open_ai_api_key.trim();
+        if !saved_key.is_empty() {
+            return Ok(saved_key.to_string());
+        }
     }
     env::var("OPENAI_API_KEY")
         .map(|value| value.trim().to_string())
@@ -460,7 +515,7 @@ fn generate_tts_audio(
         return Ok(cache_path);
     }
 
-    let api_key = resolve_api_key(settings)?;
+    let api_key = resolve_api_key(app, settings)?;
     let request_path = work_dir.join(format!(
         "speech-request-{}.json",
         hex::encode(Sha256::digest(notes.as_bytes()))
@@ -733,6 +788,8 @@ pub fn run() {
             delete_project,
             write_project_file,
             read_project_file,
+            get_app_settings,
+            save_app_settings,
             export_video
         ])
         .run(tauri::generate_context!())
