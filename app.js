@@ -155,7 +155,6 @@ const settingsOpenAiApiKey = document.querySelector("#settingsOpenAiApiKey");
 const settingsCanvasWidth = document.querySelector("#settingsCanvasWidth");
 const settingsCanvasHeight = document.querySelector("#settingsCanvasHeight");
 const settingsCanvasColor = document.querySelector("#settingsCanvasColor");
-const settingsTtsPreset = document.querySelector("#settingsTtsPreset");
 const settingsTtsModel = document.querySelector("#settingsTtsModel");
 const settingsTtsVoice = document.querySelector("#settingsTtsVoice");
 const settingsTtsSpeed = document.querySelector("#settingsTtsSpeed");
@@ -233,11 +232,11 @@ let projectSettingsState = {
   canvasWidth: 1280,
   canvasHeight: 720,
   canvasColor: "#ffffff",
-  ttsPreset: "animeCute",
   ttsModel: "gpt-4o-mini-tts",
   ttsVoice: "sage",
   ttsSpeed: 1.12,
-  ttsInstructions: "",
+  ttsInstructions:
+    "Read the input text naturally as written. For Korean text, keep pronunciation clear and natural. Keep the pacing conversational, warm, and not exaggerated.",
   subtitleEnabled: true,
   exportDir: "",
 };
@@ -271,30 +270,13 @@ const PROJECT_VERSION = 2;
 const HISTORY_LIMIT = 80;
 const SLIDE_DRAG_THRESHOLD = 6;
 const IS_MAC_PLATFORM = /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent || "");
-const TTS_PRESETS = {
-  animeCute: {
-    label: "여성 활발하고 귀여운 애니메이션 여캐",
-    model: "gpt-4o-mini-tts",
-    voice: "sage",
-    speed: 1.12,
-    instructions:
-      "Speak the Korean input as a cheerful young adult anime heroine. Use a bright, cute, energetic, friendly tone with lively intonation, slightly higher pitch, quick but clear pacing, and warm encouraging emotion. Read the Korean text naturally as written; do not translate it. Do not sound childish, and avoid exaggerated delivery that feels unnatural.",
-  },
-  animeTsundere: {
-    label: "여성 츤데레 애니메이션 여캐",
-    model: "gpt-4o-mini-tts",
-    voice: "coral",
-    speed: 1.06,
-    instructions:
-      "Speak the Korean input as a young adult tsundere-style anime heroine. Start slightly sharp, confident, and teasing, then let a subtle cute and embarrassed warmth show through. Keep pronunciation clear, lively, and natural in Korean. Read the Korean text as written; do not translate it. Avoid sounding childish or copying any specific actor or character.",
-  },
-};
+const DEFAULT_TTS_INSTRUCTIONS =
+  "Read the input text naturally as written. For Korean text, keep pronunciation clear and natural. Keep the pacing conversational, warm, and not exaggerated.";
 const DEFAULT_TTS_SETTINGS = {
-  preset: "animeCute",
   model: "gpt-4o-mini-tts",
-  voice: TTS_PRESETS.animeCute.voice,
-  speed: TTS_PRESETS.animeCute.speed,
-  instructions: TTS_PRESETS.animeCute.instructions,
+  voice: "sage",
+  speed: 1.12,
+  instructions: DEFAULT_TTS_INSTRUCTIONS,
 };
 const TTS_MODELS = new Set(["gpt-4o-mini-tts", "tts-1", "tts-1-hd"]);
 const TTS_VOICES = new Set(["alloy", "ash", "ballad", "cedar", "coral", "echo", "fable", "marin", "nova", "onyx", "sage", "shimmer", "verse"]);
@@ -322,36 +304,28 @@ function setStatus(message) {
   }
 }
 
-function normalizeTtsPresetKey(value) {
-  return TTS_PRESETS[value] ? value : DEFAULT_TTS_SETTINGS.preset;
-}
-
-function getTtsPreset(presetKey) {
-  return TTS_PRESETS[normalizeTtsPresetKey(presetKey)];
-}
-
 function getDefaultTextColorForCanvas(canvasValue) {
   return sanitizeColor(canvasValue, DEFAULT_CANVAS_COLOR).toLowerCase() === COLOR_PRESETS.dark.canvasColor
     ? COLOR_PRESETS.dark.textColor
     : DEFAULT_TEXT_COLOR;
 }
 
-function normalizeTtsModel(value, presetKey = DEFAULT_TTS_SETTINGS.preset) {
+function normalizeTtsModel(value) {
   const model = typeof value === "string" ? value.trim() : "";
-  return TTS_MODELS.has(model) ? model : getTtsPreset(presetKey).model;
+  return TTS_MODELS.has(model) ? model : DEFAULT_TTS_SETTINGS.model;
 }
 
-function normalizeTtsVoice(value, presetKey = DEFAULT_TTS_SETTINGS.preset) {
+function normalizeTtsVoice(value) {
   const voice = typeof value === "string" ? value.trim() : "";
-  return TTS_VOICES.has(voice) ? voice : getTtsPreset(presetKey).voice;
+  return TTS_VOICES.has(voice) ? voice : DEFAULT_TTS_SETTINGS.voice;
 }
 
-function normalizeTtsSpeed(value, presetKey = DEFAULT_TTS_SETTINGS.preset) {
-  return clamp(numberOr(value, getTtsPreset(presetKey).speed), 0.25, 4);
+function normalizeTtsSpeed(value) {
+  return clamp(numberOr(value, DEFAULT_TTS_SETTINGS.speed), 0.25, 4);
 }
 
-function normalizeTtsInstructions(value, presetKey = DEFAULT_TTS_SETTINGS.preset) {
-  return typeof value === "string" ? value.trim() : getTtsPreset(presetKey).instructions;
+function normalizeTtsInstructions(value) {
+  return typeof value === "string" ? value.trim() : DEFAULT_TTS_SETTINGS.instructions;
 }
 
 function normalizeSubtitleEnabled(value) {
@@ -1925,23 +1899,23 @@ function createDefaultSlide() {
 
 function createDefaultGitTypingData() {
   return {
-    title: "Git commit",
+    title: "Git Diff",
     repoPath: "",
     commitHash: "",
     commitLabel: "",
     filePath: "",
     commits: [],
     files: [],
-    content: "Choose Repo -> Load Commits에서 커밋과 파일을 선택한 뒤 Load Change를 누르세요.",
+    content: "저장소를 선택한 뒤 커밋과 파일을 불러오세요.",
     typingSpeed: DEFAULT_GIT_TYPING_SPEED,
   };
 }
 
 function createDefaultChatTypingData() {
   return {
-    title: "GPT conversation",
-    question: "GPT에게 질문을 입력하세요.",
-    answer: "여기에 GPT 응답을 입력하면 영상에서는 실시간으로 답변이 출력되는 것처럼 재생됩니다.",
+    title: "GPT Conversation",
+    question: "Ask a question here.",
+    answer: "Add a response here. In the exported video, it will appear as a live typing animation.",
     typingSpeed: DEFAULT_CHAT_TYPING_SPEED,
   };
 }
@@ -1993,7 +1967,7 @@ function updateSlideVideoView() {
     delete slideVideo.dataset.path;
     slideVideo.load();
     slideVideo.hidden = true;
-    slideVideoInfo.textContent = "No video";
+    slideVideoInfo.textContent = "No video selected";
     clearSlideVideo.disabled = true;
     return;
   }
@@ -3417,7 +3391,7 @@ async function chooseVideoForCurrentSlide() {
       };
       updateSlideVideoView();
       renderSlideList();
-      setStatus("현재 슬라이드에 fill 모드 영상 소스를 복사해 연결했습니다.");
+      setStatus("배경 영상을 프로젝트에 복사해 연결했습니다.");
       recordHistory();
     } catch (error) {
       setStatus(error?.message || "영상 파일을 프로젝트에 복사하지 못했습니다.");
@@ -3435,7 +3409,7 @@ function clearVideoForCurrentSlide() {
   slides[activeSlideIndex].video = null;
   updateSlideVideoView();
   renderSlideList();
-  setStatus("현재 슬라이드의 영상 소스를 제거했습니다.");
+  setStatus("배경 영상을 제거했습니다.");
   recordHistory();
 }
 
@@ -3451,7 +3425,7 @@ function openBrowserVideoFile(file) {
   };
   updateSlideVideoView();
   renderSlideList();
-  setStatus("브라우저 임시 영상 소스를 연결했습니다.");
+  setStatus("임시 배경 영상을 연결했습니다.");
   recordHistory();
   videoFileInput.value = "";
 }
@@ -3501,26 +3475,12 @@ async function saveCanvasAsPng() {
   link.download = `simple-slide-${timestamp}.png`;
   link.href = exportCanvas.toDataURL("image/png");
   link.click();
-  setStatus("PNG 파일로 저장했습니다.");
-}
-
-function applyTtsPreset(presetKey, options = {}) {
-  const safePresetKey = normalizeTtsPresetKey(presetKey);
-  const preset = getTtsPreset(safePresetKey);
-  settingsTtsPreset.value = safePresetKey;
-  settingsTtsModel.value = preset.model;
-  settingsTtsVoice.value = preset.voice;
-  settingsTtsSpeed.value = String(preset.speed);
-  settingsTtsInstructions.value = preset.instructions;
-  if (!options.silent) {
-    setStatus(`${preset.label} 프리셋을 적용했습니다. Voice는 ${preset.voice}입니다.`);
-  }
+  setStatus("PNG를 내보냈습니다.");
 }
 
 function getTtsSettings() {
   return {
     apiKey: appSettingsState.openAiApiKey,
-    preset: projectSettingsState.ttsPreset,
     model: projectSettingsState.ttsModel,
     voice: projectSettingsState.ttsVoice,
     speed: projectSettingsState.ttsSpeed,
@@ -3535,16 +3495,14 @@ function normalizeAppSettings(value = {}) {
 }
 
 function normalizeProjectSettings(value = {}) {
-  const presetKey = normalizeTtsPresetKey(value.ttsPreset);
   return {
     canvasWidth: sanitizeNumber(value.canvasWidth, DEFAULT_CANVAS_WIDTH, 80, 4096),
     canvasHeight: sanitizeNumber(value.canvasHeight, DEFAULT_CANVAS_HEIGHT, 80, 4096),
     canvasColor: sanitizeColor(value.canvasColor, DEFAULT_CANVAS_COLOR),
-    ttsPreset: presetKey,
-    ttsModel: normalizeTtsModel(value.ttsModel, presetKey),
-    ttsVoice: normalizeTtsVoice(value.ttsVoice, presetKey),
-    ttsSpeed: normalizeTtsSpeed(value.ttsSpeed, presetKey),
-    ttsInstructions: normalizeTtsInstructions(value.ttsInstructions, presetKey),
+    ttsModel: normalizeTtsModel(value.ttsModel),
+    ttsVoice: normalizeTtsVoice(value.ttsVoice),
+    ttsSpeed: normalizeTtsSpeed(value.ttsSpeed),
+    ttsInstructions: normalizeTtsInstructions(value.ttsInstructions),
     subtitleEnabled: normalizeSubtitleEnabled(value.subtitleEnabled),
     exportDir: typeof value.exportDir === "string" && value.exportDir.trim() ? value.exportDir.trim() : defaultProjectExportDir,
   };
@@ -3555,7 +3513,6 @@ function syncSettingsControls() {
   settingsCanvasWidth.value = String(projectSettingsState.canvasWidth);
   settingsCanvasHeight.value = String(projectSettingsState.canvasHeight);
   settingsCanvasColor.value = projectSettingsState.canvasColor;
-  settingsTtsPreset.value = projectSettingsState.ttsPreset;
   settingsTtsModel.value = projectSettingsState.ttsModel;
   settingsTtsVoice.value = projectSettingsState.ttsVoice;
   settingsTtsSpeed.value = String(projectSettingsState.ttsSpeed);
@@ -3570,7 +3527,6 @@ function getProjectSettingsFromControls() {
     canvasWidth: settingsCanvasWidth.value,
     canvasHeight: settingsCanvasHeight.value,
     canvasColor: settingsCanvasColor.value,
-    ttsPreset: settingsTtsPreset.value,
     ttsModel: settingsTtsModel.value,
     ttsVoice: settingsTtsVoice.value,
     ttsSpeed: settingsTtsSpeed.value,
@@ -3635,7 +3591,7 @@ async function saveSettings() {
     applyProjectCanvasSettingsToSlides({ record: true });
     scheduleNativeProjectSave();
     syncSettingsControls();
-    setStatus("설정을 저장했습니다. OpenAI Key는 앱 전역, 나머지는 현재 프로젝트에 저장됩니다.");
+    setStatus("설정을 저장했습니다. OpenAI API Key는 앱 전역, 나머지는 현재 프로젝트에 저장됩니다.");
     hideAppSettings();
   } catch (error) {
     setStatus(error?.message || "설정 저장에 실패했습니다.");
@@ -3653,24 +3609,24 @@ function hideAppSettings() {
 
 async function chooseProjectExportDirectory() {
   if (!nativeApi?.selectDirectory) {
-    setStatus("Export 폴더 지정은 Tauri 앱에서 사용할 수 있습니다.");
+    setStatus("내보내기 폴더 지정은 Tauri 앱에서 사용할 수 있습니다.");
     return;
   }
   try {
     const path = await nativeApi.selectDirectory();
     if (path) {
       settingsExportDir.value = path;
-      setStatus("MP4 export 폴더를 선택했습니다. Save Settings로 저장하세요.");
+      setStatus("영상 내보내기 폴더를 선택했습니다. 설정을 저장하면 적용됩니다.");
     }
   } catch (error) {
-    setStatus(error?.message || "MP4 export 폴더를 선택하지 못했습니다.");
+    setStatus(error?.message || "영상 내보내기 폴더를 선택하지 못했습니다.");
   }
 }
 
 async function resetProjectExportDirectory() {
   try {
     settingsExportDir.value = defaultProjectExportDir;
-    setStatus("MP4 export 폴더를 Downloads로 되돌렸습니다. Save Settings로 저장하세요.");
+    setStatus("영상 내보내기 폴더를 Downloads로 되돌렸습니다. 설정을 저장하면 적용됩니다.");
   } catch (error) {
     setStatus(error?.message || "기본 Downloads 폴더를 읽지 못했습니다.");
   }
@@ -3735,7 +3691,7 @@ async function chooseGitRepositoryForSlide() {
       filePath: "",
       commits: [],
       files: [],
-      content: "Load Commits를 눌러 이 저장소의 커밋 기록을 불러오세요.",
+      content: "저장소의 커밋 기록을 불러오세요.",
     };
   }, { record: true });
   syncDynamicSlidePanel();
@@ -3836,7 +3792,7 @@ async function loadGitFilesForSlide(options = {}) {
         content:
           options.clearContent || !current.content
             ? selectedFilePath
-              ? "Load Change를 눌러 선택한 파일의 변경 내용을 불러오세요."
+              ? "Load Diff를 눌러 선택한 파일의 변경 내용을 불러오세요."
               : "이 커밋에서 변경된 파일을 찾지 못했습니다."
             : current.content,
       };
@@ -3875,7 +3831,7 @@ async function loadGitFileChangeForSlide() {
         commitHash: result.commitHash || commitHash,
         commitLabel: current.commitLabel || result.commitHash || commitHash,
         filePath: result.filePath || filePath,
-        title: result.title || "Git commit",
+        title: result.title || "Git Diff",
         content: result.content || "",
       };
     }, { record: true });
@@ -3900,7 +3856,7 @@ function setExportModalProgress(phase, message, current = 0, total = 1) {
 
 function throwIfExportCancelled() {
   if (activeExportJob?.cancelled) {
-    throw new Error("MP4 추출을 취소했습니다.");
+    throw new Error("영상 내보내기를 취소했습니다.");
   }
 }
 
@@ -3913,7 +3869,7 @@ async function beginExportJob(exportId) {
   cancelExport.disabled = false;
   document.body.classList.add("is-exporting");
   exportModal.hidden = false;
-  setExportModalProgress("Preparing", "Export 준비 중입니다.", 0, 1);
+  setExportModalProgress("Preparing", "Preparing export...", 0, 1);
 
   if (nativeApi?.listenVideoExportProgress) {
     try {
@@ -3923,7 +3879,7 @@ async function beginExportJob(exportId) {
         }
         setExportModalProgress(
           progress.phase || "Exporting",
-          progress.message || "MP4를 생성하고 있습니다.",
+          progress.message || "영상 파일을 생성하고 있습니다.",
           progress.current,
           progress.total
         );
@@ -3954,7 +3910,7 @@ async function cancelActiveExportJob() {
   }
   activeExportJob.cancelled = true;
   cancelExport.disabled = true;
-  setExportModalProgress("Cancelling", "MP4 추출을 취소하는 중입니다.", 1, 1);
+  setExportModalProgress("Cancelling", "영상 내보내기를 취소하는 중입니다.", 1, 1);
   if (nativeApi?.cancelVideoExport) {
     try {
       await nativeApi.cancelVideoExport(activeExportJob.id);
@@ -3966,7 +3922,7 @@ async function cancelActiveExportJob() {
 
 async function exportProjectAsMp4() {
   if (!nativeApi?.exportVideo || !nativeApi?.selectMp4Output) {
-    setStatus("MP4 추출은 Tauri 데스크톱 앱에서 사용할 수 있습니다.");
+    setStatus("영상 내보내기는 Tauri 데스크톱 앱에서 사용할 수 있습니다.");
     return;
   }
 
@@ -3977,7 +3933,7 @@ async function exportProjectAsMp4() {
   try {
     outputPath = await nativeApi.selectMp4Output(`${baseName}-${timestamp}.mp4`, projectSettingsState.exportDir);
   } catch (error) {
-    setStatus(error?.message || "MP4 저장 경로를 선택하지 못했습니다.");
+    setStatus(error?.message || "영상 저장 경로를 선택하지 못했습니다.");
     return;
   }
   if (!outputPath) {
@@ -4027,7 +3983,7 @@ async function exportProjectAsMp4() {
     }
 
     throwIfExportCancelled();
-    setExportModalProgress("Encoding", "TTS와 MP4 세그먼트를 생성하고 있습니다.", 0, 1);
+    setExportModalProgress("Encoding", "음성과 영상 세그먼트를 생성하고 있습니다.", 0, 1);
     const result = await nativeApi.exportVideo({
       exportId,
       outputPath,
@@ -4036,10 +3992,10 @@ async function exportProjectAsMp4() {
       tts: getTtsSettings(),
       slides: renderedSlides,
     });
-    setExportModalProgress("Done", "MP4 추출이 완료되었습니다.", 1, 1);
-    setStatus(`MP4로 추출했습니다: ${result?.outputPath || outputPath}`);
+    setExportModalProgress("Complete", "영상 내보내기가 완료되었습니다.", 1, 1);
+    setStatus(`영상을 내보냈습니다: ${result?.outputPath || outputPath}`);
   } catch (error) {
-    const message = error?.message || String(error) || "MP4 추출에 실패했습니다.";
+    const message = error?.message || String(error) || "영상 내보내기에 실패했습니다.";
     setStatus(message);
   } finally {
     exportMp4.disabled = previousDisabled;
@@ -4142,7 +4098,7 @@ function applyColorPreset(presetKey) {
 
   settingsCanvasColor.value = preset.canvasColor;
   syncColorPresetButtons();
-  setStatus(`${preset.canvasColor === "#000000" ? "검정 배경 / 흰색 글씨" : "흰색 배경 / 검정 글씨"} 기본값을 선택했습니다. Save Settings로 저장하세요.`);
+  setStatus(`${preset.canvasColor === "#000000" ? "검정 배경 / 흰색 글씨" : "흰색 배경 / 검정 글씨"} 기본값을 선택했습니다. 설정을 저장하면 적용됩니다.`);
 }
 
 function applySelectedShapeStyleChange(shouldRecord = false) {
@@ -4233,7 +4189,6 @@ videoFileInput.addEventListener("change", () => {
     openBrowserVideoFile(file);
   }
 });
-settingsTtsPreset.addEventListener("change", () => applyTtsPreset(settingsTtsPreset.value));
 settingsCanvasWidth.addEventListener("blur", () => {
   settingsCanvasWidth.value = String(sanitizeNumber(settingsCanvasWidth.value, DEFAULT_CANVAS_WIDTH, 80, 4096));
 });
@@ -4243,7 +4198,7 @@ settingsCanvasHeight.addEventListener("blur", () => {
 settingsCanvasColor.addEventListener("input", syncColorPresetButtons);
 settingsCanvasColor.addEventListener("change", syncColorPresetButtons);
 settingsTtsSpeed.addEventListener("blur", () => {
-  settingsTtsSpeed.value = String(normalizeTtsSpeed(settingsTtsSpeed.value, settingsTtsPreset.value));
+  settingsTtsSpeed.value = String(normalizeTtsSpeed(settingsTtsSpeed.value));
 });
 
 pasteImage.addEventListener("click", pasteImageFromClipboard);
@@ -4269,7 +4224,7 @@ gitCommitSelect.addEventListener("change", () => {
 gitFileSelect.addEventListener("change", () => {
   const filePath = gitFileSelect.value;
   if (filePath) {
-    gitTypingContent.value = "Load Change를 눌러 선택한 파일의 변경 내용을 불러오세요.";
+    gitTypingContent.value = "Load Diff를 눌러 선택한 파일의 변경 내용을 불러오세요.";
   }
   syncGitTypingInputsToSlide({ record: true });
 });

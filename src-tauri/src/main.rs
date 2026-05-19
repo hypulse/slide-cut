@@ -259,7 +259,7 @@ fn is_export_cancelled(export_id: &str) -> bool {
 
 fn check_export_cancelled(export_id: &str) -> Result<(), String> {
     if is_export_cancelled(export_id) {
-        Err("MP4 추출을 취소했습니다.".to_string())
+        Err("영상 내보내기를 취소했습니다.".to_string())
     } else {
         Ok(())
     }
@@ -736,7 +736,7 @@ fn run_command(mut command: Command, label: &str, export_id: &str) -> Result<(),
         if is_export_cancelled(export_id) {
             let _ = child.kill();
             let _ = child.wait();
-            return Err("MP4 추출을 취소했습니다.".to_string());
+            return Err("영상 내보내기를 취소했습니다.".to_string());
         }
         match child.try_wait() {
             Ok(Some(_)) => break,
@@ -1242,7 +1242,7 @@ fn concat_segments(
         .arg(&filelist_path)
         .args(["-c", "copy", "-movflags", "+faststart"])
         .arg(output_path);
-    run_command(command, "MP4 세그먼트 병합", export_id)
+    run_command(command, "영상 세그먼트 병합", export_id)
 }
 
 #[tauri::command]
@@ -1258,7 +1258,7 @@ fn export_video(app: AppHandle, payload: VideoExportPayload) -> Result<VideoExpo
             return Err("추출할 슬라이드가 없습니다.".to_string());
         }
         if payload.output_path.trim().is_empty() {
-            return Err("MP4 저장 경로가 없습니다.".to_string());
+            return Err("영상 저장 경로가 없습니다.".to_string());
         }
 
         emit_export_progress(
@@ -1394,7 +1394,7 @@ fn export_video(app: AppHandle, payload: VideoExportPayload) -> Result<VideoExpo
                 &export_id,
                 "Encoding",
                 &format!(
-                    "슬라이드 {} / {} MP4 세그먼트를 생성하고 있습니다.",
+                    "슬라이드 {} / {} 영상 세그먼트를 생성하고 있습니다.",
                     index + 1,
                     prepared_slides.len()
                 ),
@@ -1441,7 +1441,7 @@ fn export_video(app: AppHandle, payload: VideoExportPayload) -> Result<VideoExpo
             &app,
             &export_id,
             "Finalizing",
-            "MP4 파일을 병합하고 있습니다.",
+            "영상 파일을 병합하고 있습니다.",
             0,
             1,
         );
@@ -1450,7 +1450,7 @@ fn export_video(app: AppHandle, payload: VideoExportPayload) -> Result<VideoExpo
             fs::create_dir_all(parent).map_err(|error| error.to_string())?;
         }
         concat_segments(&ffmpeg, &work_dir, &segments, &output_path, &export_id)?;
-        emit_export_progress(&app, &export_id, "Done", "MP4 추출이 완료되었습니다.", 1, 1);
+        emit_export_progress(&app, &export_id, "Complete", "영상 내보내기가 완료되었습니다.", 1, 1);
         Ok(VideoExportResult {
             output_path: output_path.to_string_lossy().to_string(),
             slide_count: prepared_slides.len(),

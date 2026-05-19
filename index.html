@@ -10,27 +10,27 @@
   </head>
   <body>
     <div class="app-frame">
-      <header class="top-menu" aria-label="상단 메뉴">
+      <header class="top-menu" aria-label="Main menu">
         <div class="brand">
           <h1>Simple Slide</h1>
-          <input id="projectNameInput" class="project-name-input" type="text" value="Untitled" aria-label="프로젝트 이름" />
+          <input id="projectNameInput" class="project-name-input" type="text" value="Untitled" aria-label="Project name" />
         </div>
-        <div class="top-actions" aria-label="빠른 작업">
-          <span class="menu-group" aria-label="프로젝트">
+        <div class="top-actions" aria-label="Quick actions">
+          <span class="menu-group" aria-label="Project">
             <button id="projectLibraryButton" type="button">Projects</button>
             <button id="appSettingsButton" type="button">Settings</button>
             <button id="saveProject" type="button">Export Project</button>
             <button id="openProject" type="button">Import Project</button>
           </span>
           <span class="menu-divider native-divider" aria-hidden="true"></span>
-          <span class="menu-group" aria-label="삽입">
+          <span class="menu-group" aria-label="Insert">
             <button id="pasteImage" type="button">Paste Image</button>
-            <button id="addTextBox" type="button">Add Text Box</button>
+            <button id="addTextBox" type="button">Add Text</button>
           </span>
           <span class="menu-divider" aria-hidden="true"></span>
-          <span class="menu-group" aria-label="내보내기">
-            <button id="savePng" type="button">Save PNG</button>
-            <button id="exportMp4" type="button">Export MP4</button>
+          <span class="menu-group" aria-label="Export">
+            <button id="savePng" type="button">Export PNG</button>
+            <button id="exportMp4" type="button">Export Video</button>
           </span>
           <input id="projectFileInput" type="file" accept=".simpleslide.json,application/json,.json" hidden />
           <input id="videoFileInput" type="file" accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.m4v,.webm" hidden />
@@ -38,7 +38,7 @@
       </header>
 
       <main class="app-shell">
-        <aside class="toolbar" aria-label="도구">
+        <aside class="toolbar" aria-label="Tools">
 
         <section class="panel" aria-labelledby="draw-title">
           <h2 id="draw-title">Draw</h2>
@@ -59,17 +59,17 @@
         </section>
 
         <section class="panel" aria-labelledby="slide-video-title">
-          <h2 id="slide-video-title">Slide Video</h2>
+          <h2 id="slide-video-title">Background Video</h2>
           <div class="video-source-actions">
-            <button id="chooseSlideVideo" type="button">Choose</button>
+            <button id="chooseSlideVideo" type="button">Choose Video</button>
             <button id="clearSlideVideo" type="button">Remove</button>
           </div>
-          <div id="slideVideoInfo" class="inline-info">No video</div>
+          <div id="slideVideoInfo" class="inline-info">No video selected</div>
         </section>
 
         <section class="panel dynamic-slide-panel" aria-labelledby="dynamic-slide-title">
           <div class="panel-title-row">
-            <h2 id="dynamic-slide-title">Dynamic</h2>
+            <h2 id="dynamic-slide-title">Dynamic Slide</h2>
             <span id="dynamicSlideType" class="panel-summary">Canvas</span>
           </div>
           <div id="gitTypingControls" class="dynamic-controls" hidden>
@@ -78,13 +78,13 @@
               <input id="gitSlideTitle" type="text" />
             </label>
             <label>
-              <span>Repo</span>
+              <span>Repository</span>
               <input id="gitRepoPath" type="text" readonly />
             </label>
             <div class="dynamic-actions">
-              <button id="chooseGitRepo" type="button">Choose Repo</button>
+              <button id="chooseGitRepo" type="button">Choose Repository</button>
               <button id="loadGitCommits" type="button">Load Commits</button>
-              <button id="refreshGitDiff" type="button">Load Change</button>
+              <button id="refreshGitDiff" type="button">Load Diff</button>
             </div>
             <label>
               <span>Commit</span>
@@ -98,7 +98,7 @@
               <span>Speed</span>
               <input id="gitTypingSpeed" type="number" min="20" max="240" step="5" value="90" />
             </label>
-            <textarea id="gitTypingContent" class="dynamic-textarea" spellcheck="false" placeholder="Git 변경 내용을 불러오거나 직접 입력하세요."></textarea>
+            <textarea id="gitTypingContent" class="dynamic-textarea" spellcheck="false" placeholder="Load a commit diff or type content manually."></textarea>
           </div>
           <div id="chatTypingControls" class="dynamic-controls" hidden>
             <label>
@@ -109,15 +109,15 @@
               <span>Speed</span>
               <input id="chatTypingSpeed" type="number" min="20" max="240" step="5" value="80" />
             </label>
-            <textarea id="chatQuestion" class="dynamic-textarea compact" spellcheck="false" placeholder="GPT에게 묻는 질문"></textarea>
-            <textarea id="chatAnswer" class="dynamic-textarea" spellcheck="false" placeholder="GPT가 답하는 내용"></textarea>
+            <textarea id="chatQuestion" class="dynamic-textarea compact" spellcheck="false" placeholder="Question"></textarea>
+            <textarea id="chatAnswer" class="dynamic-textarea" spellcheck="false" placeholder="Answer"></textarea>
           </div>
           <div id="canvasSlideHint" class="inline-info">일반 슬라이드</div>
         </section>
 
         <section class="panel selected-panel" aria-labelledby="selected-title">
           <div class="panel-title-row">
-            <h2 id="selected-title">Selected</h2>
+            <h2 id="selected-title">Selection</h2>
             <span id="selectionSummary" class="panel-summary">None</span>
           </div>
           <label>
@@ -137,11 +137,11 @@
             <input id="selectedH" type="number" min="8" step="1" />
           </label>
           <label>
-            <span>Rotate</span>
+            <span>Rotation</span>
             <input id="selectedR" type="number" step="1" />
           </label>
           <label>
-            <span>Size</span>
+            <span>Text Size</span>
             <div id="selectedTextSize" class="text-size-buttons" role="group" aria-label="텍스트 크기">
               <button type="button" data-text-size="h4">H4</button>
               <button type="button" data-text-size="h3" class="is-active">H3</button>
@@ -150,11 +150,11 @@
             </div>
           </label>
           <label>
-            <span>Color</span>
+            <span>Text Color</span>
             <input id="selectedTextColor" type="color" value="#000000" />
           </label>
           <label>
-            <span>Align</span>
+            <span>Text Align</span>
             <div id="selectedTextAlign" class="text-align-buttons" role="group" aria-label="텍스트 정렬">
               <button type="button" data-text-align="left">Left</button>
               <button type="button" data-text-align="center">Center</button>
@@ -175,23 +175,23 @@
         </section>
       </aside>
 
-      <section class="workspace" aria-label="작업 영역">
+      <section class="workspace" aria-label="Workspace">
         <div class="canvas-scroll">
-          <div id="canvas" class="canvas" tabindex="0" aria-label="편집 캔버스">
+          <div id="canvas" class="canvas" tabindex="0" aria-label="Editing canvas">
             <video id="slideVideo" class="canvas-video" muted loop playsinline></video>
             <div id="dynamicSlidePreview" class="dynamic-slide-preview" aria-hidden="true"></div>
           </div>
         </div>
-        <section class="slide-notes" aria-label="슬라이드 노트">
+        <section class="slide-notes" aria-label="Slide notes">
           <div class="slide-notes-header">
             <h2>Notes</h2>
-            <span>Current slide</span>
+            <span>Current slide notes</span>
           </div>
-          <textarea id="slideNotes" spellcheck="false" placeholder="이 슬라이드에 대한 발표 메모나 설명을 적어두세요."></textarea>
+          <textarea id="slideNotes" spellcheck="false" placeholder="Add presenter notes for this slide."></textarea>
         </section>
       </section>
 
-      <aside class="slides-sidebar" aria-label="슬라이드">
+      <aside class="slides-sidebar" aria-label="Slides">
         <div class="slides-header">
           <div>
             <h2>Slides</h2>
@@ -209,7 +209,7 @@
       </aside>
       </main>
 
-      <footer class="status-bar" aria-label="상태">
+      <footer class="status-bar" aria-label="Status">
         <span id="saveStateText">Ready</span>
         <span id="selectionStateText">No selection</span>
         <span id="slideStateText">Slide 1 of 1</span>
@@ -262,11 +262,11 @@
     <div id="exportModal" class="export-modal" role="dialog" aria-modal="true" aria-labelledby="export-modal-title" hidden>
       <section class="export-modal-panel">
         <header class="export-modal-header">
-          <h2 id="export-modal-title">MP4 Export</h2>
+          <h2 id="export-modal-title">Export Video</h2>
           <span id="exportModalPhase">Preparing</span>
         </header>
         <progress id="exportProgress" max="100" value="0"></progress>
-        <div id="exportModalStatus" class="export-modal-status">Export 준비 중입니다.</div>
+        <div id="exportModalStatus" class="export-modal-status">Preparing export...</div>
         <button id="cancelExport" class="danger" type="button">Cancel</button>
       </section>
     </div>
@@ -276,7 +276,7 @@
         <header class="project-library-header">
           <div>
             <h2 id="project-library-title">Projects</h2>
-            <p>앱 내부에 자동 저장된 Simple Slide 프로젝트</p>
+            <p>Auto-saved projects on this device.</p>
           </div>
           <button id="closeProjectLibrary" type="button">Close</button>
         </header>
@@ -292,12 +292,12 @@
         <header class="app-settings-header">
           <div>
             <h2 id="app-settings-title">Settings</h2>
-            <p>OpenAI Key는 앱 전역, 나머지는 현재 프로젝트 설정</p>
+            <p>The OpenAI API key is app-wide. Other settings are saved with this project.</p>
           </div>
           <button id="closeAppSettings" type="button">Close</button>
         </header>
         <label>
-          <span>OpenAI Key</span>
+          <span>OpenAI API Key</span>
           <input id="settingsOpenAiApiKey" type="password" autocomplete="off" placeholder="sk-..." />
         </label>
         <label>
@@ -320,14 +320,7 @@
           </div>
         </label>
         <label>
-          <span>TTS Preset</span>
-          <select id="settingsTtsPreset">
-            <option value="animeCute">여성 활발하고 귀여운 애니메이션 여캐</option>
-            <option value="animeTsundere">여성 츤데레 애니메이션 여캐</option>
-          </select>
-        </label>
-        <label>
-          <span>TTS Model</span>
+          <span>Speech Model</span>
           <select id="settingsTtsModel">
             <option value="gpt-4o-mini-tts">gpt-4o-mini-tts</option>
             <option value="tts-1">tts-1</option>
@@ -335,7 +328,7 @@
           </select>
         </label>
         <label>
-          <span>TTS Voice</span>
+          <span>Voice</span>
           <select id="settingsTtsVoice">
             <option value="marin">marin</option>
             <option value="cedar">cedar</option>
@@ -353,27 +346,27 @@
           </select>
         </label>
         <label>
-          <span>TTS Speed</span>
+          <span>Speech Speed</span>
           <input id="settingsTtsSpeed" type="number" min="0.25" max="4" step="0.05" value="1" />
         </label>
         <label>
-          <span>TTS Tone</span>
-          <input id="settingsTtsInstructions" type="text" placeholder="차분하게 읽기" />
+          <span>Voice Instructions</span>
+          <input id="settingsTtsInstructions" type="text" placeholder="Tone, pacing, and delivery style" />
         </label>
         <label>
-          <span>Subtitle</span>
+          <span>Subtitles</span>
           <input id="settingsSubtitleEnabled" type="checkbox" checked />
         </label>
         <label class="settings-path-label">
-          <span>MP4 Export</span>
+          <span>Export Folder</span>
           <span class="settings-path-row">
             <input id="settingsExportDir" type="text" readonly placeholder="Downloads" />
             <button id="chooseExportDir" type="button">Choose</button>
-            <button id="resetExportDir" type="button">Downloads</button>
+            <button id="resetExportDir" type="button">Reset</button>
           </span>
         </label>
         <div class="app-settings-actions">
-          <button id="saveAppSettings" type="button">Save Settings</button>
+          <button id="saveAppSettings" type="button">Save</button>
         </div>
       </section>
     </div>
