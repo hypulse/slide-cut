@@ -99,6 +99,22 @@ button.danger {
   min-width: 0;
 }
 
+.menu-audio-group {
+  flex: 0 1 auto;
+  max-width: 260px;
+}
+
+.top-menu-info {
+  max-width: 118px;
+  overflow: hidden;
+  color: #4a5260;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .top-actions button {
   height: 28px;
   border-radius: 5px;
@@ -639,12 +655,16 @@ button.danger {
   order: 4;
 }
 
-.toolbar section[aria-labelledby="dynamic-slide-title"] {
+.toolbar section[aria-labelledby="slide-sound-title"] {
   order: 5;
 }
 
-.toolbar section[aria-labelledby="mp4-export-title"] {
+.toolbar section[aria-labelledby="dynamic-slide-title"] {
   order: 6;
+}
+
+.toolbar section[aria-labelledby="mp4-export-title"] {
+  order: 7;
 }
 
 .panel {

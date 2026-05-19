@@ -87,6 +87,7 @@ struct VideoExportPayload {
     tts: TtsSettings,
     fps: Option<u32>,
     fallback_duration_seconds: Option<f64>,
+    background_music_path: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -96,6 +97,7 @@ struct VideoExportSlide {
     height: u32,
     notes: String,
     video_path: Option<String>,
+    start_sound_path: Option<String>,
     frame_png: String,
     animation_frames: Option<Vec<String>>,
     frame_rate: Option<f64>,
@@ -417,6 +419,21 @@ fn materialize_project_assets(
     project_id: &str,
     mut data: Value,
 ) -> Result<Value, String> {
+    if let Some(settings) = data.get_mut("settings").and_then(Value::as_object_mut) {
+        if let Some(music) = settings
+            .get_mut("backgroundMusic")
+            .and_then(Value::as_object_mut)
+        {
+            if let Some(path_value) = music.get_mut("path") {
+                if let Some(path) = path_value.as_str() {
+                    if let Some(copied) = copy_asset_into_project(app, project_id, path, false)? {
+                        *path_value = Value::String(copied.to_string_lossy().to_string());
+                    }
+                }
+            }
+        }
+    }
+
     let Some(slides) = data.get_mut("slides").and_then(Value::as_array_mut) else {
         return Ok(data);
     };
@@ -424,6 +441,16 @@ fn materialize_project_assets(
     for slide in slides {
         if let Some(video) = slide.get_mut("video").and_then(Value::as_object_mut) {
             if let Some(path_value) = video.get_mut("path") {
+                if let Some(path) = path_value.as_str() {
+                    if let Some(copied) = copy_asset_into_project(app, project_id, path, false)? {
+                        *path_value = Value::String(copied.to_string_lossy().to_string());
+                    }
+                }
+            }
+        }
+
+        if let Some(sound) = slide.get_mut("startSound").and_then(Value::as_object_mut) {
+            if let Some(path_value) = sound.get_mut("path") {
                 if let Some(path) = path_value.as_str() {
                     if let Some(copied) = copy_asset_into_project(app, project_id, path, false)? {
                         *path_value = Value::String(copied.to_string_lossy().to_string());
@@ -1256,6 +1283,59 @@ fn create_silence_audio(
     run_command(command, "무음 오디오 생성", export_id)
 }
 
+fn mix_start_sound(
+    ffmpeg: &Path,
+    base_audio_path: &Path,
+    sound_path: &Path,
+    output_path: &Path,
+    duration_seconds: f64,
+    export_id: &str,
+) -> Result<(), String> {
+    let duration = format_seconds(duration_seconds);
+    let filter = format!(
+        "[0:a]aresample=44100,aformat=channel_layouts=stereo,apad[a0];[1:a]aresample=44100,aformat=channel_layouts=stereo,apad[a1];[a0][a1]amix=inputs=2:duration=first:dropout_transition=0,atrim=0:{duration},asetpts=N/SR/TB[a]"
+    );
+    let mut command = Command::new(ffmpeg);
+    command
+        .arg("-y")
+        .arg("-i")
+        .arg(base_audio_path)
+        .arg("-i")
+        .arg(sound_path)
+        .arg("-filter_complex")
+        .arg(filter)
+        .args(["-map", "[a]", "-t"])
+        .arg(duration)
+        .args(["-c:a", "aac", "-b:a", "192k"])
+        .arg(output_path);
+    run_command(command, "슬라이드 시작 효과음 믹스", export_id)
+}
+
+fn mix_background_music(
+    ffmpeg: &Path,
+    video_path: &Path,
+    music_path: &Path,
+    output_path: &Path,
+    export_id: &str,
+) -> Result<(), String> {
+    let filter = "[0:a]aresample=44100,aformat=channel_layouts=stereo[a0];[1:a]aresample=44100,aformat=channel_layouts=stereo,volume=0.32[a1];[a0][a1]amix=inputs=2:duration=first:dropout_transition=0[a]";
+    let mut command = Command::new(ffmpeg);
+    command
+        .arg("-y")
+        .arg("-i")
+        .arg(video_path)
+        .args(["-stream_loop", "-1"])
+        .arg("-i")
+        .arg(music_path)
+        .arg("-filter_complex")
+        .arg(filter)
+        .args(["-map", "0:v", "-map", "[a]", "-c:v", "copy"])
+        .args(["-c:a", "aac", "-b:a", "192k", "-shortest"])
+        .args(["-movflags", "+faststart"])
+        .arg(output_path);
+    run_command(command, "프로젝트 배경음 믹스", export_id)
+}
+
 fn probe_audio_duration(ffprobe: &Path, path: &Path, fallback: f64) -> Result<f64, String> {
     let output = Command::new(ffprobe)
         .args([
@@ -1529,10 +1609,26 @@ fn export_video(app: AppHandle, payload: VideoExportPayload) -> Result<VideoExpo
                     &export_id,
                 )?
             };
-            let duration = if trimmed_notes.is_empty() {
+            let base_audio_duration = if trimmed_notes.is_empty() {
                 fallback_duration
             } else {
                 probe_audio_duration(&ffprobe, &audio_path, fallback_duration)?
+            };
+            let start_sound_path = slide
+                .start_sound_path
+                .as_deref()
+                .filter(|path| !path.trim().is_empty())
+                .map(PathBuf::from);
+            let start_sound_duration = if let Some(path) = start_sound_path.as_ref() {
+                if !path.exists() {
+                    return Err(format!(
+                        "효과음 파일을 찾지 못했습니다: {}",
+                        path.to_string_lossy()
+                    ));
+                }
+                Some(probe_audio_duration(&ffprobe, path, 0.5)?)
+            } else {
+                None
             };
             let frame_rate = slide.frame_rate.unwrap_or(8.0).clamp(1.0, 30.0);
             let animation_duration = slide
@@ -1544,7 +1640,23 @@ fn export_video(app: AppHandle, payload: VideoExportPayload) -> Result<VideoExpo
                         .as_ref()
                         .map(|frames| frames.len() as f64 / frame_rate)
                 });
-            let duration = duration.max(animation_duration.unwrap_or(0.0));
+            let duration = base_audio_duration
+                .max(animation_duration.unwrap_or(0.0))
+                .max(start_sound_duration.unwrap_or(0.0));
+            let audio_path = if let Some(sound_path) = start_sound_path.as_ref() {
+                let mixed_path = work_dir.join(format!("mixed-audio-{index:04}.m4a"));
+                mix_start_sound(
+                    &ffmpeg,
+                    &audio_path,
+                    sound_path,
+                    &mixed_path,
+                    duration,
+                    &export_id,
+                )?;
+                mixed_path
+            } else {
+                audio_path
+            };
             let video_path = slide
                 .video_path
                 .as_deref()
@@ -1631,7 +1743,34 @@ fn export_video(app: AppHandle, payload: VideoExportPayload) -> Result<VideoExpo
         if let Some(parent) = output_path.parent() {
             fs::create_dir_all(parent).map_err(|error| error.to_string())?;
         }
-        concat_segments(&ffmpeg, &work_dir, &segments, &output_path, &export_id)?;
+        let background_music_path = payload
+            .background_music_path
+            .as_deref()
+            .filter(|path| !path.trim().is_empty())
+            .map(PathBuf::from);
+        if let Some(path) = background_music_path.as_ref() {
+            if !path.exists() {
+                return Err(format!(
+                    "배경음 파일을 찾지 못했습니다: {}",
+                    path.to_string_lossy()
+                ));
+            }
+        }
+        if let Some(music_path) = background_music_path.as_ref() {
+            let merged_path = work_dir.join("merged-without-bgm.mp4");
+            concat_segments(&ffmpeg, &work_dir, &segments, &merged_path, &export_id)?;
+            emit_export_progress(
+                &app,
+                &export_id,
+                "Finalizing",
+                "프로젝트 배경음을 영상에 믹스하고 있습니다.",
+                1,
+                1,
+            );
+            mix_background_music(&ffmpeg, &merged_path, music_path, &output_path, &export_id)?;
+        } else {
+            concat_segments(&ffmpeg, &work_dir, &segments, &output_path, &export_id)?;
+        }
         emit_export_progress(
             &app,
             &export_id,

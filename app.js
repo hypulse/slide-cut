@@ -9,6 +9,7 @@ const tauriInvoke = window.__TAURI__?.core?.invoke || null;
 const tauriDialog = window.__TAURI__?.dialog || null;
 const PROJECT_FILE_FILTER = [{ name: "Simple Slide Project", extensions: ["json"] }];
 const VIDEO_FILE_FILTER = [{ name: "Video", extensions: ["mp4", "mov", "m4v", "webm"] }];
+const AUDIO_FILE_FILTER = [{ name: "Audio", extensions: ["mp3", "wav", "m4a", "aac", "ogg", "flac"] }];
 const MP4_FILE_FILTER = [{ name: "MP4 Video", extensions: ["mp4"] }];
 const nativeApi = window.simpleSlideNative || (tauriInvoke ? {
   isNative: true,
@@ -79,6 +80,20 @@ const nativeApi = window.simpleSlideNative || (tauriInvoke ? {
     }
     return path;
   },
+  selectAudioFile: async () => {
+    if (!tauriDialog?.open) {
+      throw new Error("Tauri 파일 선택 대화상자를 사용할 수 없습니다.");
+    }
+    const path = await tauriDialog.open({
+      multiple: false,
+      directory: false,
+      filters: AUDIO_FILE_FILTER,
+    });
+    if (!path || Array.isArray(path)) {
+      return null;
+    }
+    return path;
+  },
   selectMp4Output: async (suggestedName, exportDir = "") => {
     if (!tauriDialog?.save) {
       throw new Error("Tauri 파일 저장 대화상자를 사용할 수 없습니다.");
@@ -107,6 +122,9 @@ const pasteImage = document.querySelector("#pasteImage");
 const addTextBox = document.querySelector("#addTextBox");
 const addGitTypingSlide = document.querySelector("#addGitTypingSlide");
 const addChatTypingSlide = document.querySelector("#addChatTypingSlide");
+const chooseBackgroundMusic = document.querySelector("#chooseBackgroundMusic");
+const clearBackgroundMusic = document.querySelector("#clearBackgroundMusic");
+const backgroundMusicInfo = document.querySelector("#backgroundMusicInfo");
 const savePng = document.querySelector("#savePng");
 const exportMp4 = document.querySelector("#exportMp4");
 const saveProject = document.querySelector("#saveProject");
@@ -115,6 +133,7 @@ const projectFileInput = document.querySelector("#projectFileInput");
 const videoFileInput = document.querySelector("#videoFileInput");
 const drawPanel = document.querySelector('[aria-labelledby="draw-title"]');
 const slideVideoPanel = document.querySelector('[aria-labelledby="slide-video-title"]');
+const slideSoundPanel = document.querySelector('[aria-labelledby="slide-sound-title"]');
 const dynamicSlidePanel = document.querySelector('[aria-labelledby="dynamic-slide-title"]');
 const addSlide = document.querySelector("#addSlide");
 const duplicateSlide = document.querySelector("#duplicateSlide");
@@ -125,6 +144,9 @@ const strokeWidth = document.querySelector("#strokeWidth");
 const chooseSlideVideo = document.querySelector("#chooseSlideVideo");
 const clearSlideVideo = document.querySelector("#clearSlideVideo");
 const slideVideoInfo = document.querySelector("#slideVideoInfo");
+const chooseSlideSound = document.querySelector("#chooseSlideSound");
+const clearSlideSound = document.querySelector("#clearSlideSound");
+const slideSoundInfo = document.querySelector("#slideSoundInfo");
 const dynamicSlidePreview = document.querySelector("#dynamicSlidePreview");
 const dynamicSlideType = document.querySelector("#dynamicSlideType");
 const gitTypingControls = document.querySelector("#gitTypingControls");
@@ -244,6 +266,7 @@ let projectSettingsState = {
     "Read the input text naturally as written. For Korean text, keep pronunciation clear and natural. Keep the pacing conversational, warm, and not exaggerated.",
   subtitleEnabled: true,
   exportDir: "",
+  backgroundMusic: null,
 };
 let activeExportJob = null;
 
@@ -2144,6 +2167,7 @@ function createDefaultSlide() {
     color: projectSettingsState.canvasColor,
     notes: "",
     video: null,
+    startSound: null,
     objects: [],
   };
 }
@@ -2198,12 +2222,34 @@ function normalizeSlideVideo(value) {
   };
 }
 
+function normalizeAudioAsset(value) {
+  if (!value || typeof value.path !== "string" || !value.path.trim()) {
+    return null;
+  }
+  return {
+    path: value.path,
+    name: typeof value.name === "string" && value.name.trim() ? value.name : getFileNameFromPath(value.path),
+  };
+}
+
+function normalizeSlideStartSound(value) {
+  return normalizeAudioAsset(value);
+}
+
+function normalizeProjectBackgroundMusic(value) {
+  return normalizeAudioAsset(value);
+}
+
 function getActiveSlideVideo() {
   const slide = slides[activeSlideIndex];
   if (isDynamicSlide(slide)) {
     return null;
   }
   return normalizeSlideVideo(slide?.video);
+}
+
+function getActiveSlideStartSound() {
+  return normalizeSlideStartSound(slides[activeSlideIndex]?.startSound);
 }
 
 function updateSlideVideoView() {
@@ -2235,6 +2281,40 @@ function updateSlideVideoView() {
   slideVideo.play().catch(() => {});
   slideVideoInfo.textContent = `${video.name} · fill`;
   clearSlideVideo.disabled = false;
+}
+
+function updateSlideSoundView() {
+  const sound = getActiveSlideStartSound();
+  if (!slideSoundInfo || !clearSlideSound) {
+    return;
+  }
+
+  if (!sound) {
+    slideSoundInfo.textContent = "No sound selected";
+    clearSlideSound.disabled = true;
+    return;
+  }
+
+  slideSoundInfo.textContent = sound.name;
+  clearSlideSound.disabled = false;
+}
+
+function updateBackgroundMusicView() {
+  const music = normalizeProjectBackgroundMusic(projectSettingsState.backgroundMusic);
+  if (!backgroundMusicInfo || !clearBackgroundMusic) {
+    return;
+  }
+
+  if (!music) {
+    backgroundMusicInfo.textContent = "No BGM";
+    backgroundMusicInfo.title = "";
+    clearBackgroundMusic.disabled = true;
+    return;
+  }
+
+  backgroundMusicInfo.textContent = music.name;
+  backgroundMusicInfo.title = music.name;
+  clearBackgroundMusic.disabled = false;
 }
 
 function createPreviewElement(tagName, className, text = "") {
@@ -2345,6 +2425,7 @@ function syncSlideOptionPanels(kind) {
   const isCanvasSlide = kind === "canvas";
   drawPanel.hidden = false;
   slideVideoPanel.hidden = !isCanvasSlide;
+  slideSoundPanel.hidden = false;
   dynamicSlidePanel.hidden = isCanvasSlide;
   selectedPanel.hidden = false;
 }
@@ -2448,6 +2529,7 @@ function serializeCurrentSlide() {
     ...getCanvasState(),
     notes: slideNotes.value,
     video: normalizeSlideVideo(slides[activeSlideIndex]?.video),
+    startSound: normalizeSlideStartSound(slides[activeSlideIndex]?.startSound),
     objects: [...canvas.querySelectorAll(".object")].map(serializeObject),
   };
 }
@@ -2526,7 +2608,9 @@ function loadSlide(index, shouldSaveCurrent = true) {
   applyCanvasFrame(slide.width, slide.height, slide.color);
   slideNotes.value = typeof slide.notes === "string" ? slide.notes : "";
   slides[activeSlideIndex].video = normalizeSlideVideo(slide.video);
+  slides[activeSlideIndex].startSound = normalizeSlideStartSound(slide.startSound);
   updateSlideVideoView();
+  updateSlideSoundView();
   syncDynamicSlidePanel();
   defaultTextColor = getDefaultTextColorForCanvas(slide.color);
 
@@ -3006,7 +3090,18 @@ function applyMaterializedAssetPaths(savedData) {
     return;
   }
 
+  const savedBackgroundMusic = normalizeProjectBackgroundMusic(savedData.settings?.backgroundMusic);
+  const currentBackgroundMusic = normalizeProjectBackgroundMusic(projectSettingsState.backgroundMusic);
+  if ((savedBackgroundMusic?.path || "") !== (currentBackgroundMusic?.path || "")) {
+    projectSettingsState = normalizeProjectSettings({
+      ...projectSettingsState,
+      backgroundMusic: savedBackgroundMusic,
+    });
+    updateBackgroundMusicView();
+  }
+
   let shouldRefreshActiveVideo = false;
+  let shouldRefreshActiveSound = false;
   let shouldRefreshSlides = false;
   for (const [index, savedSlide] of savedData.slides.entries()) {
     if (!slides[index]) {
@@ -3019,6 +3114,16 @@ function applyMaterializedAssetPaths(savedData) {
       shouldRefreshSlides = true;
       if (index === activeSlideIndex) {
         shouldRefreshActiveVideo = true;
+      }
+    }
+
+    const savedSound = normalizeSlideStartSound(savedSlide.startSound);
+    const currentSound = normalizeSlideStartSound(slides[index].startSound);
+    if ((savedSound?.path || "") !== (currentSound?.path || "")) {
+      slides[index].startSound = savedSound;
+      shouldRefreshSlides = true;
+      if (index === activeSlideIndex) {
+        shouldRefreshActiveSound = true;
       }
     }
 
@@ -3040,6 +3145,9 @@ function applyMaterializedAssetPaths(savedData) {
 
   if (shouldRefreshActiveVideo) {
     updateSlideVideoView();
+  }
+  if (shouldRefreshActiveSound) {
+    updateSlideSoundView();
   }
   if (shouldRefreshSlides) {
     renderSlideList();
@@ -3204,6 +3312,7 @@ function hideProjectLibrary() {
 
 function resetToBlankProject() {
   projectSettingsState = normalizeProjectSettings();
+  updateBackgroundMusicView();
   slideSeed = 0;
   objectSeed = 0;
   activePointer = null;
@@ -3219,6 +3328,7 @@ function resetToBlankProject() {
 
 function applyProjectState(project) {
   projectSettingsState = normalizeProjectSettings(project.settings);
+  updateBackgroundMusicView();
   slides = project.slides;
   activeSlideIndex = project.activeSlideIndex;
   slideSeed = slides.length;
@@ -3549,6 +3659,7 @@ function normalizeProjectData(data) {
     color: sanitizeColor(slide.color),
     notes: typeof slide.notes === "string" ? slide.notes : "",
     video: normalizeSlideVideo(slide.video),
+    startSound: normalizeSlideStartSound(slide.startSound),
     gitTyping:
       sanitizeSlideKind(slide.kind) === "gitTyping"
         ? {
@@ -3681,6 +3792,91 @@ function clearVideoForCurrentSlide() {
   renderSlideList();
   setStatus("배경 영상을 제거했습니다.");
   recordHistory();
+}
+
+async function chooseSoundForCurrentSlide() {
+  if (!nativeApi?.selectAudioFile) {
+    setStatus("효과음 선택은 Tauri 앱에서 사용할 수 있습니다.");
+    return;
+  }
+
+  try {
+    const path = await nativeApi.selectAudioFile();
+    if (!path || !slides[activeSlideIndex]) {
+      return;
+    }
+    if (!activeProjectId) {
+      await saveActiveNativeProject();
+    }
+    const importedAsset =
+      activeProjectId && nativeApi.importProjectAsset
+        ? await nativeApi.importProjectAsset(activeProjectId, path)
+        : { path, name: getFileNameFromPath(path) };
+    slides[activeSlideIndex].startSound = {
+      path: importedAsset.path,
+      name: importedAsset.name || getFileNameFromPath(path),
+    };
+    updateSlideSoundView();
+    renderSlideList();
+    setStatus("슬라이드 시작 효과음을 프로젝트에 복사해 연결했습니다.");
+    recordHistory();
+  } catch (error) {
+    setStatus(error?.message || "효과음 파일을 프로젝트에 복사하지 못했습니다.");
+  }
+}
+
+function clearSoundForCurrentSlide() {
+  if (!slides[activeSlideIndex]) {
+    return;
+  }
+  slides[activeSlideIndex].startSound = null;
+  updateSlideSoundView();
+  renderSlideList();
+  setStatus("슬라이드 시작 효과음을 제거했습니다.");
+  recordHistory();
+}
+
+async function chooseBackgroundMusicForProject() {
+  if (!nativeApi?.selectAudioFile) {
+    setStatus("배경음 선택은 Tauri 앱에서 사용할 수 있습니다.");
+    return;
+  }
+
+  try {
+    const path = await nativeApi.selectAudioFile();
+    if (!path) {
+      return;
+    }
+    if (!activeProjectId) {
+      await saveActiveNativeProject();
+    }
+    const importedAsset =
+      activeProjectId && nativeApi.importProjectAsset
+        ? await nativeApi.importProjectAsset(activeProjectId, path)
+        : { path, name: getFileNameFromPath(path) };
+    projectSettingsState = normalizeProjectSettings({
+      ...projectSettingsState,
+      backgroundMusic: {
+        path: importedAsset.path,
+        name: importedAsset.name || getFileNameFromPath(path),
+      },
+    });
+    updateBackgroundMusicView();
+    setStatus("프로젝트 배경음을 프로젝트에 복사해 연결했습니다.");
+    scheduleNativeProjectSave();
+  } catch (error) {
+    setStatus(error?.message || "배경음 파일을 프로젝트에 복사하지 못했습니다.");
+  }
+}
+
+function clearBackgroundMusicForProject() {
+  projectSettingsState = normalizeProjectSettings({
+    ...projectSettingsState,
+    backgroundMusic: null,
+  });
+  updateBackgroundMusicView();
+  setStatus("프로젝트 배경음을 제거했습니다.");
+  scheduleNativeProjectSave();
 }
 
 function openBrowserVideoFile(file) {
@@ -3820,6 +4016,7 @@ function normalizeProjectSettings(value = {}) {
     ttsInstructions: normalizeTtsInstructions(value.ttsInstructions, ttsProvider),
     subtitleEnabled: normalizeSubtitleEnabled(value.subtitleEnabled),
     exportDir: typeof value.exportDir === "string" && value.exportDir.trim() ? value.exportDir.trim() : defaultProjectExportDir,
+    backgroundMusic: normalizeProjectBackgroundMusic(value.backgroundMusic),
   };
 }
 
@@ -3836,6 +4033,7 @@ function syncSettingsControls() {
   settingsTtsInstructions.value = projectSettingsState.ttsInstructions;
   settingsSubtitleEnabled.checked = projectSettingsState.subtitleEnabled;
   settingsExportDir.value = projectSettingsState.exportDir;
+  updateBackgroundMusicView();
   syncColorPresetButtons();
 }
 
@@ -3851,6 +4049,7 @@ function getProjectSettingsFromControls() {
     ttsInstructions: settingsTtsInstructions.value,
     subtitleEnabled: settingsSubtitleEnabled.checked,
     exportDir: settingsExportDir.value,
+    backgroundMusic: projectSettingsState.backgroundMusic,
   });
 }
 
@@ -4268,11 +4467,13 @@ async function exportProjectAsMp4() {
   setStatus("슬라이드를 영상 추출용 프레임으로 렌더링하고 있습니다.");
 
   try {
+    const backgroundMusic = normalizeProjectBackgroundMusic(projectSettingsState.backgroundMusic);
     const renderedSlides = [];
     for (let index = 0; index < slides.length; index += 1) {
       throwIfExportCancelled();
       const slide = slides[index];
       const video = normalizeSlideVideo(slide.video);
+      const startSound = normalizeSlideStartSound(slide.startSound);
       setExportModalProgress("Rendering", `슬라이드 ${index + 1} / ${slides.length} 렌더링 중입니다.`, index, slides.length);
       const noteSegments = splitNotesForExport(slide.notes);
       const exportNoteSegments = noteSegments.length ? noteSegments : [""];
@@ -4292,6 +4493,7 @@ async function exportProjectAsMp4() {
         renderedSlides.push({
           ...baseSlidePayload,
           notes: exportNoteSegments[0],
+          startSoundPath: startSound?.path || null,
           framePng: animation.framePng,
           animationFrames: animation.frames,
           frameRate: animation.frameRate,
@@ -4301,6 +4503,7 @@ async function exportProjectAsMp4() {
           renderedSlides.push({
             ...baseSlidePayload,
             notes: segmentNotes,
+            startSoundPath: null,
             framePng: await renderDynamicSlideToDataUrl(slide, animation.duration, {
               subtitles: projectSettingsState.subtitleEnabled,
               subtitleText: segmentNotes,
@@ -4308,10 +4511,11 @@ async function exportProjectAsMp4() {
           });
         }
       } else {
-        for (const segmentNotes of exportNoteSegments) {
+        for (const [segmentIndex, segmentNotes] of exportNoteSegments.entries()) {
           renderedSlides.push({
             ...baseSlidePayload,
             notes: segmentNotes,
+            startSoundPath: segmentIndex === 0 ? startSound?.path || null : null,
             framePng: await renderSlideToDataUrl(slide, {
               transparentBackground: Boolean(video),
               subtitles: projectSettingsState.subtitleEnabled,
@@ -4329,6 +4533,7 @@ async function exportProjectAsMp4() {
       outputPath,
       fps: VIDEO_EXPORT_FPS,
       fallbackDurationSeconds: VIDEO_EXPORT_FALLBACK_DURATION,
+      backgroundMusicPath: backgroundMusic?.path || null,
       tts: getTtsSettings(),
       slides: renderedSlides,
     });
@@ -4505,6 +4710,8 @@ projectLibrary.addEventListener("click", (event) => {
 appSettingsButton.addEventListener("click", showAppSettings);
 closeAppSettings.addEventListener("click", hideAppSettings);
 saveAppSettingsButton.addEventListener("click", saveSettings);
+chooseBackgroundMusic.addEventListener("click", chooseBackgroundMusicForProject);
+clearBackgroundMusic.addEventListener("click", clearBackgroundMusicForProject);
 chooseExportDir.addEventListener("click", chooseProjectExportDirectory);
 resetExportDir.addEventListener("click", resetProjectExportDirectory);
 appSettings.addEventListener("click", (event) => {
@@ -4523,6 +4730,8 @@ strokeWidth.addEventListener("change", () => {
 strokeWidth.addEventListener("blur", normalizeStrokeWidthInput);
 chooseSlideVideo.addEventListener("click", chooseVideoForCurrentSlide);
 clearSlideVideo.addEventListener("click", clearVideoForCurrentSlide);
+chooseSlideSound.addEventListener("click", chooseSoundForCurrentSlide);
+clearSlideSound.addEventListener("click", clearSoundForCurrentSlide);
 videoFileInput.addEventListener("change", () => {
   const [file] = videoFileInput.files;
   if (file) {

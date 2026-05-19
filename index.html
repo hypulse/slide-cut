@@ -28,6 +28,12 @@
             <button id="addTextBox" type="button" data-icon="type">Add Text</button>
           </span>
           <span class="menu-divider" aria-hidden="true"></span>
+          <span class="menu-group menu-audio-group" aria-label="Audio">
+            <button id="chooseBackgroundMusic" type="button" data-icon="music">BGM</button>
+            <button id="clearBackgroundMusic" type="button" data-icon="x">Remove</button>
+            <span id="backgroundMusicInfo" class="top-menu-info">No BGM</span>
+          </span>
+          <span class="menu-divider" aria-hidden="true"></span>
           <span class="menu-group" aria-label="Export">
             <button id="savePng" type="button" data-icon="image-down">Export PNG</button>
             <button id="exportMp4" type="button" data-icon="film">Export Video</button>
@@ -65,6 +71,15 @@
             <button id="clearSlideVideo" type="button" data-icon="x">Remove</button>
           </div>
           <div id="slideVideoInfo" class="inline-info">No video selected</div>
+        </section>
+
+        <section class="panel" aria-labelledby="slide-sound-title">
+          <h2 id="slide-sound-title">Start Sound</h2>
+          <div class="video-source-actions">
+            <button id="chooseSlideSound" type="button" data-icon="music-2">Choose Sound</button>
+            <button id="clearSlideSound" type="button" data-icon="x">Remove</button>
+          </div>
+          <div id="slideSoundInfo" class="inline-info">No sound selected</div>
         </section>
 
         <section class="panel dynamic-slide-panel" aria-labelledby="dynamic-slide-title">
