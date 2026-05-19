@@ -302,7 +302,7 @@ const DEFAULT_SUBTITLE_ENABLED = true;
 const SUBTITLE_MAX_LINES = 2;
 const VIDEO_EXPORT_FPS = 30;
 const VIDEO_EXPORT_FALLBACK_DURATION = 3;
-const DYNAMIC_FRAME_RATE = 8;
+const DYNAMIC_FRAME_RATE = VIDEO_EXPORT_FPS;
 const DYNAMIC_MAX_DURATION = 60;
 const DEFAULT_GIT_TYPING_SPEED = 90;
 const DEFAULT_CHAT_TYPING_SPEED = 80;
@@ -1673,67 +1673,79 @@ function drawGitTypingSlide(context, slide, width, height, timeSeconds) {
 function drawChatTypingSlide(context, slide, width, height, timeSeconds) {
   const data = getChatTypingData(slide);
   const speed = data.typingSpeed;
-  const qDuration = (data.question || "").length / speed;
+  const questionSource = data.question || "";
+  const answerSource = data.answer || "";
+  const qDuration = questionSource.length / speed;
   const answerStart = qDuration + CHAT_ANSWER_DELAY_SECONDS;
-  const visibleQuestionCount = clamp(Math.floor(timeSeconds * speed), 0, (data.question || "").length);
-  const visibleAnswerCount = clamp(Math.floor((timeSeconds - answerStart) * speed), 0, (data.answer || "").length);
-  const questionDone = visibleQuestionCount >= (data.question || "").length;
-  const answerDone = visibleAnswerCount >= (data.answer || "").length;
-  const questionText = `${(data.question || "").slice(0, visibleQuestionCount)}${questionDone ? "" : "▌"}`;
-  const answerText =
-    timeSeconds >= answerStart
-      ? `${(data.answer || "").slice(0, visibleAnswerCount)}${answerDone ? "" : "▌"}`
-      : "";
+  const visibleQuestionCount = clamp(Math.floor(timeSeconds * speed), 0, questionSource.length);
+  const visibleAnswerCount = clamp(Math.floor((timeSeconds - answerStart) * speed), 0, answerSource.length);
+  const questionText = questionSource.slice(0, visibleQuestionCount);
+  const answerText = timeSeconds >= answerStart ? answerSource.slice(0, visibleAnswerCount) : "";
   const marginX = Math.round(width * 0.036);
   const topMargin = Math.round(height * 0.022);
   const bottomMargin = Math.round(height * 0.045);
   const questionSize = clamp(Math.round(width * 0.0175), 16, 23);
-  const thoughtSize = clamp(Math.round(width * 0.015), 14, 19);
   const answerSize = clamp(Math.round(width * 0.017), 15, 22);
   const questionLineHeight = Math.round(questionSize * 1.36);
   const answerLineHeight = Math.round(answerSize * 1.52);
   const questionMaxWidth = Math.round(width * 0.58);
   const answerMaxWidth = width - marginX * 2;
+  const viewportY = topMargin;
+  const viewportHeight = height - topMargin - bottomMargin;
+  const messageGap = Math.round(height * 0.075);
 
   context.fillStyle = "#ffffff";
   context.fillRect(0, 0, width, height);
   context.textBaseline = "top";
 
   context.font = `750 ${questionSize}px Pretendard, sans-serif`;
-  const questionLines = wrapTextLines(context, questionText, questionMaxWidth + TEXT_PADDING_X * 2);
+  const questionLines = questionText ? wrapTextLines(context, questionText, questionMaxWidth + TEXT_PADDING_X * 2) : [];
   const questionPaddingX = Math.round(questionSize * 1.08);
   const questionPaddingY = Math.round(questionSize * 0.62);
-  const questionHeight = questionLines.length * questionLineHeight + questionPaddingY * 2;
-  const questionTextWidth = Math.min(questionMaxWidth, getMeasuredTextWidth(context, questionLines, questionSize * 4));
-  const questionWidth = Math.min(width - marginX * 2, Math.ceil(questionTextWidth + questionPaddingX * 2));
-  const questionX = width - marginX - questionWidth;
-  const questionY = topMargin;
-  context.fillStyle = "#050505";
-  fillRoundedRect(context, questionX, questionY, questionWidth, questionHeight, Math.round(questionHeight / 2));
-  context.fillStyle = "#ffffff";
-  context.textAlign = "left";
-  for (const [index, line] of questionLines.entries()) {
-    context.fillText(line, questionX + questionPaddingX, questionY + questionPaddingY + index * questionLineHeight);
-  }
+  const questionHeight = questionLines.length ? questionLines.length * questionLineHeight + questionPaddingY * 2 : 0;
 
-  const answerAreaY = Math.max(questionY + questionHeight + Math.round(height * 0.105), Math.round(height * 0.18));
-  if (timeSeconds >= answerStart - CHAT_ANSWER_DELAY_SECONDS * 0.35) {
+  context.font = `700 ${answerSize}px Pretendard, sans-serif`;
+  const answerLines = answerText ? wrapTextLines(context, answerText, answerMaxWidth + TEXT_PADDING_X * 2) : [];
+  const answerHeight = answerLines.length * answerLineHeight;
+  const totalContentHeight =
+    questionHeight + (questionLines.length && answerLines.length ? messageGap : 0) + answerHeight;
+  const scrollOffset = Math.max(0, totalContentHeight - viewportHeight);
+  let contentY = viewportY - scrollOffset;
+
+  context.save();
+  context.beginPath();
+  context.rect(0, viewportY, width, viewportHeight);
+  context.clip();
+
+  if (questionLines.length) {
+    context.font = `750 ${questionSize}px Pretendard, sans-serif`;
+    const questionTextWidth = Math.min(questionMaxWidth, getMeasuredTextWidth(context, questionLines, questionSize * 4));
+    const questionWidth = Math.min(width - marginX * 2, Math.ceil(questionTextWidth + questionPaddingX * 2));
+    const questionX = width - marginX - questionWidth;
+    context.fillStyle = "#050505";
+    fillRoundedRect(context, questionX, contentY, questionWidth, questionHeight, Math.round(questionHeight / 2));
+    context.fillStyle = "#ffffff";
     context.textAlign = "left";
-    context.font = `650 ${thoughtSize}px Pretendard, sans-serif`;
-    context.fillStyle = "#8f8f8f";
-    context.fillText("Thought for a few seconds", marginX, answerAreaY);
+    for (const [index, line] of questionLines.entries()) {
+      context.fillText(line, questionX + questionPaddingX, contentY + questionPaddingY + index * questionLineHeight);
+    }
+    contentY += questionHeight + (answerLines.length ? messageGap : 0);
   }
 
-  if (answerText) {
-    const answerY = answerAreaY + Math.round(thoughtSize * 2.45);
-    const answerMaxHeight = Math.max(answerLineHeight, height - answerY - bottomMargin);
+  if (answerLines.length) {
     context.font = `700 ${answerSize}px Pretendard, sans-serif`;
-    const answerLines = wrapTextLines(context, answerText, answerMaxWidth + TEXT_PADDING_X * 2);
-    const totalAnswerHeight = answerLines.length * answerLineHeight;
-    const scrollOffset = Math.max(0, totalAnswerHeight - answerMaxHeight);
     context.fillStyle = "#111111";
-    drawClippedLines(context, answerLines, marginX, answerY, answerMaxHeight, answerLineHeight, scrollOffset);
+    context.textAlign = "left";
+    for (const [index, line] of answerLines.entries()) {
+      const lineY = contentY + index * answerLineHeight;
+      if (lineY + answerLineHeight < viewportY || lineY > viewportY + viewportHeight) {
+        continue;
+      }
+      context.fillText(line, marginX, lineY);
+    }
   }
+
+  context.restore();
 }
 
 function drawDynamicSlide(context, slide, width, height, timeSeconds, options = {}) {
@@ -2076,15 +2088,11 @@ function renderDynamicSlidePreview(slide) {
     const surface = createPreviewElement("div", "dynamic-preview-surface chat");
     const chat = createPreviewElement("div", "dynamic-preview-chat");
     const answer = createPreviewElement("div", "dynamic-preview-answer", data.answer);
-    chat.append(
-      createPreviewElement("div", "dynamic-preview-bubble question", data.question),
-      createPreviewElement("div", "dynamic-preview-thought", "Thought for a few seconds"),
-      answer
-    );
+    chat.append(createPreviewElement("div", "dynamic-preview-bubble question", data.question), answer);
     surface.append(chat);
     dynamicSlidePreview.append(surface);
     window.requestAnimationFrame(() => {
-      answer.scrollTop = answer.scrollHeight;
+      chat.scrollTop = chat.scrollHeight;
     });
   }
 }

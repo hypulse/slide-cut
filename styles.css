@@ -1060,7 +1060,7 @@ input[type="checkbox"] {
 .dynamic-preview-chat {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 18px;
   overflow: hidden;
   height: 100%;
 }
@@ -1081,18 +1081,10 @@ input[type="checkbox"] {
   color: #ffffff;
 }
 
-.dynamic-preview-thought {
-  margin-top: 68px;
-  color: #8f8f8f;
-  font-size: 17px;
-  font-weight: 650;
-  line-height: 1.25;
-}
-
 .dynamic-preview-answer {
-  flex: 1;
+  flex: 0 0 auto;
   min-height: 0;
-  overflow: hidden;
+  overflow: visible;
   color: #111111;
   font-size: 20px;
   font-weight: 700;
