@@ -1462,11 +1462,11 @@ function drawSubtitleBox(context, text, width, height) {
   }
 
   const fontSize = clamp(Math.round(width * 0.032), 22, 34);
-  const lineHeight = Math.round(fontSize * 1.34);
-  const paddingX = Math.round(fontSize * 0.86);
-  const paddingY = Math.round(fontSize * 0.52);
+  const lineHeight = Math.round(fontSize * 1.24);
+  const paddingX = Math.round(fontSize * 0.45);
+  const paddingY = Math.round(fontSize * 0.22);
   const maxTextWidth = Math.round(width * 0.78);
-  const bottomOffset = Math.round(height * 0.095);
+  const bottomOffset = Math.round(height * 0.055);
 
   context.save();
   context.font = `700 ${fontSize}px Pretendard, sans-serif`;
