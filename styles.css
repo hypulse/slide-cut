@@ -945,9 +945,85 @@ input[type="checkbox"] {
 
 .selected-panel.is-empty label,
 .selected-panel.is-empty .arrange-controls,
+.selected-panel.is-empty .canvas-align-controls,
 .selected-panel.is-empty .selected-actions {
   opacity: 0.42;
   pointer-events: none;
+}
+
+.canvas-align-controls {
+  display: grid;
+  grid-template-columns: repeat(3, 28px);
+  gap: 4px;
+}
+
+.canvas-align-button {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  border: 1px solid #c9ced8;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.canvas-align-button::before {
+  content: "";
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #111827;
+  transform: translate(-50%, -50%);
+}
+
+.canvas-align-button.align-top-left::before {
+  left: 28%;
+  top: 28%;
+}
+
+.canvas-align-button.align-top::before {
+  left: 50%;
+  top: 28%;
+}
+
+.canvas-align-button.align-top-right::before {
+  left: 72%;
+  top: 28%;
+}
+
+.canvas-align-button.align-left::before {
+  left: 28%;
+  top: 50%;
+}
+
+.canvas-align-button.align-center::before {
+  left: 50%;
+  top: 50%;
+}
+
+.canvas-align-button.align-right::before {
+  left: 72%;
+  top: 50%;
+}
+
+.canvas-align-button.align-bottom-left::before {
+  left: 28%;
+  top: 72%;
+}
+
+.canvas-align-button.align-bottom::before {
+  left: 50%;
+  top: 72%;
+}
+
+.canvas-align-button.align-bottom-right::before {
+  left: 72%;
+  top: 72%;
+}
+
+.canvas-align-button:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .arrange-controls {
@@ -969,6 +1045,7 @@ input[type="checkbox"] {
 }
 
 .arrange-controls button:disabled,
+.canvas-align-button:disabled,
 .selected-actions button:disabled {
   opacity: 0.42;
   pointer-events: none;

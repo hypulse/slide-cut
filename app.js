@@ -194,6 +194,7 @@ const selectedW = document.querySelector("#selectedW");
 const selectedH = document.querySelector("#selectedH");
 const selectedR = document.querySelector("#selectedR");
 const selectedTextSize = document.querySelector("#selectedTextSize");
+const canvasAlignButtons = [...document.querySelectorAll("[data-canvas-align]")];
 const textSizeButtons = [...document.querySelectorAll("[data-text-size]")];
 const textAlignButtons = [...document.querySelectorAll("[data-text-align]")];
 const selectedTextColor = document.querySelector("#selectedTextColor");
@@ -290,6 +291,28 @@ const DEFAULT_STROKE_WIDTH = 4;
 const SHAPE_KINDS = new Set(["line", "arrow", "pen"]);
 const SHAPE_DRAW_PADDING = 14;
 const MIN_SHAPE_DRAW_DISTANCE = 5;
+const CANVAS_ALIGNMENTS = new Set([
+  "top-left",
+  "top",
+  "top-right",
+  "left",
+  "center",
+  "right",
+  "bottom-left",
+  "bottom",
+  "bottom-right",
+]);
+const CANVAS_ALIGNMENT_LABELS = {
+  "top-left": "좌측 상단",
+  top: "상단 중앙",
+  "top-right": "우측 상단",
+  left: "좌측 중앙",
+  center: "캔버스 중앙",
+  right: "우측 중앙",
+  "bottom-left": "좌측 하단",
+  bottom: "하단 중앙",
+  "bottom-right": "우측 하단",
+};
 const SVG_NS = "http://www.w3.org/2000/svg";
 const PROJECT_FORMAT = "simple-slide-project";
 const PROJECT_VERSION = 2;
@@ -801,6 +824,9 @@ function syncSelectedInputs() {
     input.disabled = !hasSelection;
   }
   for (const button of Object.values(arrangeButtons)) {
+    button.disabled = !hasSelection;
+  }
+  for (const button of canvasAlignButtons) {
     button.disabled = !hasSelection;
   }
   for (const button of textSizeButtons) {
@@ -3374,6 +3400,94 @@ function moveSelectedLayer(mode) {
   recordHistory();
 }
 
+function getObjectBounds(object) {
+  const state = getState(object);
+  return {
+    left: state.x,
+    top: state.y,
+    right: state.x + state.width,
+    bottom: state.y + state.height,
+  };
+}
+
+function getSelectedBounds() {
+  if (selectedObjects.length === 0) {
+    return null;
+  }
+  return selectedObjects.map(getObjectBounds).reduce(
+    (bounds, objectBounds) => ({
+      left: Math.min(bounds.left, objectBounds.left),
+      top: Math.min(bounds.top, objectBounds.top),
+      right: Math.max(bounds.right, objectBounds.right),
+      bottom: Math.max(bounds.bottom, objectBounds.bottom),
+    }),
+    { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity }
+  );
+}
+
+function getCanvasAlignmentTarget(bounds, alignment) {
+  const width = bounds.right - bounds.left;
+  const height = bounds.bottom - bounds.top;
+  const canvasWidth = canvas.offsetWidth;
+  const canvasHeight = canvas.offsetHeight;
+  let left = bounds.left;
+  let top = bounds.top;
+
+  if (alignment.endsWith("left") || alignment === "left") {
+    left = 0;
+  } else if (alignment.endsWith("right") || alignment === "right") {
+    left = canvasWidth - width;
+  } else {
+    left = (canvasWidth - width) / 2;
+  }
+
+  if (alignment.startsWith("top") || alignment === "top") {
+    top = 0;
+  } else if (alignment.startsWith("bottom") || alignment === "bottom") {
+    top = canvasHeight - height;
+  } else {
+    top = (canvasHeight - height) / 2;
+  }
+
+  return { left, top };
+}
+
+function alignSelectedToCanvas(alignment) {
+  if (!CANVAS_ALIGNMENTS.has(alignment) || selectedObjects.length === 0) {
+    return false;
+  }
+
+  for (const object of selectedObjects) {
+    syncTextEditorValue(object);
+  }
+
+  const bounds = getSelectedBounds();
+  if (!bounds) {
+    return false;
+  }
+
+  const target = getCanvasAlignmentTarget(bounds, alignment);
+  const deltaX = target.left - bounds.left;
+  const deltaY = target.top - bounds.top;
+  if (Math.abs(deltaX) < 0.001 && Math.abs(deltaY) < 0.001) {
+    return false;
+  }
+
+  for (const object of selectedObjects) {
+    const state = getState(object);
+    applyState(object, {
+      ...state,
+      x: state.x + deltaX,
+      y: state.y + deltaY,
+    });
+  }
+
+  renderSlideList();
+  setStatus(`${selectedObjects.length}개 오브젝트를 ${CANVAS_ALIGNMENT_LABELS[alignment]}에 맞췄습니다.`);
+  recordHistory();
+  return true;
+}
+
 function nudgeSelectedObjects(deltaX, deltaY) {
   if (selectedObjects.length === 0) {
     return false;
@@ -5147,6 +5261,9 @@ arrangeButtons.backward.addEventListener("click", () => moveSelectedLayer("backw
 arrangeButtons.forward.addEventListener("click", () => moveSelectedLayer("forward"));
 arrangeButtons.back.addEventListener("click", () => moveSelectedLayer("back"));
 arrangeButtons.front.addEventListener("click", () => moveSelectedLayer("front"));
+for (const button of canvasAlignButtons) {
+  button.addEventListener("click", () => alignSelectedToCanvas(button.dataset.canvasAlign));
+}
 projectNameInput.addEventListener("change", () => {
   activeProjectName = getProjectName();
   projectNameInput.value = activeProjectName;
