@@ -769,19 +769,10 @@ select {
   gap: 6px;
 }
 
-.media-source-actions {
-  grid-template-columns: minmax(0, 1fr) 78px;
-}
-
 .video-source-actions button {
   height: 32px;
   font-size: 12px;
   font-weight: 700;
-}
-
-.media-status {
-  max-width: 112px;
-  color: var(--muted);
 }
 
 .inline-info {
@@ -1101,7 +1092,7 @@ input[type="checkbox"] {
 
 .dynamic-preview-surface.git {
   padding: 34px 48px;
-  background: #edf1f7;
+  background: #0b1020;
 }
 
 .dynamic-preview-surface.chat {
@@ -1128,10 +1119,10 @@ input[type="checkbox"] {
 .dynamic-preview-code-window {
   overflow: hidden;
   min-height: 0;
-  border: 1px solid rgba(100, 116, 139, 0.34);
-  border-radius: 18px;
-  background: #f6f6f7;
-  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.26);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 22px;
+  background: #202632;
+  box-shadow: 0 22px 54px rgba(0, 0, 0, 0.46);
 }
 
 .dynamic-preview-code-titlebar {
@@ -1140,21 +1131,22 @@ input[type="checkbox"] {
   align-items: center;
   justify-content: center;
   height: 38px;
-  color: #4b5563;
+  background: #2a303b;
+  color: #d7dce5;
   font-size: 13px;
   font-weight: 800;
 }
 
 .dynamic-preview-code-lights {
   position: absolute;
-  left: 15px;
+  left: 18px;
   display: flex;
-  gap: 8px;
+  gap: 10px;
 }
 
 .dynamic-preview-code-light {
-  width: 10px;
-  height: 10px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
 }
 

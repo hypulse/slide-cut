@@ -152,8 +152,6 @@ const gitTypingControls = document.querySelector("#gitTypingControls");
 const chatTypingControls = document.querySelector("#chatTypingControls");
 const canvasSlideHint = document.querySelector("#canvasSlideHint");
 const chooseGitRepo = document.querySelector("#chooseGitRepo");
-const loadGitCommits = document.querySelector("#loadGitCommits");
-const refreshGitDiff = document.querySelector("#refreshGitDiff");
 const gitRepoPath = document.querySelector("#gitRepoPath");
 const gitSlideTitle = document.querySelector("#gitSlideTitle");
 const gitCommitSelect = document.querySelector("#gitCommitSelect");
@@ -374,6 +372,14 @@ const GIT_CODE_MAX_RENDER_LINES = 700;
 const GIT_DIFF_MAX_LCS_CELLS = 220000;
 const MAX_GIT_COMMIT_OPTIONS = 80;
 const MAX_GIT_FILE_OPTIONS = 300;
+const GIT_SLIDE_HELPER_TEXTS = new Set([
+  "저장소를 선택한 뒤 커밋과 파일을 불러오세요.",
+  "저장소의 커밋 기록을 불러오세요.",
+  "커밋의 변경 파일 목록을 불러오는 중입니다.",
+  "이 저장소에서 읽을 커밋을 찾지 못했습니다.",
+  "Load Diff를 눌러 선택한 파일의 변경 내용을 불러오세요.",
+  "이 커밋에서 변경된 파일을 찾지 못했습니다.",
+]);
 const SLIDE_KINDS = new Set(["canvas", "gitTyping", "chatTyping"]);
 
 function setStatus(message) {
@@ -1754,7 +1760,9 @@ function getGitTypingData(slide) {
     ...createDefaultGitTypingData(),
     ...(slide?.gitTyping || {}),
   };
-  const afterContent = typeof data.afterContent === "string" ? data.afterContent : typeof data.content === "string" ? data.content : "";
+  const content = stripGitSlideHelperText(typeof data.content === "string" ? data.content : "");
+  const rawAfterContent = stripGitSlideHelperText(typeof data.afterContent === "string" ? data.afterContent : content);
+  const afterContent = rawAfterContent || content;
   return {
     ...data,
     commits: sanitizeGitCommitOptions(data.commits),
@@ -1763,7 +1771,7 @@ function getGitTypingData(slide) {
     beforeContent: typeof data.beforeContent === "string" ? data.beforeContent : "",
     afterContent,
     beforePath: typeof data.beforePath === "string" ? data.beforePath : "",
-    content: typeof data.content === "string" ? data.content : afterContent,
+    content: content || afterContent,
   };
 }
 
@@ -2076,37 +2084,39 @@ function drawGitTypingSlide(context, slide, width, height, timeSeconds) {
     Math.max(0, frame.lines.length * lineHeight - viewportHeight)
   );
 
-  context.fillStyle = "#edf1f7";
+  context.fillStyle = "#0b1020";
   context.fillRect(0, 0, width, height);
 
   context.save();
-  context.shadowColor = "rgba(15, 23, 42, 0.32)";
+  context.shadowColor = "rgba(0, 0, 0, 0.5)";
   context.shadowBlur = Math.round(height * 0.035);
   context.shadowOffsetY = Math.round(height * 0.016);
-  context.fillStyle = "#f7f7f8";
+  context.fillStyle = "#202632";
   fillRoundedRect(context, windowX, windowY, windowWidth, windowHeight, windowRadius);
   context.restore();
 
   context.save();
   traceRoundedRect(context, windowX, windowY, windowWidth, windowHeight, windowRadius);
   context.clip();
-  context.fillStyle = "#f6f6f7";
+  context.fillStyle = "#2a303b";
   context.fillRect(windowX, windowY, windowWidth, titleBarHeight);
   context.fillStyle = "#1e1e1e";
   context.fillRect(editorX, editorY, editorWidth, editorHeight);
-  context.fillStyle = "rgba(0, 0, 0, 0.12)";
+  context.fillStyle = "rgba(255, 255, 255, 0.08)";
   context.fillRect(windowX, editorY - 1, windowWidth, 1);
   context.restore();
-  context.strokeStyle = "rgba(100, 116, 139, 0.34)";
+  context.strokeStyle = "rgba(255, 255, 255, 0.12)";
   context.lineWidth = 1;
   strokeRoundedRect(context, windowX + 0.5, windowY + 0.5, windowWidth - 1, windowHeight - 1, windowRadius);
 
   const lightY = windowY + Math.round(titleBarHeight / 2);
-  const lightRadius = clamp(Math.round(titleBarHeight * 0.115), 5, 7);
+  const lightRadius = clamp(Math.round(titleBarHeight * 0.16), 7, 10);
+  const lightStartX = windowX + Math.round(titleBarHeight * 0.58);
+  const lightGap = Math.round(lightRadius * 2.35);
   [
-    ["#ff5f57", windowX + 22],
-    ["#febc2e", windowX + 43],
-    ["#28c840", windowX + 64],
+    ["#ff5f57", lightStartX],
+    ["#febc2e", lightStartX + lightGap],
+    ["#28c840", lightStartX + lightGap * 2],
   ].forEach(([color, x]) => {
     context.fillStyle = color;
     context.beginPath();
@@ -2114,7 +2124,7 @@ function drawGitTypingSlide(context, slide, width, height, timeSeconds) {
     context.fill();
   });
 
-  context.fillStyle = "#4b5563";
+  context.fillStyle = "#d7dce5";
   context.font = `700 ${clamp(Math.round(codeSize * 0.82), 12, 16)}px Pretendard, sans-serif`;
   context.textBaseline = "top";
   context.textAlign = "center";
@@ -2505,12 +2515,19 @@ function createDefaultGitTypingData() {
     filePath: "",
     commits: [],
     files: [],
-    content: "저장소를 선택한 뒤 커밋과 파일을 불러오세요.",
+    content: "",
     beforeContent: "",
-    afterContent: "저장소를 선택한 뒤 커밋과 파일을 불러오세요.",
+    afterContent: "",
     beforePath: "",
     typingSpeed: DEFAULT_GIT_TYPING_SPEED,
   };
+}
+
+function stripGitSlideHelperText(value) {
+  if (typeof value !== "string") {
+    return "";
+  }
+  return GIT_SLIDE_HELPER_TEXTS.has(value.trim()) ? "" : value;
 }
 
 function createDefaultChatTypingData() {
@@ -2592,9 +2609,8 @@ function updateSlideVideoView() {
     delete slideVideo.dataset.path;
     slideVideo.load();
     slideVideo.hidden = true;
-    slideVideoInfo.textContent = "";
+    slideVideoInfo.textContent = "No video selected";
     slideVideoInfo.title = "";
-    slideVideoInfo.hidden = true;
     clearSlideVideo.disabled = true;
     return;
   }
@@ -2611,7 +2627,6 @@ function updateSlideVideoView() {
   slideVideo.play().catch(() => {});
   slideVideoInfo.textContent = video.name;
   slideVideoInfo.title = video.name;
-  slideVideoInfo.hidden = false;
   clearSlideVideo.disabled = false;
 }
 
@@ -2702,7 +2717,7 @@ function replaceSelectOptions(select, placeholder, items, selectedValue, getValu
 function updateGitSelectControls(data) {
   replaceSelectOptions(
     gitCommitSelect,
-    "Load commits...",
+    data.repoPath ? "Select commit..." : "Choose repository...",
     data.commits,
     data.commitHash,
     (commit) => commit.hash,
@@ -4018,14 +4033,17 @@ function normalizeProjectData(data) {
             filePath: typeof slide.gitTyping?.filePath === "string" ? slide.gitTyping.filePath : "",
             commits: sanitizeGitCommitOptions(slide.gitTyping?.commits),
             files: sanitizeGitFileOptions(slide.gitTyping?.files),
-            content: typeof slide.gitTyping?.content === "string" ? slide.gitTyping.content : createDefaultGitTypingData().content,
+            content: stripGitSlideHelperText(
+              typeof slide.gitTyping?.content === "string" ? slide.gitTyping.content : createDefaultGitTypingData().content
+            ),
             beforeContent: typeof slide.gitTyping?.beforeContent === "string" ? slide.gitTyping.beforeContent : "",
-            afterContent:
+            afterContent: stripGitSlideHelperText(
               typeof slide.gitTyping?.afterContent === "string"
                 ? slide.gitTyping.afterContent
                 : typeof slide.gitTyping?.content === "string"
                   ? slide.gitTyping.content
-                  : createDefaultGitTypingData().afterContent,
+                  : createDefaultGitTypingData().afterContent
+            ),
             beforePath: typeof slide.gitTyping?.beforePath === "string" ? slide.gitTyping.beforePath : "",
             typingSpeed: sanitizeTypingSpeed(slide.gitTyping?.typingSpeed, DEFAULT_GIT_TYPING_SPEED),
           }
@@ -4581,9 +4599,9 @@ async function chooseGitRepositoryForSlide() {
       filePath: "",
       commits: [],
       files: [],
-      content: "저장소의 커밋 기록을 불러오세요.",
+      content: "",
       beforeContent: "",
-      afterContent: "저장소의 커밋 기록을 불러오세요.",
+      afterContent: "",
       beforePath: "",
     };
   }, { record: true });
@@ -4636,19 +4654,15 @@ async function loadGitCommitsForSlide() {
         filePath: "",
         commits,
         files: [],
-        content: selectedCommit
-          ? "커밋의 변경 파일 목록을 불러오는 중입니다."
-          : "이 저장소에서 읽을 커밋을 찾지 못했습니다.",
+        content: "",
         beforeContent: "",
-        afterContent: selectedCommit
-          ? "커밋의 변경 파일 목록을 불러오는 중입니다."
-          : "이 저장소에서 읽을 커밋을 찾지 못했습니다.",
+        afterContent: "",
         beforePath: "",
       };
     }, { record: !selectedCommit });
     syncDynamicSlidePanel();
     if (selectedCommit) {
-      await loadGitFilesForSlide({ record: true, clearContent: true });
+      await loadGitFilesForSlide({ record: true, clearContent: true, autoLoadChange: true });
     } else {
       setStatus("이 저장소에서 읽을 커밋을 찾지 못했습니다.");
     }
@@ -4679,6 +4693,7 @@ async function loadGitFilesForSlide(options = {}) {
     const current = getGitTypingData(slide);
     const selectedFilePath = files.includes(current.filePath) ? current.filePath : files[0] || "";
     const selectedCommit = current.commits.find((commit) => commit.hash === commitHash);
+    const shouldClearContent = options.clearContent || !current.content;
     updateActiveDynamicSlide((activeSlide) => {
       activeSlide.gitTyping = {
         ...getGitTypingData(activeSlide),
@@ -4687,30 +4702,24 @@ async function loadGitFilesForSlide(options = {}) {
         commitLabel: selectedCommit?.label || current.commitLabel || commitHash,
         filePath: selectedFilePath,
         files,
-        content:
-          options.clearContent || !current.content
-            ? selectedFilePath
-              ? "Load Diff를 눌러 선택한 파일의 변경 내용을 불러오세요."
-              : "이 커밋에서 변경된 파일을 찾지 못했습니다."
-            : current.content,
+        content: shouldClearContent ? "" : current.content,
         beforeContent: "",
-        afterContent:
-          options.clearContent || !current.content
-            ? selectedFilePath
-              ? "Load Diff를 눌러 선택한 파일의 변경 내용을 불러오세요."
-              : "이 커밋에서 변경된 파일을 찾지 못했습니다."
-            : current.afterContent,
+        afterContent: shouldClearContent ? "" : current.afterContent,
         beforePath: "",
       };
     }, { record: Boolean(options.record) });
     syncDynamicSlidePanel();
+    if (selectedFilePath && options.autoLoadChange) {
+      await loadGitFileChangeForSlide({ record: Boolean(options.record) });
+      return;
+    }
     setStatus(files.length ? "변경 파일 목록을 불러왔습니다." : "이 커밋에서 변경된 파일을 찾지 못했습니다.");
   } catch (error) {
     setStatus(error?.message || "Git 변경 파일 목록을 읽지 못했습니다.");
   }
 }
 
-async function loadGitFileChangeForSlide() {
+async function loadGitFileChangeForSlide(options = {}) {
   const slide = getActiveGitTypingSlide();
   if (!slide) {
     return;
@@ -4743,7 +4752,7 @@ async function loadGitFileChangeForSlide() {
         afterContent: result.afterContent || result.content || "",
         beforePath: result.beforePath || "",
       };
-    }, { record: true });
+    }, { record: options.record !== false });
     syncDynamicSlidePanel();
     setStatus("선택한 파일 변경 내용을 타이핑 슬라이드에 불러왔습니다.");
   } catch (error) {
@@ -5161,22 +5170,15 @@ addChatTypingSlide.addEventListener("click", () => addDynamicSlide("chatTyping")
 chooseGitRepo.addEventListener("click", () => {
   chooseGitRepositoryForSlide();
 });
-loadGitCommits.addEventListener("click", () => {
-  loadGitCommitsForSlide();
-});
-refreshGitDiff.addEventListener("click", () => {
-  loadGitFileChangeForSlide();
-});
 gitCommitSelect.addEventListener("change", () => {
+  gitTypingContent.value = "";
   syncGitTypingInputsToSlide({ record: true });
-  loadGitFilesForSlide({ record: true, clearContent: true });
+  loadGitFilesForSlide({ record: true, clearContent: true, autoLoadChange: true });
 });
 gitFileSelect.addEventListener("change", () => {
-  const filePath = gitFileSelect.value;
-  if (filePath) {
-    gitTypingContent.value = "Load Diff를 눌러 선택한 파일의 변경 내용을 불러오세요.";
-  }
+  gitTypingContent.value = "";
   syncGitTypingInputsToSlide({ record: true });
+  loadGitFileChangeForSlide({ record: true });
 });
 for (const input of [gitSlideTitle, gitRepoPath, gitTypingSpeed, gitTypingContent]) {
   input.addEventListener("input", () => syncGitTypingInputsToSlide());

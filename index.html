@@ -65,14 +65,12 @@
         </section>
 
         <section class="panel" aria-labelledby="slide-video-title">
-          <div class="panel-title-row">
-            <h2 id="slide-video-title">Background Video</h2>
-            <span id="slideVideoInfo" class="panel-summary media-status" hidden></span>
-          </div>
-          <div class="video-source-actions media-source-actions">
-            <button id="chooseSlideVideo" type="button" data-icon="video">Choose</button>
+          <h2 id="slide-video-title">Background Video</h2>
+          <div class="video-source-actions">
+            <button id="chooseSlideVideo" type="button" data-icon="video">Choose Video</button>
             <button id="clearSlideVideo" type="button" data-icon="x">Remove</button>
           </div>
+          <div id="slideVideoInfo" class="inline-info">No video selected</div>
         </section>
 
         <section class="panel" aria-labelledby="slide-sound-title">
@@ -96,8 +94,6 @@
             </label>
             <div class="dynamic-actions">
               <button id="chooseGitRepo" type="button" data-icon="folder-git-2">Choose Repository</button>
-              <button id="loadGitCommits" type="button" data-icon="git-commit-horizontal">Load Commits</button>
-              <button id="refreshGitDiff" type="button" data-icon="file-diff">Load Diff</button>
             </div>
             <label>
               <span>Commit</span>
@@ -111,7 +107,7 @@
               <span>Speed</span>
               <input id="gitTypingSpeed" type="number" min="20" max="240" step="5" value="90" />
             </label>
-            <textarea id="gitTypingContent" class="dynamic-textarea" spellcheck="false" placeholder="Load a commit file change or type code manually."></textarea>
+            <textarea id="gitTypingContent" class="dynamic-textarea" spellcheck="false" placeholder="Selected file content appears here."></textarea>
           </div>
           <div id="chatTypingControls" class="dynamic-controls" hidden>
             <label>
