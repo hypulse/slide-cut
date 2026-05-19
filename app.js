@@ -252,16 +252,18 @@ const TTS_PRESETS = {
   animeCute: {
     label: "여성 활발하고 귀여운 애니메이션 여캐",
     model: "gpt-4o-mini-tts",
-    voice: "nova",
+    voice: "sage",
     speed: 1.12,
-    instructions: "밝고 활발하며 귀여운 애니메이션 여성 캐릭터처럼 말해 주세요. 목소리는 에너지 있고 친근하게, 문장 끝은 산뜻하게 처리해 주세요.",
+    instructions:
+      "Speak the Korean input as a cheerful young adult anime heroine. Use a bright, cute, energetic, friendly tone with lively intonation, slightly higher pitch, quick but clear pacing, and warm encouraging emotion. Read the Korean text naturally as written; do not translate it. Do not sound childish, and avoid exaggerated delivery that feels unnatural.",
   },
   animeTsundere: {
     label: "여성 츤데레 애니메이션 여캐",
     model: "gpt-4o-mini-tts",
     voice: "coral",
-    speed: 1.04,
-    instructions: "여성 츤데레 애니메이션 캐릭터처럼 말해 주세요. 살짝 퉁명스럽고 자신감 있게 시작하되, 중간중간 귀엽고 부끄러운 느낌이 드러나게 읽어 주세요.",
+    speed: 1.06,
+    instructions:
+      "Speak the Korean input as a young adult tsundere-style anime heroine. Start slightly sharp, confident, and teasing, then let a subtle cute and embarrassed warmth show through. Keep pronunciation clear, lively, and natural in Korean. Read the Korean text as written; do not translate it. Avoid sounding childish or copying any specific actor or character.",
   },
 };
 const DEFAULT_TTS_SETTINGS = {
