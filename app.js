@@ -122,6 +122,8 @@ let nativeSavePromise = null;
 let nativeSaveQueued = false;
 let isLoadingNativeProject = false;
 let lastSaveState = "Ready";
+let activeTextEditObject = null;
+let textEditButtonHandledPointer = false;
 const textMeasureCanvas = document.createElement("canvas");
 const textMeasureContext = textMeasureCanvas.getContext("2d");
 let canvasViewScale = 1;
@@ -287,6 +289,19 @@ function applyState(element, nextState) {
   }
 }
 
+function syncTextEditorValue(element, options = {}) {
+  if (!element || element.dataset.type !== "text" || !element.classList.contains("is-editing")) {
+    return false;
+  }
+  const editor = element.querySelector(".text-editor");
+  element.dataset.text = editor.value;
+  const grew = growTextBoxToContent(element);
+  if (!grew && options.render !== false) {
+    renderTextObject(element);
+  }
+  return grew;
+}
+
 function centerPosition(width, height) {
   const x = Math.max(16, (canvas.offsetWidth - width) / 2);
   const y = Math.max(16, (canvas.offsetHeight - height) / 2);
@@ -379,6 +394,7 @@ function syncSelectedInputs() {
   duplicateSelected.disabled = !hasSelection;
   selectedTextColor.disabled = !hasTextSelection;
   editSelectedText.disabled = !hasTextSelection;
+  editSelectedText.textContent = activeTextEditObject === selectedObject ? "Done" : "Edit Text";
   deleteSelected.disabled = !hasSelection;
 
   if (!selectedObject) {
@@ -879,15 +895,24 @@ function growTextBoxToContent(element) {
 function wireTextEditor(element) {
   const editor = element.querySelector(".text-editor");
   editor.addEventListener("input", () => {
-    element.dataset.text = editor.value;
-    if (!growTextBoxToContent(element)) {
-      renderTextObject(element);
-    }
+    syncTextEditorValue(element);
+    scheduleNativeProjectSave();
+  });
+  editor.addEventListener("compositionstart", () => {
+    element.dataset.isComposing = "true";
+  });
+  editor.addEventListener("compositionend", () => {
+    delete element.dataset.isComposing;
+    syncTextEditorValue(element);
+    scheduleNativeProjectSave();
   });
   editor.addEventListener("blur", () => {
     stopTextEdit(element);
   });
   editor.addEventListener("keydown", (event) => {
+    if (event.isComposing || element.dataset.isComposing === "true") {
+      return;
+    }
     if (event.key === "Escape" || ((event.metaKey || event.ctrlKey) && event.key === "Enter")) {
       event.preventDefault();
       stopTextEdit(element);
@@ -900,11 +925,21 @@ function startTextEdit(element) {
   if (!element || element.dataset.type !== "text") {
     return;
   }
+  if (activeTextEditObject && activeTextEditObject !== element) {
+    stopTextEdit(activeTextEditObject);
+  }
   selectObject(element);
   const editor = element.querySelector(".text-editor");
   const preset = getTextPreset(element);
   const state = getState(element);
+  if (element.classList.contains("is-editing")) {
+    activeTextEditObject = element;
+    window.requestAnimationFrame(() => editor.focus({ preventScroll: true }));
+    syncSelectedInputs();
+    return;
+  }
   element.classList.add("is-editing");
+  activeTextEditObject = element;
   element.dataset.editStartText = element.dataset.text || "";
   element.dataset.editStartWidth = String(state.width);
   element.dataset.editStartHeight = String(state.height);
@@ -912,25 +947,33 @@ function startTextEdit(element) {
   editor.style.fontSize = `${preset.fontSize}px`;
   editor.style.lineHeight = `${preset.lineHeight}px`;
   editor.style.color = element.dataset.textColor || DEFAULT_TEXT_COLOR;
-  editor.focus();
-  selectEditableContent(editor);
-  setStatus("텍스트 편집 중입니다. 입력 후 바깥을 클릭하거나 Esc로 종료할 수 있습니다.");
+  window.requestAnimationFrame(() => {
+    editor.focus({ preventScroll: true });
+    selectEditableContent(editor);
+  });
+  syncSelectedInputs();
+  setStatus("텍스트 편집 중입니다. Esc 또는 Done으로 종료할 수 있습니다.");
 }
 
 function stopTextEdit(element, shouldSetStatus = true) {
   if (!element || element.dataset.type !== "text" || !element.classList.contains("is-editing")) {
-    return;
+    return false;
   }
   const editor = element.querySelector(".text-editor");
   const previousText = element.dataset.editStartText || "";
   const previousWidth = numberOr(element.dataset.editStartWidth, Number.NaN);
   const previousHeight = numberOr(element.dataset.editStartHeight, Number.NaN);
+  syncTextEditorValue(element, { render: false });
   element.dataset.text = editor.value;
   element.classList.remove("is-editing");
+  if (activeTextEditObject === element) {
+    activeTextEditObject = null;
+  }
   renderTextObject(element);
   delete element.dataset.editStartText;
   delete element.dataset.editStartWidth;
   delete element.dataset.editStartHeight;
+  delete element.dataset.isComposing;
   if (shouldSetStatus) {
     setStatus("텍스트 편집을 종료했습니다.");
   }
@@ -939,9 +982,12 @@ function stopTextEdit(element, shouldSetStatus = true) {
     previousText !== element.dataset.text ||
     previousWidth !== state.width ||
     previousHeight !== state.height;
+  syncSelectedInputs();
   if (shouldSetStatus && changed) {
+    renderSlideList();
     recordHistory();
   }
+  return changed;
 }
 
 function startMove(element, event) {
@@ -1283,8 +1329,8 @@ function serializeCurrentSlide() {
     return;
   }
 
-  for (const object of canvas.querySelectorAll(".text-object")) {
-    stopTextEdit(object, false);
+  for (const object of canvas.querySelectorAll(".text-object.is-editing")) {
+    syncTextEditorValue(object, { render: false });
   }
 
   slides[activeSlideIndex] = {
@@ -1352,6 +1398,9 @@ function addObjectFromData(data) {
 
 function loadSlide(index, shouldSaveCurrent = true) {
   if (shouldSaveCurrent) {
+    if (activeTextEditObject) {
+      stopTextEdit(activeTextEditObject, false);
+    }
     serializeCurrentSlide();
   }
 
@@ -2267,8 +2316,8 @@ async function saveCanvasAsPng() {
   if (document.fonts?.ready) {
     await document.fonts.ready;
   }
-  for (const object of canvas.querySelectorAll(".text-object")) {
-    stopTextEdit(object);
+  for (const object of canvas.querySelectorAll(".text-object.is-editing")) {
+    syncTextEditorValue(object);
   }
   await Promise.all([...canvas.querySelectorAll("img")].map(waitForImageLoad));
 
@@ -2609,7 +2658,19 @@ addTextBox.addEventListener("click", () => {
   addTextObject("텍스트", "텍스트 상자를 만들었습니다. 바로 입력해서 내용을 바꿀 수 있습니다.");
   startTextEdit(selectedObject);
 });
+editSelectedText.addEventListener("pointerdown", (event) => {
+  if (activeTextEditObject === selectedObject) {
+    event.preventDefault();
+    textEditButtonHandledPointer = true;
+    stopTextEdit(activeTextEditObject);
+    canvas.focus();
+  }
+});
 editSelectedText.addEventListener("click", () => {
+  if (textEditButtonHandledPointer) {
+    textEditButtonHandledPointer = false;
+    return;
+  }
   startTextEdit(selectedObject);
 });
 duplicateSelected.addEventListener("click", duplicateSelectedObjects);
