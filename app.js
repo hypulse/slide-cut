@@ -4494,6 +4494,7 @@ async function exportProjectAsMp4() {
           ...baseSlidePayload,
           notes: exportNoteSegments[0],
           startSoundPath: startSound?.path || null,
+          endOnTtsEnd: true,
           framePng: animation.framePng,
           animationFrames: animation.frames,
           frameRate: animation.frameRate,

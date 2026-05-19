@@ -102,6 +102,7 @@ struct VideoExportSlide {
     animation_frames: Option<Vec<String>>,
     frame_rate: Option<f64>,
     animation_duration_seconds: Option<f64>,
+    end_on_tts_end: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1640,9 +1641,13 @@ fn export_video(app: AppHandle, payload: VideoExportPayload) -> Result<VideoExpo
                         .as_ref()
                         .map(|frames| frames.len() as f64 / frame_rate)
                 });
-            let duration = base_audio_duration
-                .max(animation_duration.unwrap_or(0.0))
-                .max(start_sound_duration.unwrap_or(0.0));
+            let duration = if slide.end_on_tts_end.unwrap_or(false) {
+                base_audio_duration
+            } else {
+                base_audio_duration
+                    .max(animation_duration.unwrap_or(0.0))
+                    .max(start_sound_duration.unwrap_or(0.0))
+            };
             let audio_path = if let Some(sound_path) = start_sound_path.as_ref() {
                 let mixed_path = work_dir.join(format!("mixed-audio-{index:04}.m4a"));
                 mix_start_sound(
