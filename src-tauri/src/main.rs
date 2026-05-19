@@ -87,6 +87,9 @@ struct VideoExportSlide {
     notes: String,
     video_path: Option<String>,
     frame_png: String,
+    animation_frames: Option<Vec<String>>,
+    frame_rate: Option<f64>,
+    animation_duration_seconds: Option<f64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -106,6 +109,38 @@ struct VideoExportResult {
     slide_count: usize,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct GitChanges {
+    repo_path: String,
+    commit_hash: String,
+    file_path: String,
+    title: String,
+    content: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct GitCommit {
+    hash: String,
+    label: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct GitCommitList {
+    repo_path: String,
+    commits: Vec<GitCommit>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct GitFileList {
+    repo_path: String,
+    commit_hash: String,
+    files: Vec<String>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct VideoExportProgress {
@@ -119,6 +154,8 @@ struct VideoExportProgress {
 #[derive(Debug)]
 struct PreparedSlide {
     frame_path: PathBuf,
+    animation_frame_paths: Option<Vec<PathBuf>>,
+    frame_rate: f64,
     audio_path: PathBuf,
     video_path: Option<PathBuf>,
     duration_seconds: f64,
@@ -541,6 +578,197 @@ fn run_command(mut command: Command, label: &str, export_id: &str) -> Result<(),
     Err(format!("{label} 실패: {detail}"))
 }
 
+fn command_output(mut command: Command, label: &str) -> Result<String, String> {
+    let output = command
+        .output()
+        .map_err(|error| format!("{label} 실행에 실패했습니다: {error}"))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(if stderr.is_empty() {
+            format!("{label} 실패")
+        } else {
+            stderr
+        });
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
+fn git_output(repo_path: &Path, args: &[&str]) -> Result<String, String> {
+    let mut command = Command::new("git");
+    command.arg("-C").arg(repo_path).args(args);
+    command_output(command, "Git")
+}
+
+fn truncate_git_content(content: String) -> String {
+    if content.chars().count() > 12000 {
+        format!(
+            "{}\n\n... truncated ...",
+            content.chars().take(12000).collect::<String>()
+        )
+    } else {
+        content
+    }
+}
+
+fn resolve_git_root(repo_path: &str) -> Result<PathBuf, String> {
+    if repo_path.trim().is_empty() {
+        return Err("Git 저장소 경로가 없습니다.".to_string());
+    }
+    let input_path = PathBuf::from(repo_path.trim());
+    let root = git_output(&input_path, &["rev-parse", "--show-toplevel"])?;
+    let root = root.trim();
+    if root.is_empty() {
+        return Err("Git 저장소 루트를 찾지 못했습니다.".to_string());
+    }
+    Ok(PathBuf::from(root))
+}
+
+fn verify_commit(root: &Path, commit_hash: &str) -> Result<String, String> {
+    let trimmed = commit_hash.trim();
+    if trimmed.is_empty() {
+        return Err("커밋을 선택해 주세요.".to_string());
+    }
+    if trimmed.starts_with('-') {
+        return Err("올바르지 않은 커밋 값입니다.".to_string());
+    }
+    let spec = format!("{trimmed}^{{commit}}");
+    let commit = git_output(root, &["rev-parse", "--verify", &spec])?;
+    Ok(commit.trim().to_string())
+}
+
+#[tauri::command]
+fn list_git_commits(repo_path: String) -> Result<GitCommitList, String> {
+    let root = resolve_git_root(&repo_path)?;
+    let output = git_output(
+        &root,
+        &[
+            "log",
+            "--date=short",
+            "--pretty=format:%H%x1f%h%x1f%ad%x1f%s",
+            "-n",
+            "80",
+        ],
+    )?;
+    let commits = output
+        .lines()
+        .filter_map(|line| {
+            let mut parts = line.splitn(4, '\u{1f}');
+            let hash = parts.next()?.trim();
+            let short_hash = parts.next()?.trim();
+            let date = parts.next()?.trim();
+            let subject = parts.next().unwrap_or("").trim();
+            if hash.is_empty() {
+                return None;
+            }
+            Some(GitCommit {
+                hash: hash.to_string(),
+                label: format!("{short_hash} · {date} · {subject}"),
+            })
+        })
+        .collect();
+
+    Ok(GitCommitList {
+        repo_path: root.to_string_lossy().to_string(),
+        commits,
+    })
+}
+
+#[tauri::command]
+fn list_git_commit_files(repo_path: String, commit_hash: String) -> Result<GitFileList, String> {
+    let root = resolve_git_root(&repo_path)?;
+    let commit = verify_commit(&root, &commit_hash)?;
+    let output = git_output(
+        &root,
+        &[
+            "diff-tree",
+            "--root",
+            "--no-commit-id",
+            "--name-only",
+            "-r",
+            &commit,
+        ],
+    )?;
+    let mut files: Vec<String> = output
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(ToString::to_string)
+        .collect();
+    files.sort();
+    files.dedup();
+
+    Ok(GitFileList {
+        repo_path: root.to_string_lossy().to_string(),
+        commit_hash: commit,
+        files,
+    })
+}
+
+#[tauri::command]
+fn read_git_commit_file_change(
+    repo_path: String,
+    commit_hash: String,
+    file_path: String,
+) -> Result<GitChanges, String> {
+    let root = resolve_git_root(&repo_path)?;
+    let commit = verify_commit(&root, &commit_hash)?;
+    let file_path = file_path.trim().to_string();
+    if file_path.is_empty() {
+        return Err("파일을 선택해 주세요.".to_string());
+    }
+
+    let short_hash = git_output(&root, &["rev-parse", "--short", &commit])
+        .map(|value| value.trim().to_string())
+        .unwrap_or_else(|_| commit.chars().take(12).collect());
+    let stat = git_output(
+        &root,
+        &[
+            "show",
+            "--no-ext-diff",
+            "--format=fuller",
+            "--stat",
+            "--find-renames",
+            &commit,
+            "--",
+            &file_path,
+        ],
+    )?;
+    let patch = git_output(
+        &root,
+        &[
+            "show",
+            "--no-ext-diff",
+            "--format=",
+            "--find-renames",
+            "--patch",
+            &commit,
+            "--",
+            &file_path,
+        ],
+    )
+    .unwrap_or_default();
+
+    let mut content = String::new();
+    content.push_str(&format!("$ git show --stat {short_hash} -- {file_path}\n"));
+    content.push_str(stat.trim_end());
+    content.push_str(&format!(
+        "\n\n$ git show --patch {short_hash} -- {file_path}\n"
+    ));
+    content.push_str(if patch.trim().is_empty() {
+        "No textual patch for this file."
+    } else {
+        patch.trim_end()
+    });
+
+    Ok(GitChanges {
+        repo_path: root.to_string_lossy().to_string(),
+        commit_hash: commit,
+        file_path: file_path.clone(),
+        title: format!("{short_hash} · {file_path}"),
+        content: truncate_git_content(content),
+    })
+}
+
 fn tts_value(settings: &TtsSettings, notes: &str) -> Value {
     let model = settings
         .model
@@ -756,6 +984,58 @@ fn create_video_segment(
     run_command(command, "영상 배경 슬라이드 세그먼트 생성", export_id)
 }
 
+fn create_animation_segment(
+    ffmpeg: &Path,
+    prepared: &PreparedSlide,
+    output_path: &Path,
+    width: u32,
+    height: u32,
+    fps: u32,
+    export_id: &str,
+) -> Result<(), String> {
+    let frame_paths = prepared
+        .animation_frame_paths
+        .as_ref()
+        .ok_or_else(|| "애니메이션 프레임이 없습니다.".to_string())?;
+    if frame_paths.is_empty() {
+        return Err("애니메이션 프레임이 없습니다.".to_string());
+    }
+    let first_frame = frame_paths
+        .first()
+        .and_then(|path| path.parent())
+        .ok_or_else(|| "애니메이션 프레임 경로가 올바르지 않습니다.".to_string())?
+        .join("frame-%05d.png");
+    let frame_duration = frame_paths.len() as f64 / prepared.frame_rate.max(1.0);
+    let stop_duration = (prepared.duration_seconds - frame_duration).max(0.0);
+    let filter = format!(
+        "scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=white,tpad=stop_mode=clone:stop_duration={},format=yuv420p",
+        format_seconds(stop_duration)
+    );
+    let mut command = Command::new(ffmpeg);
+    command
+        .args(["-y", "-framerate"])
+        .arg(format_seconds(prepared.frame_rate))
+        .arg("-i")
+        .arg(first_frame)
+        .arg("-i")
+        .arg(&prepared.audio_path)
+        .arg("-t")
+        .arg(format_seconds(prepared.duration_seconds))
+        .arg("-vf")
+        .arg(filter)
+        .arg("-af")
+        .arg("apad")
+        .args([
+            "-map", "0:v", "-map", "1:a", "-c:v", "libx264", "-preset", "veryfast",
+        ])
+        .arg("-r")
+        .arg(fps.to_string())
+        .args(["-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k"])
+        .args(["-movflags", "+faststart"])
+        .arg(output_path);
+    run_command(command, "타이핑 슬라이드 세그먼트 생성", export_id)
+}
+
 fn concat_segments(
     ffmpeg: &Path,
     work_dir: &Path,
@@ -847,6 +1127,25 @@ fn export_video(app: AppHandle, payload: VideoExportPayload) -> Result<VideoExpo
             let frame_path = work_dir.join(format!("frame-{index:04}.png"));
             fs::write(&frame_path, decode_png_data_url(&slide.frame_png)?)
                 .map_err(|error| error.to_string())?;
+            let animation_frame_paths = if let Some(frames) = slide.animation_frames.as_ref() {
+                if frames.is_empty() {
+                    None
+                } else {
+                    let frame_dir = work_dir.join(format!("animation-{index:04}"));
+                    fs::create_dir_all(&frame_dir).map_err(|error| error.to_string())?;
+                    let mut paths = Vec::with_capacity(frames.len());
+                    for (frame_index, frame_data) in frames.iter().enumerate() {
+                        check_export_cancelled(&export_id)?;
+                        let path = frame_dir.join(format!("frame-{frame_index:05}.png"));
+                        fs::write(&path, decode_png_data_url(frame_data)?)
+                            .map_err(|error| error.to_string())?;
+                        paths.push(path);
+                    }
+                    Some(paths)
+                }
+            } else {
+                None
+            };
 
             let trimmed_notes = slide.notes.trim();
             let audio_path = if trimmed_notes.is_empty() {
@@ -868,6 +1167,17 @@ fn export_video(app: AppHandle, payload: VideoExportPayload) -> Result<VideoExpo
             } else {
                 probe_audio_duration(&ffprobe, &audio_path, fallback_duration)?
             };
+            let frame_rate = slide.frame_rate.unwrap_or(8.0).clamp(1.0, 30.0);
+            let animation_duration = slide
+                .animation_duration_seconds
+                .filter(|duration| duration.is_finite())
+                .map(|duration| duration.clamp(0.5, 120.0))
+                .or_else(|| {
+                    animation_frame_paths
+                        .as_ref()
+                        .map(|frames| frames.len() as f64 / frame_rate)
+                });
+            let duration = duration.max(animation_duration.unwrap_or(0.0));
             let video_path = slide
                 .video_path
                 .as_deref()
@@ -883,6 +1193,8 @@ fn export_video(app: AppHandle, payload: VideoExportPayload) -> Result<VideoExpo
             }
             prepared_slides.push(PreparedSlide {
                 frame_path,
+                animation_frame_paths,
+                frame_rate,
                 audio_path,
                 video_path,
                 duration_seconds: duration,
@@ -905,7 +1217,17 @@ fn export_video(app: AppHandle, payload: VideoExportPayload) -> Result<VideoExpo
                 prepared_slides.len(),
             );
             let segment_path = work_dir.join(format!("segment-{index:04}.mp4"));
-            if prepared.video_path.is_some() {
+            if prepared.animation_frame_paths.is_some() {
+                create_animation_segment(
+                    &ffmpeg,
+                    prepared,
+                    &segment_path,
+                    width,
+                    height,
+                    fps,
+                    &export_id,
+                )?;
+            } else if prepared.video_path.is_some() {
                 create_video_segment(
                     &ffmpeg,
                     prepared,
@@ -969,6 +1291,9 @@ pub fn run() {
             get_app_settings,
             save_app_settings,
             cancel_video_export,
+            list_git_commits,
+            list_git_commit_files,
+            read_git_commit_file_change,
             export_video
         ])
         .run(tauri::generate_context!())

@@ -50,6 +50,19 @@ const nativeApi = window.simpleSlideNative || (tauriInvoke ? {
     }
     return tauriInvoke("read_project_file", { path });
   },
+  selectDirectory: async () => {
+    if (!tauriDialog?.open) {
+      throw new Error("Tauri 폴더 선택 대화상자를 사용할 수 없습니다.");
+    }
+    const path = await tauriDialog.open({
+      multiple: false,
+      directory: true,
+    });
+    if (!path || Array.isArray(path)) {
+      return null;
+    }
+    return path;
+  },
   selectVideoFile: async () => {
     if (!tauriDialog?.open) {
       throw new Error("Tauri 파일 선택 대화상자를 사용할 수 없습니다.");
@@ -76,6 +89,10 @@ const nativeApi = window.simpleSlideNative || (tauriInvoke ? {
   exportVideo: (payload) => tauriInvoke("export_video", { payload }),
   cancelVideoExport: (exportId) => tauriInvoke("cancel_video_export", { exportId }),
   listenVideoExportProgress: (handler) => window.__TAURI__?.event?.listen?.("video-export-progress", (event) => handler(event.payload)),
+  listGitCommits: (repoPath) => tauriInvoke("list_git_commits", { repoPath }),
+  listGitCommitFiles: (repoPath, commitHash) => tauriInvoke("list_git_commit_files", { repoPath, commitHash }),
+  readGitCommitFileChange: (repoPath, commitHash, filePath) =>
+    tauriInvoke("read_git_commit_file_change", { repoPath, commitHash, filePath }),
 } : null);
 
 const projectNameInput = document.querySelector("#projectNameInput");
@@ -90,6 +107,8 @@ const applyCanvas = document.querySelector("#applyCanvas");
 const colorPresetButtons = [...document.querySelectorAll("[data-color-preset]")];
 const pasteImage = document.querySelector("#pasteImage");
 const addTextBox = document.querySelector("#addTextBox");
+const addGitTypingSlide = document.querySelector("#addGitTypingSlide");
+const addChatTypingSlide = document.querySelector("#addChatTypingSlide");
 const savePng = document.querySelector("#savePng");
 const exportMp4 = document.querySelector("#exportMp4");
 const saveProject = document.querySelector("#saveProject");
@@ -105,6 +124,24 @@ const strokeWidth = document.querySelector("#strokeWidth");
 const chooseSlideVideo = document.querySelector("#chooseSlideVideo");
 const clearSlideVideo = document.querySelector("#clearSlideVideo");
 const slideVideoInfo = document.querySelector("#slideVideoInfo");
+const dynamicSlidePreview = document.querySelector("#dynamicSlidePreview");
+const dynamicSlideType = document.querySelector("#dynamicSlideType");
+const gitTypingControls = document.querySelector("#gitTypingControls");
+const chatTypingControls = document.querySelector("#chatTypingControls");
+const canvasSlideHint = document.querySelector("#canvasSlideHint");
+const chooseGitRepo = document.querySelector("#chooseGitRepo");
+const loadGitCommits = document.querySelector("#loadGitCommits");
+const refreshGitDiff = document.querySelector("#refreshGitDiff");
+const gitRepoPath = document.querySelector("#gitRepoPath");
+const gitSlideTitle = document.querySelector("#gitSlideTitle");
+const gitCommitSelect = document.querySelector("#gitCommitSelect");
+const gitFileSelect = document.querySelector("#gitFileSelect");
+const gitTypingSpeed = document.querySelector("#gitTypingSpeed");
+const gitTypingContent = document.querySelector("#gitTypingContent");
+const chatSlideTitle = document.querySelector("#chatSlideTitle");
+const chatTypingSpeed = document.querySelector("#chatTypingSpeed");
+const chatQuestion = document.querySelector("#chatQuestion");
+const chatAnswer = document.querySelector("#chatAnswer");
 const ttsPreset = document.querySelector("#ttsPreset");
 const ttsModel = document.querySelector("#ttsModel");
 const ttsVoice = document.querySelector("#ttsVoice");
@@ -239,6 +276,14 @@ const DEFAULT_SUBTITLE_ENABLED = true;
 const SUBTITLE_MAX_LINES = 2;
 const VIDEO_EXPORT_FPS = 30;
 const VIDEO_EXPORT_FALLBACK_DURATION = 3;
+const DYNAMIC_FRAME_RATE = 8;
+const DYNAMIC_MAX_DURATION = 60;
+const DEFAULT_GIT_TYPING_SPEED = 90;
+const DEFAULT_CHAT_TYPING_SPEED = 80;
+const CHAT_ANSWER_DELAY_SECONDS = 0.55;
+const MAX_GIT_COMMIT_OPTIONS = 80;
+const MAX_GIT_FILE_OPTIONS = 300;
+const SLIDE_KINDS = new Set(["canvas", "gitTyping", "chatTyping"]);
 
 function setStatus(message) {
   window.clearTimeout(statusTimer);
@@ -274,6 +319,46 @@ function sanitizeTextAlign(value) {
 
 function getFileNameFromPath(path) {
   return String(path || "").split(/[\\/]/).pop() || "Video";
+}
+
+function sanitizeSlideKind(value) {
+  return SLIDE_KINDS.has(value) ? value : "canvas";
+}
+
+function isDynamicSlide(slide) {
+  const kind = sanitizeSlideKind(slide?.kind);
+  return kind === "gitTyping" || kind === "chatTyping";
+}
+
+function sanitizeTypingSpeed(value, fallback) {
+  return clamp(numberOr(value, fallback), 20, 240);
+}
+
+function truncateText(value, maxLength) {
+  const text = String(value || "");
+  return text.length > maxLength ? `${text.slice(0, maxLength)}\n\n... truncated ...` : text;
+}
+
+function sanitizeGitCommitOptions(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .map((item) => ({
+      hash: typeof item?.hash === "string" ? item.hash : "",
+      label: typeof item?.label === "string" ? item.label : "",
+    }))
+    .filter((item) => item.hash)
+    .slice(0, MAX_GIT_COMMIT_OPTIONS);
+}
+
+function sanitizeGitFileOptions(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .filter((item) => typeof item === "string" && item.trim())
+    .slice(0, MAX_GIT_FILE_OPTIONS);
 }
 
 function getObjectLabel(object) {
@@ -1405,6 +1490,193 @@ function drawSubtitleBox(context, text, width, height) {
   context.restore();
 }
 
+function getGitTypingData(slide) {
+  const data = {
+    ...createDefaultGitTypingData(),
+    ...(slide?.gitTyping || {}),
+  };
+  return {
+    ...data,
+    commits: sanitizeGitCommitOptions(data.commits),
+    files: sanitizeGitFileOptions(data.files),
+    typingSpeed: sanitizeTypingSpeed(slide?.gitTyping?.typingSpeed, DEFAULT_GIT_TYPING_SPEED),
+  };
+}
+
+function getChatTypingData(slide) {
+  return {
+    ...createDefaultChatTypingData(),
+    ...(slide?.chatTyping || {}),
+    typingSpeed: sanitizeTypingSpeed(slide?.chatTyping?.typingSpeed, DEFAULT_CHAT_TYPING_SPEED),
+  };
+}
+
+function getDynamicSlideDuration(slide) {
+  const kind = sanitizeSlideKind(slide?.kind);
+  if (kind === "gitTyping") {
+    const data = getGitTypingData(slide);
+    return clamp((data.content || "").length / data.typingSpeed + 1.2, 4, DYNAMIC_MAX_DURATION);
+  }
+  if (kind === "chatTyping") {
+    const data = getChatTypingData(slide);
+    return clamp(
+      (data.question || "").length / data.typingSpeed +
+        CHAT_ANSWER_DELAY_SECONDS +
+        (data.answer || "").length / data.typingSpeed +
+        1.1,
+      4,
+      DYNAMIC_MAX_DURATION
+    );
+  }
+  return 0;
+}
+
+function drawWrappedText(context, text, x, y, maxWidth, lineHeight, maxHeight) {
+  const lines = wrapTextLines(context, text, maxWidth + TEXT_PADDING_X * 2);
+  let drawn = 0;
+  for (const line of lines) {
+    const nextY = y + drawn * lineHeight;
+    if (nextY + lineHeight > y + maxHeight) {
+      break;
+    }
+    context.fillText(line, x, nextY);
+    drawn += 1;
+  }
+}
+
+function drawGitTypingSlide(context, slide, width, height, timeSeconds) {
+  const data = getGitTypingData(slide);
+  const content = truncateText(data.content, 9000);
+  const visibleCount = clamp(Math.floor(timeSeconds * data.typingSpeed), 0, content.length);
+  const visibleText = `${content.slice(0, visibleCount)}${visibleCount < content.length ? "▌" : ""}`;
+  const marginX = Math.round(width * 0.05);
+  const marginY = Math.round(height * 0.07);
+  const titleSize = clamp(Math.round(width * 0.033), 28, 44);
+  const codeSize = clamp(Math.round(width * 0.015), 15, 20);
+  const title = data.title || "Git changes";
+  const boxY = marginY + titleSize + 26;
+  const boxHeight = height - boxY - marginY;
+
+  context.fillStyle = "#0b1020";
+  context.fillRect(0, 0, width, height);
+  context.fillStyle = "#f8fafc";
+  context.font = `850 ${titleSize}px Pretendard, sans-serif`;
+  context.textBaseline = "top";
+  context.textAlign = "left";
+  context.fillText(title, marginX, marginY);
+
+  context.fillStyle = "rgba(4, 8, 18, 0.86)";
+  fillRoundedRect(context, marginX, boxY, width - marginX * 2, boxHeight, 10);
+  context.strokeStyle = "rgba(148, 163, 184, 0.34)";
+  context.lineWidth = 1;
+  context.strokeRect(marginX + 0.5, boxY + 0.5, width - marginX * 2 - 1, boxHeight - 1);
+
+  context.fillStyle = "#dbeafe";
+  context.font = `600 ${codeSize}px Menlo, Monaco, Consolas, monospace`;
+  drawWrappedText(context, visibleText, marginX + 24, boxY + 22, width - marginX * 2 - 48, Math.round(codeSize * 1.45), boxHeight - 44);
+}
+
+function drawChatTypingSlide(context, slide, width, height, timeSeconds) {
+  const data = getChatTypingData(slide);
+  const speed = data.typingSpeed;
+  const qDuration = (data.question || "").length / speed;
+  const answerStart = qDuration + CHAT_ANSWER_DELAY_SECONDS;
+  const visibleQuestionCount = clamp(Math.floor(timeSeconds * speed), 0, (data.question || "").length);
+  const visibleAnswerCount = clamp(Math.floor((timeSeconds - answerStart) * speed), 0, (data.answer || "").length);
+  const questionDone = visibleQuestionCount >= (data.question || "").length;
+  const answerDone = visibleAnswerCount >= (data.answer || "").length;
+  const questionText = `${(data.question || "").slice(0, visibleQuestionCount)}${questionDone ? "" : "▌"}`;
+  const answerText =
+    timeSeconds >= answerStart
+      ? `${(data.answer || "").slice(0, visibleAnswerCount)}${answerDone ? "" : "▌"}`
+      : "";
+  const marginX = Math.round(width * 0.07);
+  const titleY = Math.round(height * 0.07);
+  const titleSize = clamp(Math.round(width * 0.031), 28, 42);
+  const bodySize = clamp(Math.round(width * 0.024), 22, 32);
+  const lineHeight = Math.round(bodySize * 1.42);
+  const bubbleMaxWidth = Math.round(width * 0.72);
+  const title = data.title || "GPT conversation";
+
+  context.fillStyle = "#f4f7fb";
+  context.fillRect(0, 0, width, height);
+  context.fillStyle = "#111827";
+  context.font = `850 ${titleSize}px Pretendard, sans-serif`;
+  context.textBaseline = "top";
+  context.textAlign = "left";
+  context.fillText(title, marginX, titleY);
+
+  context.font = `700 ${bodySize}px Pretendard, sans-serif`;
+  const questionLines = wrapTextLines(context, questionText, bubbleMaxWidth);
+  const questionHeight = Math.min(questionLines.length, 4) * lineHeight + 34;
+  const questionWidth = Math.min(
+    bubbleMaxWidth,
+    Math.max(...questionLines.map((line) => context.measureText(line).width), bodySize * 4) + 42
+  );
+  const questionX = width - marginX - questionWidth;
+  const questionY = titleY + titleSize + 40;
+  context.fillStyle = "#2563eb";
+  fillRoundedRect(context, questionX, questionY, questionWidth, questionHeight, 18);
+  context.fillStyle = "#ffffff";
+  drawWrappedText(context, questionText, questionX + 21, questionY + 18, questionWidth - 42, lineHeight, questionHeight - 34);
+
+  if (answerText) {
+    const answerLines = wrapTextLines(context, answerText, bubbleMaxWidth);
+    const answerHeight = Math.min(answerLines.length, 9) * lineHeight + 36;
+    const answerWidth = Math.min(
+      bubbleMaxWidth,
+      Math.max(...answerLines.map((line) => context.measureText(line).width), bodySize * 5) + 44
+    );
+    const answerX = marginX;
+    const answerY = questionY + questionHeight + 28;
+    context.fillStyle = "#ffffff";
+    fillRoundedRect(context, answerX, answerY, answerWidth, answerHeight, 18);
+    context.fillStyle = "#172033";
+    drawWrappedText(context, answerText, answerX + 22, answerY + 18, answerWidth - 44, lineHeight, answerHeight - 36);
+  }
+}
+
+function drawDynamicSlide(context, slide, width, height, timeSeconds, options = {}) {
+  if (sanitizeSlideKind(slide?.kind) === "gitTyping") {
+    drawGitTypingSlide(context, slide, width, height, timeSeconds);
+  } else {
+    drawChatTypingSlide(context, slide, width, height, timeSeconds);
+  }
+  if (options.subtitles) {
+    drawSubtitleBox(context, slide.notes, width, height);
+  }
+}
+
+function renderDynamicSlideToDataUrl(slide, timeSeconds, options = {}) {
+  const exportCanvas = document.createElement("canvas");
+  exportCanvas.width = Math.max(1, roundedCanvasSize(slide.width));
+  exportCanvas.height = Math.max(1, roundedCanvasSize(slide.height));
+  drawDynamicSlide(exportCanvas.getContext("2d"), slide, exportCanvas.width, exportCanvas.height, timeSeconds, options);
+  return exportCanvas.toDataURL("image/png");
+}
+
+async function renderDynamicSlideFrames(slide, options = {}) {
+  const duration = getDynamicSlideDuration(slide);
+  const frameRate = DYNAMIC_FRAME_RATE;
+  const frameCount = Math.max(2, Math.ceil(duration * frameRate));
+  const frames = [];
+  for (let index = 0; index < frameCount; index += 1) {
+    throwIfExportCancelled();
+    if (index % frameRate === 0) {
+      await new Promise((resolve) => window.requestAnimationFrame(resolve));
+    }
+    const timeSeconds = Math.min(duration, index / frameRate);
+    frames.push(renderDynamicSlideToDataUrl(slide, timeSeconds, options));
+  }
+  frames.push(renderDynamicSlideToDataUrl(slide, duration, options));
+  return {
+    frames,
+    frameRate,
+    duration,
+    framePng: frames[frames.length - 1],
+  };
+}
+
 function drawShapeData(context, data, width, height) {
   const points = parseShapePoints(data.points);
   if (points.length < 2) {
@@ -1482,6 +1754,9 @@ async function renderSlideToDataUrl(slide, options = {}) {
   if (document.fonts?.ready) {
     await document.fonts.ready;
   }
+  if (isDynamicSlide(slide)) {
+    return renderDynamicSlideToDataUrl(slide, getDynamicSlideDuration(slide), options);
+  }
   const exportCanvas = document.createElement("canvas");
   exportCanvas.width = Math.max(1, roundedCanvasSize(slide.width));
   exportCanvas.height = Math.max(1, roundedCanvasSize(slide.height));
@@ -1526,6 +1801,7 @@ async function renderSlideToDataUrl(slide, options = {}) {
 function createDefaultSlide() {
   return {
     id: `slide-${++slideSeed}`,
+    kind: "canvas",
     width: 1280,
     height: 720,
     color: "#ffffff",
@@ -1533,6 +1809,45 @@ function createDefaultSlide() {
     video: null,
     objects: [],
   };
+}
+
+function createDefaultGitTypingData() {
+  return {
+    title: "Git commit",
+    repoPath: "",
+    commitHash: "",
+    commitLabel: "",
+    filePath: "",
+    commits: [],
+    files: [],
+    content: "Choose Repo -> Load Commits에서 커밋과 파일을 선택한 뒤 Load Change를 누르세요.",
+    typingSpeed: DEFAULT_GIT_TYPING_SPEED,
+  };
+}
+
+function createDefaultChatTypingData() {
+  return {
+    title: "GPT conversation",
+    question: "GPT에게 질문을 입력하세요.",
+    answer: "여기에 GPT 응답을 입력하면 영상에서는 실시간으로 답변이 출력되는 것처럼 재생됩니다.",
+    typingSpeed: DEFAULT_CHAT_TYPING_SPEED,
+  };
+}
+
+function createDynamicSlide(kind) {
+  const slide = createDefaultSlide();
+  slide.kind = kind;
+  slide.color = kind === "gitTyping" ? "#0b1020" : "#f4f7fb";
+  slide.notes =
+    kind === "gitTyping"
+      ? "Git 변경 내용을 실시간으로 타이핑하듯 보여줍니다."
+      : "GPT 질문과 응답이 실시간 대화처럼 출력됩니다.";
+  if (kind === "gitTyping") {
+    slide.gitTyping = createDefaultGitTypingData();
+  } else {
+    slide.chatTyping = createDefaultChatTypingData();
+  }
+  return slide;
 }
 
 function normalizeSlideVideo(value) {
@@ -1579,6 +1894,117 @@ function updateSlideVideoView() {
   slideVideo.play().catch(() => {});
   slideVideoInfo.textContent = `${video.name} · fill`;
   clearSlideVideo.disabled = false;
+}
+
+function createPreviewElement(tagName, className, text = "") {
+  const element = document.createElement(tagName);
+  element.className = className;
+  element.textContent = text;
+  return element;
+}
+
+function replaceSelectOptions(select, placeholder, items, selectedValue, getValue, getLabel) {
+  select.replaceChildren();
+  const emptyOption = document.createElement("option");
+  emptyOption.value = "";
+  emptyOption.textContent = placeholder;
+  select.append(emptyOption);
+
+  let hasSelectedValue = !selectedValue;
+  for (const item of items) {
+    const value = getValue(item);
+    if (!value) {
+      continue;
+    }
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = getLabel(item);
+    select.append(option);
+    if (value === selectedValue) {
+      hasSelectedValue = true;
+    }
+  }
+
+  if (selectedValue && !hasSelectedValue) {
+    const selectedOption = document.createElement("option");
+    selectedOption.value = selectedValue;
+    selectedOption.textContent = selectedValue;
+    select.append(selectedOption);
+  }
+
+  select.value = selectedValue || "";
+}
+
+function updateGitSelectControls(data) {
+  replaceSelectOptions(
+    gitCommitSelect,
+    "Load commits...",
+    data.commits,
+    data.commitHash,
+    (commit) => commit.hash,
+    (commit) => commit.label || commit.hash
+  );
+  replaceSelectOptions(
+    gitFileSelect,
+    data.commitHash ? "Select file..." : "Select commit first...",
+    data.files,
+    data.filePath,
+    (filePath) => filePath,
+    (filePath) => filePath
+  );
+}
+
+function renderDynamicSlidePreview(slide) {
+  dynamicSlidePreview.replaceChildren();
+  const kind = sanitizeSlideKind(slide?.kind);
+  dynamicSlidePreview.classList.toggle("is-visible", isDynamicSlide(slide));
+  if (kind === "gitTyping") {
+    const data = getGitTypingData(slide);
+    const surface = createPreviewElement("div", "dynamic-preview-surface git");
+    const title = createPreviewElement("div", "dynamic-preview-title", data.title);
+    const code = createPreviewElement("pre", "dynamic-preview-code", truncateText(data.content, 2400));
+    surface.append(title, code);
+    dynamicSlidePreview.append(surface);
+    return;
+  }
+  if (kind === "chatTyping") {
+    const data = getChatTypingData(slide);
+    const surface = createPreviewElement("div", "dynamic-preview-surface chat");
+    const title = createPreviewElement("div", "dynamic-preview-title", data.title);
+    const chat = createPreviewElement("div", "dynamic-preview-chat");
+    chat.append(
+      createPreviewElement("div", "dynamic-preview-bubble question", data.question),
+      createPreviewElement("div", "dynamic-preview-bubble answer", data.answer)
+    );
+    surface.append(title, chat);
+    dynamicSlidePreview.append(surface);
+  }
+}
+
+function syncDynamicSlidePanel() {
+  const slide = slides[activeSlideIndex];
+  const kind = sanitizeSlideKind(slide?.kind);
+  dynamicSlideType.textContent = kind === "gitTyping" ? "Git" : kind === "chatTyping" ? "GPT" : "Canvas";
+  gitTypingControls.hidden = kind !== "gitTyping";
+  chatTypingControls.hidden = kind !== "chatTyping";
+  canvasSlideHint.hidden = isDynamicSlide(slide);
+
+  if (kind === "gitTyping") {
+    const data = getGitTypingData(slide);
+    gitSlideTitle.value = data.title;
+    gitRepoPath.value = data.repoPath;
+    updateGitSelectControls(data);
+    gitTypingSpeed.value = String(data.typingSpeed);
+    gitTypingContent.value = data.content;
+  } else if (kind === "chatTyping") {
+    const data = getChatTypingData(slide);
+    chatSlideTitle.value = data.title;
+    chatTypingSpeed.value = String(data.typingSpeed);
+    chatQuestion.value = data.question;
+    chatAnswer.value = data.answer;
+  }
+
+  renderDynamicSlidePreview(slide);
 }
 
 function getCanvasState() {
@@ -1727,6 +2153,7 @@ function loadSlide(index, shouldSaveCurrent = true) {
   slideNotes.value = typeof slide.notes === "string" ? slide.notes : "";
   slides[activeSlideIndex].video = normalizeSlideVideo(slide.video);
   updateSlideVideoView();
+  syncDynamicSlidePanel();
   defaultTextColor = slide.color?.toLowerCase?.() === COLOR_PRESETS.dark.canvasColor ? COLOR_PRESETS.dark.textColor : DEFAULT_TEXT_COLOR;
   syncColorPresetButtons();
 
@@ -1748,13 +2175,27 @@ function loadSlide(index, shouldSaveCurrent = true) {
 function renderSlidePreview(slide, previewCanvas) {
   const width = 144;
   const height = 81;
+  previewCanvas.width = width;
+  previewCanvas.height = height;
+  const context = previewCanvas.getContext("2d");
+  if (isDynamicSlide(slide)) {
+    const previewSource = document.createElement("canvas");
+    previewSource.width = Math.max(1, roundedCanvasSize(slide.width));
+    previewSource.height = Math.max(1, roundedCanvasSize(slide.height));
+    drawDynamicSlide(
+      previewSource.getContext("2d"),
+      slide,
+      previewSource.width,
+      previewSource.height,
+      getDynamicSlideDuration(slide)
+    );
+    context.drawImage(previewSource, 0, 0, width, height);
+    return;
+  }
   const scale = Math.min(width / slide.width, height / slide.height);
   const offsetX = (width - slide.width * scale) / 2;
   const offsetY = (height - slide.height * scale) / 2;
 
-  previewCanvas.width = width;
-  previewCanvas.height = height;
-  const context = previewCanvas.getContext("2d");
   context.clearRect(0, 0, width, height);
   context.fillStyle = "#eef0f4";
   context.fillRect(0, 0, width, height);
@@ -1892,6 +2333,14 @@ function addNewSlide() {
   slides.push(createDefaultSlide());
   loadSlide(slides.length - 1, false);
   setStatus("새 슬라이드를 추가했습니다.");
+  recordHistory();
+}
+
+function addDynamicSlide(kind) {
+  serializeCurrentSlide();
+  slides.push(createDynamicSlide(kind));
+  loadSlide(slides.length - 1, false);
+  setStatus(kind === "gitTyping" ? "Git 타이핑 슬라이드를 추가했습니다." : "GPT 대화 타이핑 슬라이드를 추가했습니다.");
   recordHistory();
 }
 
@@ -2567,11 +3016,39 @@ function normalizeProjectData(data) {
 
   const normalizedSlides = data.slides.map((slide, index) => ({
     id: typeof slide.id === "string" ? slide.id : `slide-${index + 1}`,
+    kind: sanitizeSlideKind(slide.kind),
     width: sanitizeNumber(slide.width, 1280, 80, 4096),
     height: sanitizeNumber(slide.height, 720, 80, 4096),
     color: sanitizeColor(slide.color),
     notes: typeof slide.notes === "string" ? slide.notes : "",
     video: normalizeSlideVideo(slide.video),
+    gitTyping:
+      sanitizeSlideKind(slide.kind) === "gitTyping"
+        ? {
+            ...createDefaultGitTypingData(),
+            ...(slide.gitTyping || {}),
+            title: typeof slide.gitTyping?.title === "string" ? slide.gitTyping.title : createDefaultGitTypingData().title,
+            repoPath: typeof slide.gitTyping?.repoPath === "string" ? slide.gitTyping.repoPath : "",
+            commitHash: typeof slide.gitTyping?.commitHash === "string" ? slide.gitTyping.commitHash : "",
+            commitLabel: typeof slide.gitTyping?.commitLabel === "string" ? slide.gitTyping.commitLabel : "",
+            filePath: typeof slide.gitTyping?.filePath === "string" ? slide.gitTyping.filePath : "",
+            commits: sanitizeGitCommitOptions(slide.gitTyping?.commits),
+            files: sanitizeGitFileOptions(slide.gitTyping?.files),
+            content: typeof slide.gitTyping?.content === "string" ? slide.gitTyping.content : createDefaultGitTypingData().content,
+            typingSpeed: sanitizeTypingSpeed(slide.gitTyping?.typingSpeed, DEFAULT_GIT_TYPING_SPEED),
+          }
+        : undefined,
+    chatTyping:
+      sanitizeSlideKind(slide.kind) === "chatTyping"
+        ? {
+            ...createDefaultChatTypingData(),
+            ...(slide.chatTyping || {}),
+            title: typeof slide.chatTyping?.title === "string" ? slide.chatTyping.title : createDefaultChatTypingData().title,
+            question: typeof slide.chatTyping?.question === "string" ? slide.chatTyping.question : createDefaultChatTypingData().question,
+            answer: typeof slide.chatTyping?.answer === "string" ? slide.chatTyping.answer : createDefaultChatTypingData().answer,
+            typingSpeed: sanitizeTypingSpeed(slide.chatTyping?.typingSpeed, DEFAULT_CHAT_TYPING_SPEED),
+          }
+        : undefined,
     objects: Array.isArray(slide.objects) ? slide.objects.map(normalizeProjectObject).filter(Boolean) : [],
   }));
 
@@ -2854,6 +3331,216 @@ function hideAppSettings() {
   appSettings.hidden = true;
 }
 
+function updateActiveDynamicSlide(mutator, options = {}) {
+  const slide = slides[activeSlideIndex];
+  if (!slide || !isDynamicSlide(slide)) {
+    return;
+  }
+  mutator(slide);
+  renderDynamicSlidePreview(slide);
+  renderSlideList();
+  scheduleNativeProjectSave();
+  if (options.record) {
+    recordHistory();
+  }
+}
+
+function syncGitTypingInputsToSlide(options = {}) {
+  updateActiveDynamicSlide((slide) => {
+    slide.gitTyping = {
+      ...getGitTypingData(slide),
+      title: gitSlideTitle.value,
+      repoPath: gitRepoPath.value,
+      commitHash: gitCommitSelect.value,
+      commitLabel: gitCommitSelect.selectedOptions[0]?.textContent || "",
+      filePath: gitFileSelect.value,
+      typingSpeed: sanitizeTypingSpeed(gitTypingSpeed.value, DEFAULT_GIT_TYPING_SPEED),
+      content: gitTypingContent.value,
+    };
+  }, options);
+}
+
+function syncChatTypingInputsToSlide(options = {}) {
+  updateActiveDynamicSlide((slide) => {
+    slide.chatTyping = {
+      ...getChatTypingData(slide),
+      title: chatSlideTitle.value,
+      typingSpeed: sanitizeTypingSpeed(chatTypingSpeed.value, DEFAULT_CHAT_TYPING_SPEED),
+      question: chatQuestion.value,
+      answer: chatAnswer.value,
+    };
+  }, options);
+}
+
+async function chooseGitRepositoryForSlide() {
+  if (!nativeApi?.selectDirectory) {
+    setStatus("Git 저장소 선택은 Tauri 앱에서 사용할 수 있습니다.");
+    return;
+  }
+  const path = await nativeApi.selectDirectory();
+  if (!path) {
+    return;
+  }
+  updateActiveDynamicSlide((slide) => {
+    slide.gitTyping = {
+      ...getGitTypingData(slide),
+      repoPath: path,
+      commitHash: "",
+      commitLabel: "",
+      filePath: "",
+      commits: [],
+      files: [],
+      content: "Load Commits를 눌러 이 저장소의 커밋 기록을 불러오세요.",
+    };
+  }, { record: true });
+  syncDynamicSlidePanel();
+  await loadGitCommitsForSlide();
+}
+
+function getActiveGitTypingSlide() {
+  const slide = slides[activeSlideIndex];
+  if (!slide || sanitizeSlideKind(slide.kind) !== "gitTyping") {
+    return null;
+  }
+  return slide;
+}
+
+function requireGitRepoPath() {
+  const repoPath = gitRepoPath.value.trim();
+  if (!repoPath) {
+    setStatus("먼저 Git 저장소 폴더를 선택해 주세요.");
+    return "";
+  }
+  return repoPath;
+}
+
+async function loadGitCommitsForSlide() {
+  const slide = getActiveGitTypingSlide();
+  if (!slide) {
+    return;
+  }
+  if (!nativeApi?.listGitCommits) {
+    setStatus("Git 커밋 읽기는 Tauri 앱에서 사용할 수 있습니다.");
+    return;
+  }
+  const repoPath = requireGitRepoPath();
+  if (!repoPath) {
+    return;
+  }
+  try {
+    setStatus("Git 커밋 기록을 불러오는 중입니다.");
+    const result = await nativeApi.listGitCommits(repoPath);
+    const commits = sanitizeGitCommitOptions(result.commits);
+    const current = getGitTypingData(slide);
+    const selectedCommit = commits.find((commit) => commit.hash === current.commitHash) || commits[0];
+    updateActiveDynamicSlide((activeSlide) => {
+      activeSlide.gitTyping = {
+        ...getGitTypingData(activeSlide),
+        repoPath: result.repoPath || repoPath,
+        commitHash: selectedCommit?.hash || "",
+        commitLabel: selectedCommit?.label || "",
+        filePath: "",
+        commits,
+        files: [],
+        content: selectedCommit
+          ? "커밋의 변경 파일 목록을 불러오는 중입니다."
+          : "이 저장소에서 읽을 커밋을 찾지 못했습니다.",
+      };
+    }, { record: !selectedCommit });
+    syncDynamicSlidePanel();
+    if (selectedCommit) {
+      await loadGitFilesForSlide({ record: true, clearContent: true });
+    } else {
+      setStatus("이 저장소에서 읽을 커밋을 찾지 못했습니다.");
+    }
+  } catch (error) {
+    setStatus(error?.message || "Git 커밋 기록을 읽지 못했습니다.");
+  }
+}
+
+async function loadGitFilesForSlide(options = {}) {
+  const slide = getActiveGitTypingSlide();
+  if (!slide) {
+    return;
+  }
+  if (!nativeApi?.listGitCommitFiles) {
+    setStatus("Git 파일 목록 읽기는 Tauri 앱에서 사용할 수 있습니다.");
+    return;
+  }
+  const repoPath = requireGitRepoPath();
+  const commitHash = gitCommitSelect.value;
+  if (!repoPath || !commitHash) {
+    setStatus("커밋을 먼저 선택해 주세요.");
+    return;
+  }
+  try {
+    setStatus("커밋의 변경 파일을 불러오는 중입니다.");
+    const result = await nativeApi.listGitCommitFiles(repoPath, commitHash);
+    const files = sanitizeGitFileOptions(result.files);
+    const current = getGitTypingData(slide);
+    const selectedFilePath = files.includes(current.filePath) ? current.filePath : files[0] || "";
+    const selectedCommit = current.commits.find((commit) => commit.hash === commitHash);
+    updateActiveDynamicSlide((activeSlide) => {
+      activeSlide.gitTyping = {
+        ...getGitTypingData(activeSlide),
+        repoPath: result.repoPath || repoPath,
+        commitHash,
+        commitLabel: selectedCommit?.label || current.commitLabel || commitHash,
+        filePath: selectedFilePath,
+        files,
+        content:
+          options.clearContent || !current.content
+            ? selectedFilePath
+              ? "Load Change를 눌러 선택한 파일의 변경 내용을 불러오세요."
+              : "이 커밋에서 변경된 파일을 찾지 못했습니다."
+            : current.content,
+      };
+    }, { record: Boolean(options.record) });
+    syncDynamicSlidePanel();
+    setStatus(files.length ? "변경 파일 목록을 불러왔습니다." : "이 커밋에서 변경된 파일을 찾지 못했습니다.");
+  } catch (error) {
+    setStatus(error?.message || "Git 변경 파일 목록을 읽지 못했습니다.");
+  }
+}
+
+async function loadGitFileChangeForSlide() {
+  const slide = getActiveGitTypingSlide();
+  if (!slide) {
+    return;
+  }
+  if (!nativeApi?.readGitCommitFileChange) {
+    setStatus("Git 파일 변경 내용 읽기는 Tauri 앱에서 사용할 수 있습니다.");
+    return;
+  }
+  const repoPath = requireGitRepoPath();
+  const commitHash = gitCommitSelect.value;
+  const filePath = gitFileSelect.value;
+  if (!repoPath || !commitHash || !filePath) {
+    setStatus("저장소, 커밋, 파일을 모두 선택해 주세요.");
+    return;
+  }
+  try {
+    setStatus("선택한 파일의 변경 내용을 불러오는 중입니다.");
+    const result = await nativeApi.readGitCommitFileChange(repoPath, commitHash, filePath);
+    const current = getGitTypingData(slide);
+    updateActiveDynamicSlide((activeSlide) => {
+      activeSlide.gitTyping = {
+        ...getGitTypingData(activeSlide),
+        repoPath: result.repoPath || repoPath,
+        commitHash: result.commitHash || commitHash,
+        commitLabel: current.commitLabel || result.commitHash || commitHash,
+        filePath: result.filePath || filePath,
+        title: result.title || "Git commit",
+        content: result.content || "",
+      };
+    }, { record: true });
+    syncDynamicSlidePanel();
+    setStatus("선택한 파일 변경 내용을 타이핑 슬라이드에 불러왔습니다.");
+  } catch (error) {
+    setStatus(error?.message || "Git 파일 변경 내용을 읽지 못했습니다.");
+  }
+}
+
 function createExportId() {
   return `export-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
@@ -2965,18 +3652,33 @@ async function exportProjectAsMp4() {
       const slide = slides[index];
       const video = normalizeSlideVideo(slide.video);
       setExportModalProgress("Rendering", `슬라이드 ${index + 1} / ${slides.length} 렌더링 중입니다.`, index, slides.length);
-      renderedSlides.push({
+      const baseSlidePayload = {
         index,
         width: roundedCanvasSize(slide.width),
         height: roundedCanvasSize(slide.height),
         color: sanitizeColor(slide.color, "#ffffff"),
         notes: typeof slide.notes === "string" ? slide.notes : "",
         videoPath: video?.path || null,
-        framePng: await renderSlideToDataUrl(slide, {
-          transparentBackground: Boolean(video),
-          subtitles: subtitleEnabled.checked,
-        }),
-      });
+      };
+      if (isDynamicSlide(slide)) {
+        setExportModalProgress("Rendering", `슬라이드 ${index + 1} / ${slides.length} 타이핑 프레임을 만들고 있습니다.`, index, slides.length);
+        const animation = await renderDynamicSlideFrames(slide, { subtitles: subtitleEnabled.checked });
+        renderedSlides.push({
+          ...baseSlidePayload,
+          framePng: animation.framePng,
+          animationFrames: animation.frames,
+          frameRate: animation.frameRate,
+          animationDurationSeconds: animation.duration,
+        });
+      } else {
+        renderedSlides.push({
+          ...baseSlidePayload,
+          framePng: await renderSlideToDataUrl(slide, {
+            transparentBackground: Boolean(video),
+            subtitles: subtitleEnabled.checked,
+          }),
+        });
+      }
     }
 
     throwIfExportCancelled();
@@ -3247,6 +3949,36 @@ addTextBox.addEventListener("click", () => {
   addTextObject("텍스트", "텍스트 상자를 만들었습니다. 바로 입력해서 내용을 바꿀 수 있습니다.");
   startTextEdit(selectedObject);
 });
+addGitTypingSlide.addEventListener("click", () => addDynamicSlide("gitTyping"));
+addChatTypingSlide.addEventListener("click", () => addDynamicSlide("chatTyping"));
+chooseGitRepo.addEventListener("click", () => {
+  chooseGitRepositoryForSlide();
+});
+loadGitCommits.addEventListener("click", () => {
+  loadGitCommitsForSlide();
+});
+refreshGitDiff.addEventListener("click", () => {
+  loadGitFileChangeForSlide();
+});
+gitCommitSelect.addEventListener("change", () => {
+  syncGitTypingInputsToSlide({ record: true });
+  loadGitFilesForSlide({ record: true, clearContent: true });
+});
+gitFileSelect.addEventListener("change", () => {
+  const filePath = gitFileSelect.value;
+  if (filePath) {
+    gitTypingContent.value = "Load Change를 눌러 선택한 파일의 변경 내용을 불러오세요.";
+  }
+  syncGitTypingInputsToSlide({ record: true });
+});
+for (const input of [gitSlideTitle, gitRepoPath, gitTypingSpeed, gitTypingContent]) {
+  input.addEventListener("input", () => syncGitTypingInputsToSlide());
+  input.addEventListener("change", () => syncGitTypingInputsToSlide({ record: true }));
+}
+for (const input of [chatSlideTitle, chatTypingSpeed, chatQuestion, chatAnswer]) {
+  input.addEventListener("input", () => syncChatTypingInputsToSlide());
+  input.addEventListener("change", () => syncChatTypingInputsToSlide({ record: true }));
+}
 editSelectedText.addEventListener("pointerdown", (event) => {
   if (activeTextEditObject === selectedObject) {
     event.preventDefault();
