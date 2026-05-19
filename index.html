@@ -141,55 +141,6 @@
           <div id="canvasSlideHint" class="inline-info">일반 슬라이드</div>
         </section>
 
-        <section class="panel" aria-labelledby="mp4-export-title">
-          <h2 id="mp4-export-title">MP4 Export</h2>
-          <label>
-            <span>Preset</span>
-            <select id="ttsPreset">
-              <option value="animeCute">여성 활발하고 귀여운 애니메이션 여캐</option>
-              <option value="animeTsundere">여성 츤데레 애니메이션 여캐</option>
-            </select>
-          </label>
-          <label>
-            <span>Model</span>
-            <select id="ttsModel">
-              <option value="gpt-4o-mini-tts">gpt-4o-mini-tts</option>
-              <option value="tts-1">tts-1</option>
-              <option value="tts-1-hd">tts-1-hd</option>
-            </select>
-          </label>
-          <label>
-            <span>Voice</span>
-            <select id="ttsVoice">
-              <option value="marin">marin</option>
-              <option value="cedar">cedar</option>
-              <option value="coral">coral</option>
-              <option value="nova">nova</option>
-              <option value="alloy">alloy</option>
-              <option value="sage">sage</option>
-              <option value="verse">verse</option>
-              <option value="shimmer">shimmer</option>
-              <option value="onyx">onyx</option>
-              <option value="echo">echo</option>
-              <option value="fable">fable</option>
-              <option value="ash">ash</option>
-              <option value="ballad">ballad</option>
-            </select>
-          </label>
-          <label>
-            <span>Speed</span>
-            <input id="ttsSpeed" type="number" min="0.25" max="4" step="0.05" value="1" />
-          </label>
-          <label>
-            <span>Tone</span>
-            <input id="ttsInstructions" type="text" placeholder="차분하게 읽기" />
-          </label>
-          <label>
-            <span>Subtitle</span>
-            <input id="subtitleEnabled" type="checkbox" checked />
-          </label>
-        </section>
-
         <section class="panel selected-panel" aria-labelledby="selected-title">
           <div class="panel-title-row">
             <h2 id="selected-title">Selected</h2>
@@ -380,6 +331,44 @@
             <option value="animeTsundere">여성 츤데레 애니메이션 여캐</option>
           </select>
         </label>
+        <label>
+          <span>TTS Model</span>
+          <select id="settingsTtsModel">
+            <option value="gpt-4o-mini-tts">gpt-4o-mini-tts</option>
+            <option value="tts-1">tts-1</option>
+            <option value="tts-1-hd">tts-1-hd</option>
+          </select>
+        </label>
+        <label>
+          <span>TTS Voice</span>
+          <select id="settingsTtsVoice">
+            <option value="marin">marin</option>
+            <option value="cedar">cedar</option>
+            <option value="coral">coral</option>
+            <option value="nova">nova</option>
+            <option value="alloy">alloy</option>
+            <option value="sage">sage</option>
+            <option value="verse">verse</option>
+            <option value="shimmer">shimmer</option>
+            <option value="onyx">onyx</option>
+            <option value="echo">echo</option>
+            <option value="fable">fable</option>
+            <option value="ash">ash</option>
+            <option value="ballad">ballad</option>
+          </select>
+        </label>
+        <label>
+          <span>TTS Speed</span>
+          <input id="settingsTtsSpeed" type="number" min="0.25" max="4" step="0.05" value="1" />
+        </label>
+        <label>
+          <span>TTS Tone</span>
+          <input id="settingsTtsInstructions" type="text" placeholder="차분하게 읽기" />
+        </label>
+        <label>
+          <span>Subtitle</span>
+          <input id="settingsSubtitleEnabled" type="checkbox" checked />
+        </label>
         <label class="settings-path-label">
           <span>MP4 Export</span>
           <span class="settings-path-row">
@@ -394,6 +383,6 @@
       </section>
     </div>
 
-    <script src="./app.js?v=20260519-export-dir" defer></script>
+    <script src="./app.js?v=20260519-settings-tts" defer></script>
   </body>
 </html>

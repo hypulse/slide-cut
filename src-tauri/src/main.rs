@@ -60,11 +60,41 @@ struct ProjectAsset {
     name: String,
 }
 
+fn default_tts_model() -> String {
+    "gpt-4o-mini-tts".to_string()
+}
+
+fn default_tts_voice() -> String {
+    "sage".to_string()
+}
+
+fn default_tts_speed() -> f64 {
+    1.12
+}
+
+fn default_tts_instructions() -> String {
+    "Speak the Korean input as a cheerful young adult anime heroine. Use a bright, cute, energetic, friendly tone with lively intonation, slightly higher pitch, quick but clear pacing, and warm encouraging emotion. Read the Korean text naturally as written; do not translate it. Do not sound childish, and avoid exaggerated delivery that feels unnatural.".to_string()
+}
+
+fn default_subtitle_enabled() -> bool {
+    true
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct AppSettings {
     open_ai_api_key: String,
     tts_preset: String,
+    #[serde(default)]
+    tts_model: Option<String>,
+    #[serde(default)]
+    tts_voice: Option<String>,
+    #[serde(default)]
+    tts_speed: Option<f64>,
+    #[serde(default)]
+    tts_instructions: Option<String>,
+    #[serde(default = "default_subtitle_enabled")]
+    subtitle_enabled: bool,
     #[serde(default)]
     export_dir: String,
 }
@@ -74,6 +104,11 @@ impl Default for AppSettings {
         Self {
             open_ai_api_key: String::new(),
             tts_preset: "animeCute".to_string(),
+            tts_model: Some(default_tts_model()),
+            tts_voice: Some(default_tts_voice()),
+            tts_speed: Some(default_tts_speed()),
+            tts_instructions: Some(default_tts_instructions()),
+            subtitle_enabled: default_subtitle_enabled(),
             export_dir: String::new(),
         }
     }
@@ -230,10 +265,56 @@ fn default_export_dir(app: &AppHandle) -> String {
         .to_string()
 }
 
+fn default_tts_voice_for_preset(preset: &str) -> String {
+    match preset {
+        "animeTsundere" => "coral".to_string(),
+        _ => default_tts_voice(),
+    }
+}
+
+fn default_tts_speed_for_preset(preset: &str) -> f64 {
+    match preset {
+        "animeTsundere" => 1.06,
+        _ => default_tts_speed(),
+    }
+}
+
+fn default_tts_instructions_for_preset(preset: &str) -> String {
+    match preset {
+        "animeTsundere" => "Speak the Korean input as a young adult tsundere-style anime heroine. Start slightly sharp, confident, and teasing, then let a subtle cute and embarrassed warmth show through. Keep pronunciation clear, lively, and natural in Korean. Read the Korean text as written; do not translate it. Avoid sounding childish or copying any specific actor or character.".to_string(),
+        _ => default_tts_instructions(),
+    }
+}
+
+fn clean_tts_model(value: &str) -> String {
+    match value.trim() {
+        "tts-1" => "tts-1".to_string(),
+        "tts-1-hd" => "tts-1-hd".to_string(),
+        _ => default_tts_model(),
+    }
+}
+
+fn clean_tts_voice(value: &str, preset: &str) -> String {
+    match value.trim() {
+        "alloy" | "ash" | "ballad" | "cedar" | "coral" | "echo" | "fable" | "marin" | "nova"
+        | "onyx" | "sage" | "shimmer" | "verse" => value.trim().to_string(),
+        _ => default_tts_voice_for_preset(preset),
+    }
+}
+
 fn clean_app_settings(app: &AppHandle, settings: AppSettings) -> AppSettings {
     let preset = match settings.tts_preset.as_str() {
         "animeTsundere" => "animeTsundere",
         _ => "animeCute",
+    };
+    let tts_speed = if let Some(speed) = settings.tts_speed {
+        if speed.is_finite() {
+            speed.clamp(0.25, 4.0)
+        } else {
+            default_tts_speed_for_preset(preset)
+        }
+    } else {
+        default_tts_speed_for_preset(preset)
     };
     let export_dir = settings.export_dir.trim();
     let export_dir = if export_dir.is_empty() {
@@ -249,6 +330,30 @@ fn clean_app_settings(app: &AppHandle, settings: AppSettings) -> AppSettings {
     AppSettings {
         open_ai_api_key: settings.open_ai_api_key.trim().to_string(),
         tts_preset: preset.to_string(),
+        tts_model: Some(clean_tts_model(settings.tts_model.as_deref().unwrap_or(""))),
+        tts_voice: Some(clean_tts_voice(
+            settings.tts_voice.as_deref().unwrap_or(""),
+            preset,
+        )),
+        tts_speed: Some(tts_speed),
+        tts_instructions: Some(
+            if settings
+                .tts_instructions
+                .as_deref()
+                .unwrap_or("")
+                .trim()
+                .is_empty()
+            {
+                default_tts_instructions_for_preset(preset)
+            } else {
+                settings
+                    .tts_instructions
+                    .unwrap_or_default()
+                    .trim()
+                    .to_string()
+            },
+        ),
+        subtitle_enabled: settings.subtitle_enabled,
         export_dir,
     }
 }
