@@ -103,6 +103,7 @@ struct VideoExportSlide {
     frame_rate: Option<f64>,
     animation_duration_seconds: Option<f64>,
     end_on_tts_end: Option<bool>,
+    fit_animation_to_duration: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -176,6 +177,7 @@ struct PreparedSlide {
     audio_path: PathBuf,
     video_path: Option<PathBuf>,
     duration_seconds: f64,
+    fit_animation_to_duration: bool,
 }
 
 fn now_millis() -> Result<u128, String> {
@@ -1500,7 +1502,12 @@ fn create_animation_segment(
         .and_then(|path| path.parent())
         .ok_or_else(|| "애니메이션 프레임 경로가 올바르지 않습니다.".to_string())?
         .join("frame-%05d.png");
-    let frame_duration = frame_paths.len() as f64 / prepared.frame_rate.max(1.0);
+    let input_frame_rate = if prepared.fit_animation_to_duration {
+        frame_paths.len() as f64 / prepared.duration_seconds.max(0.1)
+    } else {
+        prepared.frame_rate.max(1.0)
+    };
+    let frame_duration = frame_paths.len() as f64 / input_frame_rate.max(0.1);
     let stop_duration = (prepared.duration_seconds - frame_duration).max(0.0);
     let filter = format!(
         "scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=white,tpad=stop_mode=clone:stop_duration={},format=yuv420p",
@@ -1509,7 +1516,7 @@ fn create_animation_segment(
     let mut command = Command::new(ffmpeg);
     command
         .args(["-y", "-framerate"])
-        .arg(format_seconds(prepared.frame_rate))
+        .arg(format_seconds(input_frame_rate))
         .arg("-i")
         .arg(first_frame)
         .arg("-i")
@@ -1729,6 +1736,7 @@ fn export_video(app: AppHandle, payload: VideoExportPayload) -> Result<VideoExpo
                 audio_path,
                 video_path,
                 duration_seconds: duration,
+                fit_animation_to_duration: slide.fit_animation_to_duration.unwrap_or(false),
             });
         }
 

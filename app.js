@@ -2015,7 +2015,8 @@ function drawGitTypingSlide(context, slide, width, height, timeSeconds) {
   const windowY = Math.round(height * 0.075);
   const windowWidth = width - windowX * 2;
   const windowHeight = height - windowY * 2;
-  const titleBarHeight = clamp(Math.round(height * 0.065), 38, 54);
+  const windowRadius = clamp(Math.round(height * 0.028), 16, 24);
+  const titleBarHeight = clamp(Math.round(height * 0.066), 42, 56);
   const codeSize = clamp(Math.round(width * 0.0145), 15, 23);
   const lineHeight = Math.round(codeSize * 1.55);
   const gutterWidth = Math.round(codeSize * 3.8);
@@ -2035,29 +2036,37 @@ function drawGitTypingSlide(context, slide, width, height, timeSeconds) {
     Math.max(0, frame.lines.length * lineHeight - viewportHeight)
   );
 
-  context.fillStyle = "#10131a";
+  context.fillStyle = "#edf1f7";
   context.fillRect(0, 0, width, height);
 
-  context.fillStyle = "#1f2430";
-  fillRoundedRect(context, windowX, windowY, windowWidth, windowHeight, 12);
   context.save();
-  traceRoundedRect(context, windowX, windowY, windowWidth, windowHeight, 12);
+  context.shadowColor = "rgba(15, 23, 42, 0.32)";
+  context.shadowBlur = Math.round(height * 0.035);
+  context.shadowOffsetY = Math.round(height * 0.016);
+  context.fillStyle = "#f7f7f8";
+  fillRoundedRect(context, windowX, windowY, windowWidth, windowHeight, windowRadius);
+  context.restore();
+
+  context.save();
+  traceRoundedRect(context, windowX, windowY, windowWidth, windowHeight, windowRadius);
   context.clip();
-  context.fillStyle = "#252b38";
+  context.fillStyle = "#f6f6f7";
   context.fillRect(windowX, windowY, windowWidth, titleBarHeight);
   context.fillStyle = "#1e1e1e";
   context.fillRect(editorX, editorY, editorWidth, editorHeight);
+  context.fillStyle = "rgba(0, 0, 0, 0.12)";
+  context.fillRect(windowX, editorY - 1, windowWidth, 1);
   context.restore();
-  context.strokeStyle = "rgba(255, 255, 255, 0.12)";
+  context.strokeStyle = "rgba(100, 116, 139, 0.34)";
   context.lineWidth = 1;
-  strokeRoundedRect(context, windowX + 0.5, windowY + 0.5, windowWidth - 1, windowHeight - 1, 12);
+  strokeRoundedRect(context, windowX + 0.5, windowY + 0.5, windowWidth - 1, windowHeight - 1, windowRadius);
 
   const lightY = windowY + Math.round(titleBarHeight / 2);
-  const lightRadius = clamp(Math.round(titleBarHeight * 0.12), 5, 7);
+  const lightRadius = clamp(Math.round(titleBarHeight * 0.115), 5, 7);
   [
-    ["#ff5f56", windowX + 22],
-    ["#ffbd2e", windowX + 42],
-    ["#27c93f", windowX + 62],
+    ["#ff5f57", windowX + 22],
+    ["#febc2e", windowX + 43],
+    ["#28c840", windowX + 64],
   ].forEach(([color, x]) => {
     context.fillStyle = color;
     context.beginPath();
@@ -2065,8 +2074,8 @@ function drawGitTypingSlide(context, slide, width, height, timeSeconds) {
     context.fill();
   });
 
-  context.fillStyle = "#d7dae0";
-  context.font = `700 ${clamp(Math.round(codeSize * 0.86), 12, 16)}px Pretendard, sans-serif`;
+  context.fillStyle = "#4b5563";
+  context.font = `700 ${clamp(Math.round(codeSize * 0.82), 12, 16)}px Pretendard, sans-serif`;
   context.textBaseline = "top";
   context.textAlign = "center";
   context.fillText(fileName, windowX + windowWidth / 2, windowY + Math.round((titleBarHeight - codeSize) / 2));
@@ -4835,6 +4844,7 @@ async function exportProjectAsMp4() {
           notes: exportNoteSegments[0],
           startSoundPath: startSound?.path || null,
           endOnTtsEnd: true,
+          fitAnimationToDuration: true,
           framePng: animation.framePng,
           animationFrames: animation.frames,
           frameRate: animation.frameRate,

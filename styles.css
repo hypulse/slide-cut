@@ -1101,7 +1101,7 @@ input[type="checkbox"] {
 
 .dynamic-preview-surface.git {
   padding: 34px 48px;
-  background: #10131a;
+  background: #edf1f7;
 }
 
 .dynamic-preview-surface.chat {
@@ -1128,9 +1128,10 @@ input[type="checkbox"] {
 .dynamic-preview-code-window {
   overflow: hidden;
   min-height: 0;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 10px;
-  background: #252b38;
+  border: 1px solid rgba(100, 116, 139, 0.34);
+  border-radius: 18px;
+  background: #f6f6f7;
+  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.26);
 }
 
 .dynamic-preview-code-titlebar {
@@ -1139,7 +1140,7 @@ input[type="checkbox"] {
   align-items: center;
   justify-content: center;
   height: 38px;
-  color: #d7dae0;
+  color: #4b5563;
   font-size: 13px;
   font-weight: 800;
 }
