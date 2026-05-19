@@ -152,11 +152,14 @@ const appSettings = document.querySelector("#appSettings");
 const closeAppSettings = document.querySelector("#closeAppSettings");
 const saveAppSettingsButton = document.querySelector("#saveAppSettings");
 const settingsOpenAiApiKey = document.querySelector("#settingsOpenAiApiKey");
+const settingsMiniMaxApiKey = document.querySelector("#settingsMiniMaxApiKey");
 const settingsCanvasWidth = document.querySelector("#settingsCanvasWidth");
 const settingsCanvasHeight = document.querySelector("#settingsCanvasHeight");
 const settingsCanvasColor = document.querySelector("#settingsCanvasColor");
+const settingsTtsProvider = document.querySelector("#settingsTtsProvider");
 const settingsTtsModel = document.querySelector("#settingsTtsModel");
 const settingsTtsVoice = document.querySelector("#settingsTtsVoice");
+const settingsTtsVoiceSuggestions = document.querySelector("#ttsVoiceSuggestions");
 const settingsTtsSpeed = document.querySelector("#settingsTtsSpeed");
 const settingsTtsInstructions = document.querySelector("#settingsTtsInstructions");
 const settingsSubtitleEnabled = document.querySelector("#settingsSubtitleEnabled");
@@ -226,12 +229,14 @@ const textMeasureContext = textMeasureCanvas.getContext("2d");
 let canvasViewScale = 1;
 let appSettingsState = {
   openAiApiKey: "",
+  miniMaxApiKey: "",
 };
 let defaultProjectExportDir = "";
 let projectSettingsState = {
   canvasWidth: 1280,
   canvasHeight: 720,
   canvasColor: "#ffffff",
+  ttsProvider: "openai",
   ttsModel: "gpt-4o-mini-tts",
   ttsVoice: "sage",
   ttsSpeed: 1.12,
@@ -272,14 +277,66 @@ const SLIDE_DRAG_THRESHOLD = 6;
 const IS_MAC_PLATFORM = /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent || "");
 const DEFAULT_TTS_INSTRUCTIONS =
   "Read the input text naturally as written. For Korean text, keep pronunciation clear and natural. Keep the pacing conversational, warm, and not exaggerated.";
-const DEFAULT_TTS_SETTINGS = {
-  model: "gpt-4o-mini-tts",
-  voice: "sage",
-  speed: 1.12,
-  instructions: DEFAULT_TTS_INSTRUCTIONS,
+const DEFAULT_TTS_PROVIDER = "openai";
+const OPENAI_TTS_MODELS = ["gpt-4o-mini-tts", "tts-1", "tts-1-hd"];
+const OPENAI_TTS_VOICES = ["marin", "cedar", "coral", "nova", "alloy", "sage", "verse", "shimmer", "onyx", "echo", "fable", "ash", "ballad"];
+const MINIMAX_TTS_MODELS = [
+  "speech-2.8-turbo",
+  "speech-2.8-hd",
+  "speech-2.6-turbo",
+  "speech-2.6-hd",
+  "speech-02-turbo",
+  "speech-02-hd",
+  "speech-01-turbo",
+  "speech-01-hd",
+];
+const MINIMAX_TTS_VOICES = [
+  "Korean_SweetGirl",
+  "Korean_CheerfulLittleSister",
+  "Korean_QuirkyGirl",
+  "Korean_SassyGirl",
+  "Korean_SoothingLady",
+  "Korean_GentleWoman",
+  "English_AnimeCharacter",
+  "English_radiant_girl",
+  "English_PlayfulGirl",
+];
+const TTS_PROVIDER_CONFIGS = {
+  openai: {
+    label: "OpenAI",
+    models: OPENAI_TTS_MODELS,
+    voices: OPENAI_TTS_VOICES,
+    defaultModel: "gpt-4o-mini-tts",
+    defaultVoice: "sage",
+    defaultSpeed: 1.12,
+    speedMin: 0.25,
+    speedMax: 4,
+    defaultInstructions: DEFAULT_TTS_INSTRUCTIONS,
+    voicePlaceholder: "sage",
+    instructionsPlaceholder: "Tone, pacing, and delivery style",
+  },
+  minimax: {
+    label: "MiniMax",
+    models: MINIMAX_TTS_MODELS,
+    voices: MINIMAX_TTS_VOICES,
+    defaultModel: "speech-2.8-turbo",
+    defaultVoice: "Korean_SweetGirl",
+    defaultSpeed: 1,
+    speedMin: 0.5,
+    speedMax: 2,
+    defaultInstructions: "",
+    voicePlaceholder: "Korean_SweetGirl or custom voice_id",
+    instructionsPlaceholder: "MiniMax ignores OpenAI-style voice instructions",
+  },
 };
-const TTS_MODELS = new Set(["gpt-4o-mini-tts", "tts-1", "tts-1-hd"]);
-const TTS_VOICES = new Set(["alloy", "ash", "ballad", "cedar", "coral", "echo", "fable", "marin", "nova", "onyx", "sage", "shimmer", "verse"]);
+const TTS_PROVIDERS = new Set(Object.keys(TTS_PROVIDER_CONFIGS));
+const DEFAULT_TTS_SETTINGS = {
+  provider: DEFAULT_TTS_PROVIDER,
+  model: TTS_PROVIDER_CONFIGS[DEFAULT_TTS_PROVIDER].defaultModel,
+  voice: TTS_PROVIDER_CONFIGS[DEFAULT_TTS_PROVIDER].defaultVoice,
+  speed: TTS_PROVIDER_CONFIGS[DEFAULT_TTS_PROVIDER].defaultSpeed,
+  instructions: TTS_PROVIDER_CONFIGS[DEFAULT_TTS_PROVIDER].defaultInstructions,
+};
 const DEFAULT_SUBTITLE_ENABLED = true;
 const SUBTITLE_MAX_LINES = 2;
 const VIDEO_EXPORT_FPS = 30;
@@ -361,22 +418,38 @@ function getDefaultTextColorForCanvas(canvasValue) {
     : DEFAULT_TEXT_COLOR;
 }
 
-function normalizeTtsModel(value) {
+function normalizeTtsProvider(value) {
+  const provider = typeof value === "string" ? value.trim().toLowerCase() : "";
+  return TTS_PROVIDERS.has(provider) ? provider : DEFAULT_TTS_PROVIDER;
+}
+
+function getTtsProviderConfig(provider) {
+  return TTS_PROVIDER_CONFIGS[normalizeTtsProvider(provider)];
+}
+
+function normalizeTtsModel(value, provider = DEFAULT_TTS_PROVIDER) {
+  const config = getTtsProviderConfig(provider);
   const model = typeof value === "string" ? value.trim() : "";
-  return TTS_MODELS.has(model) ? model : DEFAULT_TTS_SETTINGS.model;
+  return config.models.includes(model) ? model : config.defaultModel;
 }
 
-function normalizeTtsVoice(value) {
+function normalizeTtsVoice(value, provider = DEFAULT_TTS_PROVIDER) {
+  const config = getTtsProviderConfig(provider);
   const voice = typeof value === "string" ? value.trim() : "";
-  return TTS_VOICES.has(voice) ? voice : DEFAULT_TTS_SETTINGS.voice;
+  if (normalizeTtsProvider(provider) === "openai") {
+    return config.voices.includes(voice) ? voice : config.defaultVoice;
+  }
+  return voice || config.defaultVoice;
 }
 
-function normalizeTtsSpeed(value) {
-  return clamp(numberOr(value, DEFAULT_TTS_SETTINGS.speed), 0.25, 4);
+function normalizeTtsSpeed(value, provider = DEFAULT_TTS_PROVIDER) {
+  const config = getTtsProviderConfig(provider);
+  return clamp(numberOr(value, config.defaultSpeed), config.speedMin, config.speedMax);
 }
 
-function normalizeTtsInstructions(value) {
-  return typeof value === "string" ? value.trim() : DEFAULT_TTS_SETTINGS.instructions;
+function normalizeTtsInstructions(value, provider = DEFAULT_TTS_PROVIDER) {
+  const config = getTtsProviderConfig(provider);
+  return typeof value === "string" ? value.trim() : config.defaultInstructions;
 }
 
 function normalizeSubtitleEnabled(value) {
@@ -3633,9 +3706,51 @@ async function saveCanvasAsPng() {
   setStatus("PNG를 내보냈습니다.");
 }
 
+function setSimpleSelectOptions(select, values) {
+  select.replaceChildren();
+  for (const value of values) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = value;
+    select.append(option);
+  }
+}
+
+function syncTtsProviderControls(provider = projectSettingsState.ttsProvider) {
+  const normalizedProvider = normalizeTtsProvider(provider);
+  const config = getTtsProviderConfig(normalizedProvider);
+  settingsTtsProvider.value = normalizedProvider;
+  setSimpleSelectOptions(settingsTtsModel, config.models);
+
+  settingsTtsVoiceSuggestions.replaceChildren();
+  for (const voice of config.voices) {
+    const option = document.createElement("option");
+    option.value = voice;
+    settingsTtsVoiceSuggestions.append(option);
+  }
+
+  settingsTtsVoice.placeholder = config.voicePlaceholder;
+  settingsTtsSpeed.min = String(config.speedMin);
+  settingsTtsSpeed.max = String(config.speedMax);
+  settingsTtsInstructions.placeholder = config.instructionsPlaceholder;
+  settingsTtsInstructions.disabled = normalizedProvider === "minimax";
+}
+
+function applyTtsProviderDefaults(provider) {
+  const normalizedProvider = normalizeTtsProvider(provider);
+  const config = getTtsProviderConfig(normalizedProvider);
+  syncTtsProviderControls(normalizedProvider);
+  settingsTtsModel.value = config.defaultModel;
+  settingsTtsVoice.value = config.defaultVoice;
+  settingsTtsSpeed.value = String(config.defaultSpeed);
+  settingsTtsInstructions.value = config.defaultInstructions;
+}
+
 function getTtsSettings() {
+  const provider = normalizeTtsProvider(projectSettingsState.ttsProvider);
   return {
-    apiKey: appSettingsState.openAiApiKey,
+    provider,
+    apiKey: provider === "minimax" ? appSettingsState.miniMaxApiKey : appSettingsState.openAiApiKey,
     model: projectSettingsState.ttsModel,
     voice: projectSettingsState.ttsVoice,
     speed: projectSettingsState.ttsSpeed,
@@ -3646,18 +3761,21 @@ function getTtsSettings() {
 function normalizeAppSettings(value = {}) {
   return {
     openAiApiKey: typeof value.openAiApiKey === "string" ? value.openAiApiKey.trim() : "",
+    miniMaxApiKey: typeof value.miniMaxApiKey === "string" ? value.miniMaxApiKey.trim() : "",
   };
 }
 
 function normalizeProjectSettings(value = {}) {
+  const ttsProvider = normalizeTtsProvider(value.ttsProvider);
   return {
     canvasWidth: sanitizeNumber(value.canvasWidth, DEFAULT_CANVAS_WIDTH, 80, 4096),
     canvasHeight: sanitizeNumber(value.canvasHeight, DEFAULT_CANVAS_HEIGHT, 80, 4096),
     canvasColor: sanitizeColor(value.canvasColor, DEFAULT_CANVAS_COLOR),
-    ttsModel: normalizeTtsModel(value.ttsModel),
-    ttsVoice: normalizeTtsVoice(value.ttsVoice),
-    ttsSpeed: normalizeTtsSpeed(value.ttsSpeed),
-    ttsInstructions: normalizeTtsInstructions(value.ttsInstructions),
+    ttsProvider,
+    ttsModel: normalizeTtsModel(value.ttsModel, ttsProvider),
+    ttsVoice: normalizeTtsVoice(value.ttsVoice, ttsProvider),
+    ttsSpeed: normalizeTtsSpeed(value.ttsSpeed, ttsProvider),
+    ttsInstructions: normalizeTtsInstructions(value.ttsInstructions, ttsProvider),
     subtitleEnabled: normalizeSubtitleEnabled(value.subtitleEnabled),
     exportDir: typeof value.exportDir === "string" && value.exportDir.trim() ? value.exportDir.trim() : defaultProjectExportDir,
   };
@@ -3665,9 +3783,11 @@ function normalizeProjectSettings(value = {}) {
 
 function syncSettingsControls() {
   settingsOpenAiApiKey.value = appSettingsState.openAiApiKey;
+  settingsMiniMaxApiKey.value = appSettingsState.miniMaxApiKey;
   settingsCanvasWidth.value = String(projectSettingsState.canvasWidth);
   settingsCanvasHeight.value = String(projectSettingsState.canvasHeight);
   settingsCanvasColor.value = projectSettingsState.canvasColor;
+  syncTtsProviderControls(projectSettingsState.ttsProvider);
   settingsTtsModel.value = projectSettingsState.ttsModel;
   settingsTtsVoice.value = projectSettingsState.ttsVoice;
   settingsTtsSpeed.value = String(projectSettingsState.ttsSpeed);
@@ -3682,6 +3802,7 @@ function getProjectSettingsFromControls() {
     canvasWidth: settingsCanvasWidth.value,
     canvasHeight: settingsCanvasHeight.value,
     canvasColor: settingsCanvasColor.value,
+    ttsProvider: settingsTtsProvider.value,
     ttsModel: settingsTtsModel.value,
     ttsVoice: settingsTtsVoice.value,
     ttsSpeed: settingsTtsSpeed.value,
@@ -3732,7 +3853,10 @@ async function loadAppSettings() {
 }
 
 async function saveSettings() {
-  const nextAppSettings = normalizeAppSettings({ openAiApiKey: settingsOpenAiApiKey.value });
+  const nextAppSettings = normalizeAppSettings({
+    openAiApiKey: settingsOpenAiApiKey.value,
+    miniMaxApiKey: settingsMiniMaxApiKey.value,
+  });
   const nextProjectSettings = getProjectSettingsFromControls();
 
   try {
@@ -3746,7 +3870,7 @@ async function saveSettings() {
     applyProjectCanvasSettingsToSlides({ record: true });
     scheduleNativeProjectSave();
     syncSettingsControls();
-    setStatus("설정을 저장했습니다. OpenAI API Key는 앱 전역, 나머지는 현재 프로젝트에 저장됩니다.");
+    setStatus("설정을 저장했습니다. API Key는 앱 전역, 나머지는 현재 프로젝트에 저장됩니다.");
     hideAppSettings();
   } catch (error) {
     setStatus(error?.message || "설정 저장에 실패했습니다.");
@@ -4352,8 +4476,17 @@ settingsCanvasHeight.addEventListener("blur", () => {
 });
 settingsCanvasColor.addEventListener("input", syncColorPresetButtons);
 settingsCanvasColor.addEventListener("change", syncColorPresetButtons);
+settingsTtsProvider.addEventListener("change", () => {
+  applyTtsProviderDefaults(settingsTtsProvider.value);
+});
+settingsTtsModel.addEventListener("change", () => {
+  settingsTtsModel.value = normalizeTtsModel(settingsTtsModel.value, settingsTtsProvider.value);
+});
+settingsTtsVoice.addEventListener("blur", () => {
+  settingsTtsVoice.value = normalizeTtsVoice(settingsTtsVoice.value, settingsTtsProvider.value);
+});
 settingsTtsSpeed.addEventListener("blur", () => {
-  settingsTtsSpeed.value = String(normalizeTtsSpeed(settingsTtsSpeed.value));
+  settingsTtsSpeed.value = String(normalizeTtsSpeed(settingsTtsSpeed.value, settingsTtsProvider.value));
 });
 
 pasteImage.addEventListener("click", pasteImageFromClipboard);

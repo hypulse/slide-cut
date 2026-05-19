@@ -65,12 +65,15 @@ struct ProjectAsset {
 struct AppSettings {
     #[serde(default)]
     open_ai_api_key: String,
+    #[serde(default)]
+    mini_max_api_key: String,
 }
 
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
             open_ai_api_key: String::new(),
+            mini_max_api_key: String::new(),
         }
     }
 }
@@ -102,6 +105,7 @@ struct VideoExportSlide {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct TtsSettings {
+    provider: Option<String>,
     api_key: Option<String>,
     model: Option<String>,
     voice: Option<String>,
@@ -229,6 +233,7 @@ fn default_export_dir(app: &AppHandle) -> String {
 fn clean_app_settings(_app: &AppHandle, settings: AppSettings) -> AppSettings {
     AppSettings {
         open_ai_api_key: settings.open_ai_api_key.trim().to_string(),
+        mini_max_api_key: settings.mini_max_api_key.trim().to_string(),
     }
 }
 
@@ -954,7 +959,21 @@ fn read_git_commit_file_change(
     })
 }
 
-fn tts_value(settings: &TtsSettings, notes: &str) -> Value {
+fn normalized_tts_provider(settings: &TtsSettings) -> &'static str {
+    let provider = settings
+        .provider
+        .as_deref()
+        .unwrap_or("")
+        .trim()
+        .to_ascii_lowercase();
+    if provider == "minimax" {
+        "minimax"
+    } else {
+        "openai"
+    }
+}
+
+fn openai_tts_value(settings: &TtsSettings, notes: &str) -> Value {
     let model = settings
         .model
         .as_deref()
@@ -964,7 +983,7 @@ fn tts_value(settings: &TtsSettings, notes: &str) -> Value {
         .voice
         .as_deref()
         .filter(|value| !value.trim().is_empty())
-        .unwrap_or("nova");
+        .unwrap_or("sage");
     let speed = settings.speed.unwrap_or(1.0).clamp(0.25, 4.0);
     let mut value = serde_json::json!({
         "model": model,
@@ -981,6 +1000,52 @@ fn tts_value(settings: &TtsSettings, notes: &str) -> Value {
     value
 }
 
+fn minimax_tts_value(settings: &TtsSettings, notes: &str) -> Value {
+    let model = settings
+        .model
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or("speech-2.8-turbo");
+    let voice = settings
+        .voice
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or("Korean_SweetGirl");
+    let speed = settings.speed.unwrap_or(1.0).clamp(0.5, 2.0);
+    serde_json::json!({
+        "model": model,
+        "text": notes,
+        "stream": false,
+        "language_boost": "auto",
+        "output_format": "hex",
+        "voice_setting": {
+            "voice_id": voice,
+            "speed": speed,
+            "vol": 1,
+            "pitch": 0
+        },
+        "audio_setting": {
+            "sample_rate": 32000,
+            "bitrate": 128000,
+            "format": "mp3",
+            "channel": 1
+        }
+    })
+}
+
+fn tts_value(settings: &TtsSettings, notes: &str) -> Value {
+    let provider = normalized_tts_provider(settings);
+    let request = if provider == "minimax" {
+        minimax_tts_value(settings, notes)
+    } else {
+        openai_tts_value(settings, notes)
+    };
+    serde_json::json!({
+        "provider": provider,
+        "request": request
+    })
+}
+
 fn tts_cache_path(app: &AppHandle, settings: &TtsSettings, notes: &str) -> Result<PathBuf, String> {
     let cache_root = app_cache_dir(app)?.join("tts-cache");
     fs::create_dir_all(&cache_root).map_err(|error| error.to_string())?;
@@ -989,22 +1054,136 @@ fn tts_cache_path(app: &AppHandle, settings: &TtsSettings, notes: &str) -> Resul
     Ok(cache_root.join(format!("{}.mp3", hex::encode(digest))))
 }
 
-fn resolve_api_key(app: &AppHandle, settings: &TtsSettings) -> Result<String, String> {
+fn resolve_api_key(
+    app: &AppHandle,
+    settings: &TtsSettings,
+    provider: &str,
+) -> Result<String, String> {
     let direct_key = settings.api_key.as_deref().unwrap_or("").trim();
     if !direct_key.is_empty() {
         return Ok(direct_key.to_string());
     }
     if let Ok(app_settings) = get_app_settings(app.clone()) {
-        let saved_key = app_settings.open_ai_api_key.trim();
+        let saved_key = if provider == "minimax" {
+            app_settings.mini_max_api_key.trim()
+        } else {
+            app_settings.open_ai_api_key.trim()
+        };
         if !saved_key.is_empty() {
             return Ok(saved_key.to_string());
         }
     }
-    env::var("OPENAI_API_KEY")
+    let env_key = if provider == "minimax" {
+        "MINIMAX_API_KEY"
+    } else {
+        "OPENAI_API_KEY"
+    };
+    env::var(env_key)
         .map(|value| value.trim().to_string())
         .ok()
         .filter(|value| !value.is_empty())
-        .ok_or_else(|| "TTS 생성을 위해 OpenAI API Key가 필요합니다.".to_string())
+        .ok_or_else(|| {
+            if provider == "minimax" {
+                "TTS 생성을 위해 MiniMax API Key가 필요합니다.".to_string()
+            } else {
+                "TTS 생성을 위해 OpenAI API Key가 필요합니다.".to_string()
+            }
+        })
+}
+
+fn tts_request_id(settings: &TtsSettings, notes: &str) -> String {
+    hex::encode(Sha256::digest(
+        tts_value(settings, notes).to_string().as_bytes(),
+    ))
+}
+
+fn run_openai_tts_request(
+    curl: &Path,
+    work_dir: &Path,
+    api_key: &str,
+    request_id: &str,
+    request_value: &Value,
+    cache_path: &Path,
+    export_id: &str,
+) -> Result<(), String> {
+    let request_path = work_dir.join(format!("speech-request-{request_id}.json"));
+    let config_path = work_dir.join(format!("speech-curl-{request_id}.conf"));
+    write_json(request_path.clone(), request_value)?;
+    let config = format!(
+        "url = \"https://api.openai.com/v1/audio/speech\"\nrequest = \"POST\"\nheader = \"Authorization: Bearer {}\"\nheader = \"Content-Type: application/json\"\ndata-binary = \"@{}\"\noutput = \"{}\"\nfail\nsilent\nshow-error\nlocation\n",
+        quote_curl_value(api_key),
+        quote_curl_value(&request_path.to_string_lossy()),
+        quote_curl_value(&cache_path.to_string_lossy())
+    );
+    fs::write(&config_path, config).map_err(|error| error.to_string())?;
+
+    let mut command = Command::new(curl);
+    command.arg("-K").arg(&config_path);
+    let result = run_command(command, "OpenAI TTS 요청", export_id);
+    let _ = fs::remove_file(&config_path);
+    let _ = fs::remove_file(&request_path);
+    result
+}
+
+fn run_minimax_tts_request(
+    curl: &Path,
+    work_dir: &Path,
+    api_key: &str,
+    request_id: &str,
+    request_value: &Value,
+    cache_path: &Path,
+    export_id: &str,
+) -> Result<(), String> {
+    let request_path = work_dir.join(format!("speech-request-{request_id}.json"));
+    let response_path = work_dir.join(format!("speech-response-{request_id}.json"));
+    let config_path = work_dir.join(format!("speech-curl-{request_id}.conf"));
+    write_json(request_path.clone(), request_value)?;
+    let config = format!(
+        "url = \"https://api.minimax.io/v1/t2a_v2\"\nrequest = \"POST\"\nheader = \"Authorization: Bearer {}\"\nheader = \"Content-Type: application/json\"\ndata-binary = \"@{}\"\noutput = \"{}\"\nfail\nsilent\nshow-error\nlocation\n",
+        quote_curl_value(api_key),
+        quote_curl_value(&request_path.to_string_lossy()),
+        quote_curl_value(&response_path.to_string_lossy())
+    );
+    fs::write(&config_path, config).map_err(|error| error.to_string())?;
+
+    let mut command = Command::new(curl);
+    command.arg("-K").arg(&config_path);
+    let result = run_command(command, "MiniMax TTS 요청", export_id);
+    let _ = fs::remove_file(&config_path);
+    let _ = fs::remove_file(&request_path);
+    result?;
+
+    let response_text = fs::read_to_string(&response_path).map_err(|error| error.to_string())?;
+    let _ = fs::remove_file(&response_path);
+    let response: Value = serde_json::from_str(&response_text)
+        .map_err(|error| format!("MiniMax TTS 응답을 읽지 못했습니다: {error}"))?;
+
+    let status_code = response
+        .pointer("/base_resp/status_code")
+        .and_then(Value::as_i64)
+        .unwrap_or(0);
+    if status_code != 0 {
+        let status_msg = response
+            .pointer("/base_resp/status_msg")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown error");
+        return Err(format!(
+            "MiniMax TTS 요청 실패: {status_msg} ({status_code})"
+        ));
+    }
+
+    let audio_hex = response
+        .pointer("/data/audio")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .trim();
+    if audio_hex.is_empty() {
+        return Err("MiniMax TTS 응답에 오디오 데이터가 없습니다.".to_string());
+    }
+
+    let audio_bytes = hex::decode(audio_hex)
+        .map_err(|error| format!("MiniMax 오디오를 디코딩하지 못했습니다: {error}"))?;
+    fs::write(cache_path, audio_bytes).map_err(|error| error.to_string())
 }
 
 fn generate_tts_audio(
@@ -1017,38 +1196,41 @@ fn generate_tts_audio(
 ) -> Result<PathBuf, String> {
     check_export_cancelled(export_id)?;
     let notes = notes.trim();
-    if notes.chars().count() > 4096 {
-        return Err("슬라이드 노트는 TTS 한 번당 4096자 이하여야 합니다.".to_string());
+    let provider = normalized_tts_provider(settings);
+    let max_chars = if provider == "minimax" { 10_000 } else { 4096 };
+    if notes.chars().count() > max_chars {
+        return Err(format!(
+            "슬라이드 노트는 TTS 한 번당 {max_chars}자 이하여야 합니다."
+        ));
     }
     let cache_path = tts_cache_path(app, settings, notes)?;
     if cache_path.exists() {
         return Ok(cache_path);
     }
 
-    let api_key = resolve_api_key(app, settings)?;
-    let request_path = work_dir.join(format!(
-        "speech-request-{}.json",
-        hex::encode(Sha256::digest(notes.as_bytes()))
-    ));
-    let config_path = work_dir.join(format!(
-        "speech-curl-{}.conf",
-        hex::encode(Sha256::digest(request_path.to_string_lossy().as_bytes()))
-    ));
-    write_json(request_path.clone(), &tts_value(settings, notes))?;
-    let config = format!(
-        "url = \"https://api.openai.com/v1/audio/speech\"\nrequest = \"POST\"\nheader = \"Authorization: Bearer {}\"\nheader = \"Content-Type: application/json\"\ndata-binary = \"@{}\"\noutput = \"{}\"\nfail\nsilent\nshow-error\nlocation\n",
-        quote_curl_value(&api_key),
-        quote_curl_value(&request_path.to_string_lossy()),
-        quote_curl_value(&cache_path.to_string_lossy())
-    );
-    fs::write(&config_path, config).map_err(|error| error.to_string())?;
-
-    let mut command = Command::new(curl);
-    command.arg("-K").arg(&config_path);
-    let result = run_command(command, "OpenAI TTS 요청", export_id);
-    let _ = fs::remove_file(&config_path);
-    let _ = fs::remove_file(&request_path);
-    result?;
+    let api_key = resolve_api_key(app, settings, provider)?;
+    let request_id = tts_request_id(settings, notes);
+    if provider == "minimax" {
+        run_minimax_tts_request(
+            curl,
+            work_dir,
+            &api_key,
+            &request_id,
+            &minimax_tts_value(settings, notes),
+            &cache_path,
+            export_id,
+        )?;
+    } else {
+        run_openai_tts_request(
+            curl,
+            work_dir,
+            &api_key,
+            &request_id,
+            &openai_tts_value(settings, notes),
+            &cache_path,
+            export_id,
+        )?;
+    }
 
     if !cache_path.exists() {
         return Err("TTS 오디오 파일을 생성하지 못했습니다.".to_string());
@@ -1450,7 +1632,14 @@ fn export_video(app: AppHandle, payload: VideoExportPayload) -> Result<VideoExpo
             fs::create_dir_all(parent).map_err(|error| error.to_string())?;
         }
         concat_segments(&ffmpeg, &work_dir, &segments, &output_path, &export_id)?;
-        emit_export_progress(&app, &export_id, "Complete", "영상 내보내기가 완료되었습니다.", 1, 1);
+        emit_export_progress(
+            &app,
+            &export_id,
+            "Complete",
+            "영상 내보내기가 완료되었습니다.",
+            1,
+            1,
+        );
         Ok(VideoExportResult {
             output_path: output_path.to_string_lossy().to_string(),
             slide_count: prepared_slides.len(),

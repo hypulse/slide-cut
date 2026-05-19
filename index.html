@@ -292,13 +292,17 @@
         <header class="app-settings-header">
           <div>
             <h2 id="app-settings-title">Settings</h2>
-            <p>The OpenAI API key is app-wide. Other settings are saved with this project.</p>
+            <p>API keys are app-wide. Canvas, speech, subtitles, and export folder are saved with this project.</p>
           </div>
           <button id="closeAppSettings" type="button" data-icon="x">Close</button>
         </header>
         <label>
           <span>OpenAI API Key</span>
           <input id="settingsOpenAiApiKey" type="password" autocomplete="off" placeholder="sk-..." />
+        </label>
+        <label>
+          <span>MiniMax API Key</span>
+          <input id="settingsMiniMaxApiKey" type="password" autocomplete="off" placeholder="MiniMax API key" />
         </label>
         <label>
           <span>Canvas Width</span>
@@ -320,30 +324,20 @@
           </div>
         </label>
         <label>
-          <span>Speech Model</span>
-          <select id="settingsTtsModel">
-            <option value="gpt-4o-mini-tts">gpt-4o-mini-tts</option>
-            <option value="tts-1">tts-1</option>
-            <option value="tts-1-hd">tts-1-hd</option>
+          <span>Speech Provider</span>
+          <select id="settingsTtsProvider">
+            <option value="openai">OpenAI</option>
+            <option value="minimax">MiniMax</option>
           </select>
         </label>
         <label>
+          <span>Speech Model</span>
+          <select id="settingsTtsModel"></select>
+        </label>
+        <label>
           <span>Voice</span>
-          <select id="settingsTtsVoice">
-            <option value="marin">marin</option>
-            <option value="cedar">cedar</option>
-            <option value="coral">coral</option>
-            <option value="nova">nova</option>
-            <option value="alloy">alloy</option>
-            <option value="sage">sage</option>
-            <option value="verse">verse</option>
-            <option value="shimmer">shimmer</option>
-            <option value="onyx">onyx</option>
-            <option value="echo">echo</option>
-            <option value="fable">fable</option>
-            <option value="ash">ash</option>
-            <option value="ballad">ballad</option>
-          </select>
+          <input id="settingsTtsVoice" type="text" list="ttsVoiceSuggestions" autocomplete="off" />
+          <datalist id="ttsVoiceSuggestions"></datalist>
         </label>
         <label>
           <span>Speech Speed</span>
