@@ -3014,8 +3014,8 @@ async function initializeNativeMode() {
   }
 
   document.body.classList.add("is-native-app");
-  saveProject.textContent = "Save";
-  openProject.textContent = "Import";
+  saveProject.textContent = "Export Project";
+  openProject.textContent = "Import Project";
   await refreshNativeProjectList();
   if (nativeProjects.length === 0) {
     await createNewNativeProject({ silent: true });
@@ -3125,7 +3125,16 @@ function isRedoShortcut(event) {
   return IS_MAC_PLATFORM ? event.shiftKey && key === "z" : key === "y" || (event.shiftKey && key === "z");
 }
 
-async function saveProjectFile() {
+async function saveProjectInternally() {
+  if (nativeApi) {
+    await saveActiveNativeProject({ showStatus: true });
+    return;
+  }
+
+  setStatus("내부 저장은 데스크톱 앱에서 사용할 수 있습니다.");
+}
+
+async function exportProjectFile() {
   if (nativeApi?.exportProjectFile) {
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
     const project = createProjectData();
@@ -3135,11 +3144,6 @@ async function saveProjectFile() {
       setSaveState("Exported");
       setStatus("선택한 경로에 프로젝트 파일을 저장했습니다.");
     }
-    return;
-  }
-
-  if (nativeApi) {
-    await saveActiveNativeProject({ showStatus: true });
     return;
   }
 
@@ -4246,7 +4250,7 @@ duplicateSelected.addEventListener("click", duplicateSelectedObjects);
 savePng.addEventListener("click", saveCanvasAsPng);
 exportMp4.addEventListener("click", exportProjectAsMp4);
 cancelExport.addEventListener("click", cancelActiveExportJob);
-saveProject.addEventListener("click", saveProjectFile);
+saveProject.addEventListener("click", exportProjectFile);
 openProject.addEventListener("click", importNativeProjectFile);
 projectFileInput.addEventListener("change", () => {
   const [file] = projectFileInput.files;
@@ -4306,7 +4310,7 @@ document.addEventListener("keydown", (event) => {
   const isEditableTarget = isEditableShortcutTarget(event.target);
   if (isPrimaryShortcut(event) && key === "s") {
     event.preventDefault();
-    saveProjectFile();
+    saveProjectInternally();
     return;
   }
   if (!isEditableTarget && isPrimaryShortcut(event) && key === "o") {
