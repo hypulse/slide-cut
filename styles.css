@@ -1161,6 +1161,8 @@ input[type="checkbox"] {
 
 .dynamic-preview-answer {
   flex: 0 0 auto;
+  align-self: flex-start;
+  max-width: 74%;
   min-height: 0;
   overflow: visible;
   color: #111111;

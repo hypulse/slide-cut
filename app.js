@@ -1876,7 +1876,7 @@ function drawChatTypingSlide(context, slide, width, height, timeSeconds, options
   const questionLineHeight = Math.round(questionSize * 1.36);
   const answerLineHeight = Math.round(answerSize * 1.52);
   const questionMaxWidth = Math.round(width * 0.68);
-  const answerMaxWidth = width - marginX * 2;
+  const answerMaxWidth = Math.min(width - marginX * 2, Math.round(width * 0.74));
   const viewportY = topMargin;
   const viewportHeight = height - topMargin - bottomMargin;
   const messageGap = Math.round(height * 0.075);
