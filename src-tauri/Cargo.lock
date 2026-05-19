@@ -2763,8 +2763,11 @@ checksum = "703d5c7ef118737c72f1af64ad2f6f8c5e1921f818cdcb97b8fe6fc69bf66214"
 name = "simple-slide"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
+ "hex",
  "serde",
  "serde_json",
+ "sha2",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",

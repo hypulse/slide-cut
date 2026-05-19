@@ -1,8 +1,11 @@
+use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 use std::{
-    fs,
-    path::PathBuf,
+    env, fs,
+    path::{Path, PathBuf},
+    process::Command,
     time::{SystemTime, UNIX_EPOCH},
 };
 use tauri::{AppHandle, Manager};
@@ -41,6 +44,51 @@ struct RenameProjectPayload {
 struct ProjectRecord {
     meta: ProjectMeta,
     data: Value,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct VideoExportPayload {
+    output_path: String,
+    slides: Vec<VideoExportSlide>,
+    tts: TtsSettings,
+    fps: Option<u32>,
+    fallback_duration_seconds: Option<f64>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct VideoExportSlide {
+    width: u32,
+    height: u32,
+    notes: String,
+    video_path: Option<String>,
+    frame_png: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TtsSettings {
+    api_key: Option<String>,
+    model: Option<String>,
+    voice: Option<String>,
+    speed: Option<f64>,
+    instructions: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct VideoExportResult {
+    output_path: String,
+    slide_count: usize,
+}
+
+#[derive(Debug)]
+struct PreparedSlide {
+    frame_path: PathBuf,
+    audio_path: PathBuf,
+    video_path: Option<PathBuf>,
+    duration_seconds: f64,
 }
 
 fn now_millis() -> Result<u128, String> {
@@ -130,7 +178,11 @@ fn list_projects(app: AppHandle) -> Result<Vec<ProjectMeta>, String> {
     let mut projects = Vec::new();
     for entry in fs::read_dir(root).map_err(|error| error.to_string())? {
         let entry = entry.map_err(|error| error.to_string())?;
-        if !entry.file_type().map_err(|error| error.to_string())?.is_dir() {
+        if !entry
+            .file_type()
+            .map_err(|error| error.to_string())?
+            .is_dir()
+        {
             continue;
         }
         let id = entry.file_name().to_string_lossy().to_string();
@@ -249,6 +301,425 @@ fn read_project_file(path: String) -> Result<ProjectRecord, String> {
     Ok(ProjectRecord { meta, data })
 }
 
+fn app_cache_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    app.path()
+        .app_cache_dir()
+        .map_err(|error| error.to_string())
+}
+
+fn decode_png_data_url(value: &str) -> Result<Vec<u8>, String> {
+    let (_, encoded) = value
+        .split_once(',')
+        .ok_or_else(|| "PNG 프레임 데이터가 올바르지 않습니다.".to_string())?;
+    general_purpose::STANDARD
+        .decode(encoded)
+        .map_err(|error| format!("PNG 프레임을 디코딩하지 못했습니다: {error}"))
+}
+
+fn quote_curl_value(value: &str) -> String {
+    value.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
+fn format_seconds(value: f64) -> String {
+    format!("{:.3}", value.max(0.1))
+}
+
+fn even_dimension(value: u32) -> u32 {
+    let value = value.clamp(2, 8192);
+    if value % 2 == 0 {
+        value
+    } else {
+        value - 1
+    }
+}
+
+fn command_runs(path: &Path, version_arg: &str) -> bool {
+    Command::new(path)
+        .arg(version_arg)
+        .output()
+        .map(|output| output.status.success())
+        .unwrap_or(false)
+}
+
+fn command_name_runs(name: &str, version_arg: &str) -> bool {
+    Command::new(name)
+        .arg(version_arg)
+        .output()
+        .map(|output| output.status.success())
+        .unwrap_or(false)
+}
+
+fn find_tool(name: &str, env_name: &str, version_arg: &str) -> Result<PathBuf, String> {
+    if let Ok(configured) = env::var(env_name) {
+        let path = PathBuf::from(configured);
+        if command_runs(&path, version_arg) {
+            return Ok(path);
+        }
+    }
+
+    let common_paths = [
+        PathBuf::from(format!("/opt/homebrew/bin/{name}")),
+        PathBuf::from(format!("/usr/local/bin/{name}")),
+        PathBuf::from(format!("/usr/bin/{name}")),
+    ];
+    for path in common_paths {
+        if command_runs(&path, version_arg) {
+            return Ok(path);
+        }
+    }
+
+    if command_name_runs(name, version_arg) {
+        return Ok(PathBuf::from(name));
+    }
+
+    Err(format!(
+        "{name}를 찾지 못했습니다. {env_name} 환경 변수나 PATH에 {name} 실행 파일을 연결해 주세요."
+    ))
+}
+
+fn run_command(mut command: Command, label: &str) -> Result<(), String> {
+    let output = command
+        .output()
+        .map_err(|error| format!("{label} 실행에 실패했습니다: {error}"))?;
+    if output.status.success() {
+        return Ok(());
+    }
+
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let detail = if !stderr.is_empty() {
+        stderr
+    } else if !stdout.is_empty() {
+        stdout
+    } else {
+        format!("종료 코드 {:?}", output.status.code())
+    };
+    Err(format!("{label} 실패: {detail}"))
+}
+
+fn tts_value(settings: &TtsSettings, notes: &str) -> Value {
+    let model = settings
+        .model
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or("gpt-4o-mini-tts");
+    let voice = settings
+        .voice
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or("marin");
+    let speed = settings.speed.unwrap_or(1.0).clamp(0.25, 4.0);
+    let mut value = serde_json::json!({
+        "model": model,
+        "input": notes,
+        "voice": voice,
+        "response_format": "mp3",
+        "speed": speed
+    });
+
+    let instructions = settings.instructions.as_deref().unwrap_or("").trim();
+    if !instructions.is_empty() && model.starts_with("gpt-4o-mini-tts") {
+        value["instructions"] = Value::String(instructions.to_string());
+    }
+    value
+}
+
+fn tts_cache_path(app: &AppHandle, settings: &TtsSettings, notes: &str) -> Result<PathBuf, String> {
+    let cache_root = app_cache_dir(app)?.join("tts-cache");
+    fs::create_dir_all(&cache_root).map_err(|error| error.to_string())?;
+    let key_source = tts_value(settings, notes).to_string();
+    let digest = Sha256::digest(key_source.as_bytes());
+    Ok(cache_root.join(format!("{}.mp3", hex::encode(digest))))
+}
+
+fn resolve_api_key(settings: &TtsSettings) -> Result<String, String> {
+    let direct_key = settings.api_key.as_deref().unwrap_or("").trim();
+    if !direct_key.is_empty() {
+        return Ok(direct_key.to_string());
+    }
+    env::var("OPENAI_API_KEY")
+        .map(|value| value.trim().to_string())
+        .ok()
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| "TTS 생성을 위해 OpenAI API Key가 필요합니다.".to_string())
+}
+
+fn generate_tts_audio(
+    app: &AppHandle,
+    curl: &Path,
+    work_dir: &Path,
+    settings: &TtsSettings,
+    notes: &str,
+) -> Result<PathBuf, String> {
+    let notes = notes.trim();
+    if notes.chars().count() > 4096 {
+        return Err("슬라이드 노트는 TTS 한 번당 4096자 이하여야 합니다.".to_string());
+    }
+    let cache_path = tts_cache_path(app, settings, notes)?;
+    if cache_path.exists() {
+        return Ok(cache_path);
+    }
+
+    let api_key = resolve_api_key(settings)?;
+    let request_path = work_dir.join(format!(
+        "speech-request-{}.json",
+        hex::encode(Sha256::digest(notes.as_bytes()))
+    ));
+    let config_path = work_dir.join(format!(
+        "speech-curl-{}.conf",
+        hex::encode(Sha256::digest(request_path.to_string_lossy().as_bytes()))
+    ));
+    write_json(request_path.clone(), &tts_value(settings, notes))?;
+    let config = format!(
+        "url = \"https://api.openai.com/v1/audio/speech\"\nrequest = \"POST\"\nheader = \"Authorization: Bearer {}\"\nheader = \"Content-Type: application/json\"\ndata-binary = \"@{}\"\noutput = \"{}\"\nfail\nsilent\nshow-error\nlocation\n",
+        quote_curl_value(&api_key),
+        quote_curl_value(&request_path.to_string_lossy()),
+        quote_curl_value(&cache_path.to_string_lossy())
+    );
+    fs::write(&config_path, config).map_err(|error| error.to_string())?;
+
+    let mut command = Command::new(curl);
+    command.arg("-K").arg(&config_path);
+    let result = run_command(command, "OpenAI TTS 요청");
+    let _ = fs::remove_file(&config_path);
+    let _ = fs::remove_file(&request_path);
+    result?;
+
+    if !cache_path.exists() {
+        return Err("TTS 오디오 파일을 생성하지 못했습니다.".to_string());
+    }
+    Ok(cache_path)
+}
+
+fn create_silence_audio(ffmpeg: &Path, path: &Path, duration_seconds: f64) -> Result<(), String> {
+    let mut command = Command::new(ffmpeg);
+    command
+        .args(["-y", "-f", "lavfi"])
+        .arg("-i")
+        .arg("anullsrc=channel_layout=stereo:sample_rate=44100")
+        .arg("-t")
+        .arg(format_seconds(duration_seconds))
+        .args(["-c:a", "aac", "-b:a", "128k"])
+        .arg(path);
+    run_command(command, "무음 오디오 생성")
+}
+
+fn probe_audio_duration(ffprobe: &Path, path: &Path, fallback: f64) -> Result<f64, String> {
+    let output = Command::new(ffprobe)
+        .args([
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+        ])
+        .arg(path)
+        .output()
+        .map_err(|error| format!("오디오 길이를 읽지 못했습니다: {error}"))?;
+    if !output.status.success() {
+        return Ok(fallback);
+    }
+    let text = String::from_utf8_lossy(&output.stdout);
+    Ok(text.trim().parse::<f64>().unwrap_or(fallback).max(0.5))
+}
+
+fn create_static_segment(
+    ffmpeg: &Path,
+    prepared: &PreparedSlide,
+    output_path: &Path,
+    width: u32,
+    height: u32,
+    fps: u32,
+) -> Result<(), String> {
+    let filter = format!(
+        "scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=white,format=yuv420p"
+    );
+    let mut command = Command::new(ffmpeg);
+    command
+        .args(["-y", "-loop", "1"])
+        .arg("-i")
+        .arg(&prepared.frame_path)
+        .arg("-i")
+        .arg(&prepared.audio_path)
+        .arg("-t")
+        .arg(format_seconds(prepared.duration_seconds))
+        .arg("-vf")
+        .arg(filter)
+        .args([
+            "-map", "0:v", "-map", "1:a", "-c:v", "libx264", "-preset", "veryfast",
+        ])
+        .arg("-r")
+        .arg(fps.to_string())
+        .args(["-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k"])
+        .args(["-shortest", "-movflags", "+faststart"])
+        .arg(output_path);
+    run_command(command, "정적 슬라이드 세그먼트 생성")
+}
+
+fn create_video_segment(
+    ffmpeg: &Path,
+    prepared: &PreparedSlide,
+    output_path: &Path,
+    width: u32,
+    height: u32,
+    fps: u32,
+) -> Result<(), String> {
+    let video_path = prepared
+        .video_path
+        .as_ref()
+        .ok_or_else(|| "영상 소스 경로가 없습니다.".to_string())?;
+    let filter = format!(
+        "[0:v]scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},setsar=1[bg];[1:v]scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=black@0,format=rgba[fg];[bg][fg]overlay=0:0,format=yuv420p[v]"
+    );
+    let mut command = Command::new(ffmpeg);
+    command
+        .args(["-y", "-stream_loop", "-1"])
+        .arg("-i")
+        .arg(video_path)
+        .args(["-loop", "1"])
+        .arg("-i")
+        .arg(&prepared.frame_path)
+        .arg("-i")
+        .arg(&prepared.audio_path)
+        .arg("-t")
+        .arg(format_seconds(prepared.duration_seconds))
+        .arg("-filter_complex")
+        .arg(filter)
+        .args([
+            "-map", "[v]", "-map", "2:a", "-c:v", "libx264", "-preset", "veryfast",
+        ])
+        .arg("-r")
+        .arg(fps.to_string())
+        .args(["-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k"])
+        .args(["-shortest", "-movflags", "+faststart"])
+        .arg(output_path);
+    run_command(command, "영상 배경 슬라이드 세그먼트 생성")
+}
+
+fn concat_segments(
+    ffmpeg: &Path,
+    work_dir: &Path,
+    segments: &[PathBuf],
+    output_path: &Path,
+) -> Result<(), String> {
+    let filelist_path = work_dir.join("segments.txt");
+    let mut filelist = String::new();
+    for segment in segments {
+        let path = segment.to_string_lossy().replace('\'', "'\\''");
+        filelist.push_str(&format!("file '{}'\n", path));
+    }
+    fs::write(&filelist_path, filelist).map_err(|error| error.to_string())?;
+    let mut command = Command::new(ffmpeg);
+    command
+        .args(["-y", "-f", "concat", "-safe", "0"])
+        .arg("-i")
+        .arg(&filelist_path)
+        .args(["-c", "copy", "-movflags", "+faststart"])
+        .arg(output_path);
+    run_command(command, "MP4 세그먼트 병합")
+}
+
+#[tauri::command]
+fn export_video(app: AppHandle, payload: VideoExportPayload) -> Result<VideoExportResult, String> {
+    if payload.slides.is_empty() {
+        return Err("추출할 슬라이드가 없습니다.".to_string());
+    }
+    if payload.output_path.trim().is_empty() {
+        return Err("MP4 저장 경로가 없습니다.".to_string());
+    }
+
+    let ffmpeg = find_tool("ffmpeg", "SIMPLE_SLIDE_FFMPEG", "-version")?;
+    let ffprobe = find_tool("ffprobe", "SIMPLE_SLIDE_FFPROBE", "-version")?;
+    let needs_tts = payload
+        .slides
+        .iter()
+        .any(|slide| !slide.notes.trim().is_empty());
+    let curl = if needs_tts {
+        Some(find_tool("curl", "SIMPLE_SLIDE_CURL", "--version")?)
+    } else {
+        None
+    };
+
+    let export_id = format!("video-export-{}", now_millis()?);
+    let work_dir = app_cache_dir(&app)?.join("video-export").join(export_id);
+    fs::create_dir_all(&work_dir).map_err(|error| error.to_string())?;
+    let fps = payload.fps.unwrap_or(30).clamp(1, 60);
+    let fallback_duration = payload
+        .fallback_duration_seconds
+        .unwrap_or(3.0)
+        .clamp(1.0, 30.0);
+    let width = even_dimension(payload.slides[0].width);
+    let height = even_dimension(payload.slides[0].height);
+
+    let mut prepared_slides = Vec::new();
+    for (index, slide) in payload.slides.iter().enumerate() {
+        let frame_path = work_dir.join(format!("frame-{index:04}.png"));
+        fs::write(&frame_path, decode_png_data_url(&slide.frame_png)?)
+            .map_err(|error| error.to_string())?;
+
+        let trimmed_notes = slide.notes.trim();
+        let audio_path = if trimmed_notes.is_empty() {
+            let path = work_dir.join(format!("silence-{index:04}.m4a"));
+            create_silence_audio(&ffmpeg, &path, fallback_duration)?;
+            path
+        } else {
+            generate_tts_audio(
+                &app,
+                curl.as_ref().unwrap(),
+                &work_dir,
+                &payload.tts,
+                trimmed_notes,
+            )?
+        };
+        let duration = if trimmed_notes.is_empty() {
+            fallback_duration
+        } else {
+            probe_audio_duration(&ffprobe, &audio_path, fallback_duration)?
+        };
+        let video_path = slide
+            .video_path
+            .as_deref()
+            .filter(|path| !path.trim().is_empty())
+            .map(PathBuf::from);
+        if let Some(path) = video_path.as_ref() {
+            if !path.exists() {
+                return Err(format!(
+                    "영상 파일을 찾지 못했습니다: {}",
+                    path.to_string_lossy()
+                ));
+            }
+        }
+        prepared_slides.push(PreparedSlide {
+            frame_path,
+            audio_path,
+            video_path,
+            duration_seconds: duration,
+        });
+    }
+
+    let mut segments = Vec::new();
+    for (index, prepared) in prepared_slides.iter().enumerate() {
+        let segment_path = work_dir.join(format!("segment-{index:04}.mp4"));
+        if prepared.video_path.is_some() {
+            create_video_segment(&ffmpeg, prepared, &segment_path, width, height, fps)?;
+        } else {
+            create_static_segment(&ffmpeg, prepared, &segment_path, width, height, fps)?;
+        }
+        segments.push(segment_path);
+    }
+
+    let output_path = PathBuf::from(payload.output_path);
+    if let Some(parent) = output_path.parent() {
+        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    }
+    concat_segments(&ffmpeg, &work_dir, &segments, &output_path)?;
+    Ok(VideoExportResult {
+        output_path: output_path.to_string_lossy().to_string(),
+        slide_count: prepared_slides.len(),
+    })
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -261,7 +732,8 @@ pub fn run() {
             duplicate_project,
             delete_project,
             write_project_file,
-            read_project_file
+            read_project_file,
+            export_video
         ])
         .run(tauri::generate_context!())
         .expect("error while running Simple Slide");

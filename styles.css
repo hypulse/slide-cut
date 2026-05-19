@@ -474,6 +474,14 @@ button.danger {
   order: 3;
 }
 
+.toolbar section[aria-labelledby="slide-video-title"] {
+  order: 4;
+}
+
+.toolbar section[aria-labelledby="mp4-export-title"] {
+  order: 5;
+}
+
 .panel {
   display: grid;
   gap: 10px;
@@ -530,6 +538,25 @@ input[type="number"] {
   background: #ffffff;
 }
 
+input[type="text"],
+input[type="password"] {
+  width: 100%;
+  height: 34px;
+  border: 1px solid #c9ced8;
+  border-radius: 6px;
+  padding: 0 9px;
+  background: #ffffff;
+  color: var(--text);
+}
+
+input[type="text"]:focus,
+input[type="password"]:focus,
+input[type="number"]:focus,
+select:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
 select {
   width: 100%;
   height: 34px;
@@ -544,6 +571,33 @@ select {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
+}
+
+.video-source-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.video-source-actions button {
+  height: 32px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.inline-info {
+  min-height: 30px;
+  overflow: hidden;
+  border: 1px solid #d7dbe2;
+  border-radius: 6px;
+  background: #ffffff;
+  padding: 7px 9px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .color-preset-buttons {
@@ -742,12 +796,27 @@ input[type="color"] {
   transform-origin: center center;
 }
 
+.canvas-video {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+
+.canvas-video[hidden] {
+  display: none;
+}
+
 .canvas.is-drawing-mode {
   cursor: crosshair;
 }
 
 .object {
   position: absolute;
+  z-index: 1;
   left: 0;
   top: 0;
   width: 180px;

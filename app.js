@@ -1,5 +1,6 @@
 const canvas = document.querySelector("#canvas");
 const slideNotes = document.querySelector("#slideNotes");
+const slideVideo = document.querySelector("#slideVideo");
 const imageTemplate = document.querySelector("#imageTemplate");
 const textTemplate = document.querySelector("#textTemplate");
 const shapeTemplate = document.querySelector("#shapeTemplate");
@@ -7,9 +8,12 @@ const statusText = document.querySelector("#statusText");
 const tauriInvoke = window.__TAURI__?.core?.invoke || null;
 const tauriDialog = window.__TAURI__?.dialog || null;
 const PROJECT_FILE_FILTER = [{ name: "Simple Slide Project", extensions: ["json"] }];
+const VIDEO_FILE_FILTER = [{ name: "Video", extensions: ["mp4", "mov", "m4v", "webm"] }];
+const MP4_FILE_FILTER = [{ name: "MP4 Video", extensions: ["mp4"] }];
 const nativeApi = window.simpleSlideNative || (tauriInvoke ? {
   isNative: true,
   platform: window.__TAURI__?.os?.platform?.() || navigator.platform || "",
+  toAssetUrl: (path) => window.__TAURI__?.core?.convertFileSrc?.(path) || path,
   listProjects: () => tauriInvoke("list_projects"),
   saveProject: (payload) => tauriInvoke("save_project", { payload }),
   loadProject: (id) => tauriInvoke("load_project", { id }),
@@ -44,6 +48,30 @@ const nativeApi = window.simpleSlideNative || (tauriInvoke ? {
     }
     return tauriInvoke("read_project_file", { path });
   },
+  selectVideoFile: async () => {
+    if (!tauriDialog?.open) {
+      throw new Error("Tauri 파일 선택 대화상자를 사용할 수 없습니다.");
+    }
+    const path = await tauriDialog.open({
+      multiple: false,
+      directory: false,
+      filters: VIDEO_FILE_FILTER,
+    });
+    if (!path || Array.isArray(path)) {
+      return null;
+    }
+    return path;
+  },
+  selectMp4Output: async (suggestedName) => {
+    if (!tauriDialog?.save) {
+      throw new Error("Tauri 파일 저장 대화상자를 사용할 수 없습니다.");
+    }
+    return tauriDialog.save({
+      defaultPath: suggestedName,
+      filters: MP4_FILE_FILTER,
+    });
+  },
+  exportVideo: (payload) => tauriInvoke("export_video", { payload }),
 } : null);
 
 const projectNameInput = document.querySelector("#projectNameInput");
@@ -58,15 +86,26 @@ const colorPresetButtons = [...document.querySelectorAll("[data-color-preset]")]
 const pasteImage = document.querySelector("#pasteImage");
 const addTextBox = document.querySelector("#addTextBox");
 const savePng = document.querySelector("#savePng");
+const exportMp4 = document.querySelector("#exportMp4");
 const saveProject = document.querySelector("#saveProject");
 const openProject = document.querySelector("#openProject");
 const projectFileInput = document.querySelector("#projectFileInput");
+const videoFileInput = document.querySelector("#videoFileInput");
 const addSlide = document.querySelector("#addSlide");
 const duplicateSlide = document.querySelector("#duplicateSlide");
 const slideList = document.querySelector("#slideList");
 const drawToolButtons = [...document.querySelectorAll("[data-draw-tool]")];
 const strokeColor = document.querySelector("#strokeColor");
 const strokeWidth = document.querySelector("#strokeWidth");
+const chooseSlideVideo = document.querySelector("#chooseSlideVideo");
+const clearSlideVideo = document.querySelector("#clearSlideVideo");
+const slideVideoInfo = document.querySelector("#slideVideoInfo");
+const ttsApiKey = document.querySelector("#ttsApiKey");
+const ttsModel = document.querySelector("#ttsModel");
+const ttsVoice = document.querySelector("#ttsVoice");
+const ttsSpeed = document.querySelector("#ttsSpeed");
+const ttsInstructions = document.querySelector("#ttsInstructions");
+const exportStatus = document.querySelector("#exportStatus");
 
 const selectedPanel = document.querySelector(".selected-panel");
 const selectedX = document.querySelector("#selectedX");
@@ -148,9 +187,18 @@ const SHAPE_DRAW_PADDING = 14;
 const MIN_SHAPE_DRAW_DISTANCE = 5;
 const SVG_NS = "http://www.w3.org/2000/svg";
 const PROJECT_FORMAT = "simple-slide-project";
-const PROJECT_VERSION = 1;
+const PROJECT_VERSION = 2;
 const HISTORY_LIMIT = 80;
 const IS_MAC_PLATFORM = /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent || "");
+const DEFAULT_TTS_SETTINGS = {
+  model: "gpt-4o-mini-tts",
+  voice: "marin",
+  speed: 1,
+  instructions: "",
+};
+const TTS_SETTINGS_STORAGE_KEY = "simpleSlideTtsSettings";
+const VIDEO_EXPORT_FPS = 30;
+const VIDEO_EXPORT_FALLBACK_DURATION = 3;
 
 function setStatus(message) {
   window.clearTimeout(statusTimer);
@@ -163,6 +211,12 @@ function setStatus(message) {
   }
 }
 
+function setExportStatus(message) {
+  if (exportStatus) {
+    exportStatus.textContent = message;
+  }
+}
+
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
@@ -170,6 +224,10 @@ function clamp(value, min, max) {
 function numberOr(value, fallback) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function getFileNameFromPath(path) {
+  return String(path || "").split(/[\\/]/).pop() || "Video";
 }
 
 function getObjectLabel(object) {
@@ -1146,6 +1204,15 @@ function drawFittedImage(context, image, width, height) {
   context.drawImage(image, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight);
 }
 
+function drawCoverMedia(context, media, width, height) {
+  const naturalWidth = media.videoWidth || media.naturalWidth || width;
+  const naturalHeight = media.videoHeight || media.naturalHeight || height;
+  const scale = Math.max(width / naturalWidth, height / naturalHeight);
+  const drawWidth = naturalWidth * scale;
+  const drawHeight = naturalHeight * scale;
+  context.drawImage(media, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight);
+}
+
 function wrapTextLines(context, text, width) {
   const maxTextWidth = Math.max(1, width - TEXT_PADDING_X * 2);
   const output = [];
@@ -1266,6 +1333,56 @@ function waitForImageLoad(image) {
   });
 }
 
+function loadImageForRender(src) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("이미지를 렌더링하지 못했습니다."));
+    image.src = src;
+  });
+}
+
+async function renderSlideToDataUrl(slide, options = {}) {
+  if (document.fonts?.ready) {
+    await document.fonts.ready;
+  }
+  const exportCanvas = document.createElement("canvas");
+  exportCanvas.width = Math.max(1, roundedCanvasSize(slide.width));
+  exportCanvas.height = Math.max(1, roundedCanvasSize(slide.height));
+  const context = exportCanvas.getContext("2d");
+
+  if (!options.transparentBackground) {
+    context.fillStyle = sanitizeColor(slide.color, "#ffffff");
+    context.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+  }
+
+  for (const object of slide.objects || []) {
+    const center = {
+      x: object.x + object.width / 2,
+      y: object.y + object.height / 2,
+    };
+    context.save();
+    context.translate(center.x, center.y);
+    context.rotate((object.rotation * Math.PI) / 180);
+    context.translate(-object.width / 2, -object.height / 2);
+
+    if (object.type === "image") {
+      const image = await loadImageForRender(object.src);
+      drawFittedImage(context, image, object.width, object.height);
+    } else if (object.type === "text") {
+      context.__textColor = object.textColor || DEFAULT_TEXT_COLOR;
+      drawTextLines(context, object.text || "", object.width, object.height, false, object.textSize || "h3");
+      delete context.__textColor;
+    } else if (object.type === "shape") {
+      drawShapeData(context, object, object.width, object.height);
+    }
+
+    context.restore();
+  }
+
+  return exportCanvas.toDataURL("image/png");
+}
+
 function createDefaultSlide() {
   return {
     id: `slide-${++slideSeed}`,
@@ -1273,8 +1390,55 @@ function createDefaultSlide() {
     height: 720,
     color: "#ffffff",
     notes: "",
+    video: null,
     objects: [],
   };
+}
+
+function normalizeSlideVideo(value) {
+  if (!value || typeof value.path !== "string" || !value.path.trim()) {
+    return null;
+  }
+  return {
+    path: value.path,
+    name: typeof value.name === "string" && value.name.trim() ? value.name : getFileNameFromPath(value.path),
+    fit: "fill",
+  };
+}
+
+function getActiveSlideVideo() {
+  return normalizeSlideVideo(slides[activeSlideIndex]?.video);
+}
+
+function updateSlideVideoView() {
+  const video = getActiveSlideVideo();
+  if (!slideVideo || !slideVideoInfo || !clearSlideVideo) {
+    return;
+  }
+
+  if (!video) {
+    slideVideo.pause();
+    slideVideo.removeAttribute("src");
+    delete slideVideo.dataset.path;
+    slideVideo.load();
+    slideVideo.hidden = true;
+    slideVideoInfo.textContent = "No video";
+    clearSlideVideo.disabled = true;
+    return;
+  }
+
+  const assetUrl = nativeApi?.toAssetUrl ? nativeApi.toAssetUrl(video.path) : video.path;
+  if (slideVideo.dataset.path !== video.path) {
+    slideVideo.src = assetUrl;
+    slideVideo.dataset.path = video.path;
+    slideVideo.load();
+  }
+  slideVideo.hidden = false;
+  slideVideo.muted = true;
+  slideVideo.loop = true;
+  slideVideo.play().catch(() => {});
+  slideVideoInfo.textContent = `${video.name} · fill`;
+  clearSlideVideo.disabled = false;
 }
 
 function getCanvasState() {
@@ -1337,6 +1501,7 @@ function serializeCurrentSlide() {
     ...slides[activeSlideIndex],
     ...getCanvasState(),
     notes: slideNotes.value,
+    video: normalizeSlideVideo(slides[activeSlideIndex]?.video),
     objects: [...canvas.querySelectorAll(".object")].map(serializeObject),
   };
 }
@@ -1418,6 +1583,8 @@ function loadSlide(index, shouldSaveCurrent = true) {
   canvas.style.height = `${slide.height}px`;
   canvas.style.backgroundColor = slide.color;
   slideNotes.value = typeof slide.notes === "string" ? slide.notes : "";
+  slides[activeSlideIndex].video = normalizeSlideVideo(slide.video);
+  updateSlideVideoView();
   defaultTextColor = slide.color?.toLowerCase?.() === COLOR_PRESETS.dark.canvasColor ? COLOR_PRESETS.dark.textColor : DEFAULT_TEXT_COLOR;
   syncColorPresetButtons();
 
@@ -1454,6 +1621,13 @@ function renderSlidePreview(slide, previewCanvas) {
   context.scale(scale, scale);
   context.fillStyle = slide.color;
   context.fillRect(0, 0, slide.width, slide.height);
+  if (normalizeSlideVideo(slide.video)) {
+    context.fillStyle = "#111827";
+    context.fillRect(0, 0, slide.width, slide.height);
+    context.fillStyle = "rgba(255, 255, 255, 0.82)";
+    context.font = "700 42px Pretendard, sans-serif";
+    context.fillText("VIDEO", 28, slide.height - 72);
+  }
 
   for (const object of slide.objects) {
     const center = {
@@ -2254,6 +2428,7 @@ function normalizeProjectData(data) {
     height: sanitizeNumber(slide.height, 720, 80, 4096),
     color: sanitizeColor(slide.color),
     notes: typeof slide.notes === "string" ? slide.notes : "",
+    video: normalizeSlideVideo(slide.video),
     objects: Array.isArray(slide.objects) ? slide.objects.map(normalizeProjectObject).filter(Boolean) : [],
   }));
 
@@ -2312,6 +2487,59 @@ async function importNativeProjectFile() {
   }
 }
 
+async function chooseVideoForCurrentSlide() {
+  if (nativeApi?.selectVideoFile) {
+    try {
+      const path = await nativeApi.selectVideoFile();
+      if (!path || !slides[activeSlideIndex]) {
+        return;
+      }
+      slides[activeSlideIndex].video = {
+        path,
+        name: getFileNameFromPath(path),
+        fit: "fill",
+      };
+      updateSlideVideoView();
+      renderSlideList();
+      setStatus("현재 슬라이드에 fill 모드 영상 소스를 연결했습니다.");
+      recordHistory();
+    } catch (error) {
+      setStatus(error?.message || "영상 파일을 선택하지 못했습니다.");
+    }
+    return;
+  }
+
+  videoFileInput.click();
+}
+
+function clearVideoForCurrentSlide() {
+  if (!slides[activeSlideIndex]) {
+    return;
+  }
+  slides[activeSlideIndex].video = null;
+  updateSlideVideoView();
+  renderSlideList();
+  setStatus("현재 슬라이드의 영상 소스를 제거했습니다.");
+  recordHistory();
+}
+
+function openBrowserVideoFile(file) {
+  if (!file || !slides[activeSlideIndex]) {
+    return;
+  }
+  const url = URL.createObjectURL(file);
+  slides[activeSlideIndex].video = {
+    path: url,
+    name: file.name || "Browser video",
+    fit: "fill",
+  };
+  updateSlideVideoView();
+  renderSlideList();
+  setStatus("브라우저 임시 영상 소스를 연결했습니다.");
+  recordHistory();
+  videoFileInput.value = "";
+}
+
 async function saveCanvasAsPng() {
   if (document.fonts?.ready) {
     await document.fonts.ready;
@@ -2328,6 +2556,9 @@ async function saveCanvasAsPng() {
   const context = exportCanvas.getContext("2d");
   context.fillStyle = getComputedStyle(canvas).backgroundColor || "#ffffff";
   context.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+  if (!slideVideo.hidden && slideVideo.readyState >= 2) {
+    drawCoverMedia(context, slideVideo, exportCanvas.width, exportCanvas.height);
+  }
 
   for (const object of canvas.querySelectorAll(".object")) {
     const state = getState(object);
@@ -2355,6 +2586,105 @@ async function saveCanvasAsPng() {
   link.href = exportCanvas.toDataURL("image/png");
   link.click();
   setStatus("PNG 파일로 저장했습니다.");
+}
+
+function loadTtsSettings() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(TTS_SETTINGS_STORAGE_KEY) || "{}");
+    ttsModel.value = saved.model || DEFAULT_TTS_SETTINGS.model;
+    ttsVoice.value = saved.voice || DEFAULT_TTS_SETTINGS.voice;
+    ttsSpeed.value = String(clamp(numberOr(saved.speed, DEFAULT_TTS_SETTINGS.speed), 0.25, 4));
+    ttsInstructions.value = typeof saved.instructions === "string" ? saved.instructions : DEFAULT_TTS_SETTINGS.instructions;
+  } catch {
+    ttsModel.value = DEFAULT_TTS_SETTINGS.model;
+    ttsVoice.value = DEFAULT_TTS_SETTINGS.voice;
+    ttsSpeed.value = String(DEFAULT_TTS_SETTINGS.speed);
+    ttsInstructions.value = DEFAULT_TTS_SETTINGS.instructions;
+  }
+}
+
+function saveTtsSettings() {
+  const settings = {
+    model: ttsModel.value,
+    voice: ttsVoice.value,
+    speed: clamp(numberOr(ttsSpeed.value, DEFAULT_TTS_SETTINGS.speed), 0.25, 4),
+    instructions: ttsInstructions.value.trim(),
+  };
+  localStorage.setItem(TTS_SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+}
+
+function getTtsSettings() {
+  const speed = clamp(numberOr(ttsSpeed.value, DEFAULT_TTS_SETTINGS.speed), 0.25, 4);
+  ttsSpeed.value = String(speed);
+  saveTtsSettings();
+  return {
+    apiKey: ttsApiKey.value.trim(),
+    model: ttsModel.value || DEFAULT_TTS_SETTINGS.model,
+    voice: ttsVoice.value || DEFAULT_TTS_SETTINGS.voice,
+    speed,
+    instructions: ttsInstructions.value.trim(),
+  };
+}
+
+async function exportProjectAsMp4() {
+  if (!nativeApi?.exportVideo || !nativeApi?.selectMp4Output) {
+    setStatus("MP4 추출은 Tauri 데스크톱 앱에서 사용할 수 있습니다.");
+    return;
+  }
+
+  serializeCurrentSlide();
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  const baseName = getProjectName().replace(/[\\/:*?"<>|]/g, "-") || "simple-slide";
+  let outputPath;
+  try {
+    outputPath = await nativeApi.selectMp4Output(`${baseName}-${timestamp}.mp4`);
+  } catch (error) {
+    setStatus(error?.message || "MP4 저장 경로를 선택하지 못했습니다.");
+    return;
+  }
+  if (!outputPath) {
+    return;
+  }
+
+  const previousDisabled = exportMp4.disabled;
+  exportMp4.disabled = true;
+  setExportStatus("Rendering slides...");
+  setStatus("슬라이드를 영상 추출용 프레임으로 렌더링하고 있습니다.");
+
+  try {
+    const renderedSlides = [];
+    for (let index = 0; index < slides.length; index += 1) {
+      const slide = slides[index];
+      const video = normalizeSlideVideo(slide.video);
+      setExportStatus(`Rendering ${index + 1} / ${slides.length}`);
+      renderedSlides.push({
+        index,
+        width: roundedCanvasSize(slide.width),
+        height: roundedCanvasSize(slide.height),
+        color: sanitizeColor(slide.color, "#ffffff"),
+        notes: typeof slide.notes === "string" ? slide.notes : "",
+        videoPath: video?.path || null,
+        framePng: await renderSlideToDataUrl(slide, { transparentBackground: Boolean(video) }),
+      });
+    }
+
+    setExportStatus("Generating MP4...");
+    const result = await nativeApi.exportVideo({
+      outputPath,
+      fps: VIDEO_EXPORT_FPS,
+      fallbackDurationSeconds: VIDEO_EXPORT_FALLBACK_DURATION,
+      tts: getTtsSettings(),
+      slides: renderedSlides,
+    });
+    setExportStatus("Exported");
+    setStatus(`MP4로 추출했습니다: ${result?.outputPath || outputPath}`);
+  } catch (error) {
+    const message = error?.message || String(error) || "MP4 추출에 실패했습니다.";
+    setExportStatus("Export failed");
+    setStatus(message);
+  } finally {
+    exportMp4.disabled = previousDisabled;
+  }
 }
 
 function handlePaste(event) {
@@ -2652,6 +2982,21 @@ strokeWidth.addEventListener("change", () => {
   applySelectedShapeStyleChange(true);
 });
 strokeWidth.addEventListener("blur", normalizeStrokeWidthInput);
+chooseSlideVideo.addEventListener("click", chooseVideoForCurrentSlide);
+clearSlideVideo.addEventListener("click", clearVideoForCurrentSlide);
+videoFileInput.addEventListener("change", () => {
+  const [file] = videoFileInput.files;
+  if (file) {
+    openBrowserVideoFile(file);
+  }
+});
+for (const input of [ttsModel, ttsVoice, ttsSpeed, ttsInstructions]) {
+  input.addEventListener("change", saveTtsSettings);
+}
+ttsSpeed.addEventListener("blur", () => {
+  ttsSpeed.value = String(clamp(numberOr(ttsSpeed.value, DEFAULT_TTS_SETTINGS.speed), 0.25, 4));
+  saveTtsSettings();
+});
 
 pasteImage.addEventListener("click", pasteImageFromClipboard);
 addTextBox.addEventListener("click", () => {
@@ -2675,6 +3020,7 @@ editSelectedText.addEventListener("click", () => {
 });
 duplicateSelected.addEventListener("click", duplicateSelectedObjects);
 savePng.addEventListener("click", saveCanvasAsPng);
+exportMp4.addEventListener("click", exportProjectAsMp4);
 saveProject.addEventListener("click", saveProjectFile);
 openProject.addEventListener("click", importNativeProjectFile);
 projectFileInput.addEventListener("change", () => {
@@ -2778,6 +3124,7 @@ document.addEventListener("keydown", (event) => {
 });
 
 window.addEventListener("resize", fitCanvasToWorkspace);
+loadTtsSettings();
 setDrawTool("select", { silent: true });
 slides = [createDefaultSlide()];
 loadSlide(0, false);

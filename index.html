@@ -6,7 +6,7 @@
     <title>Simple Slide</title>
     <link rel="preconnect" href="https://cdn.jsdelivr.net" />
     <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
-    <link rel="stylesheet" href="./styles.css?v=20260518-theme-toggle" />
+    <link rel="stylesheet" href="./styles.css?v=20260519-video-export" />
   </head>
   <body>
     <div class="app-frame">
@@ -30,8 +30,10 @@
           <span class="menu-divider" aria-hidden="true"></span>
           <span class="menu-group" aria-label="내보내기">
             <button id="savePng" type="button">Save PNG</button>
+            <button id="exportMp4" type="button">Export MP4</button>
           </span>
           <input id="projectFileInput" type="file" accept=".simpleslide.json,application/json,.json" hidden />
+          <input id="videoFileInput" type="file" accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.m4v,.webm" hidden />
         </div>
       </header>
 
@@ -78,6 +80,58 @@
             <span>Width</span>
             <input id="strokeWidth" type="number" min="1" max="32" step="1" value="4" />
           </label>
+        </section>
+
+        <section class="panel" aria-labelledby="slide-video-title">
+          <h2 id="slide-video-title">Slide Video</h2>
+          <div class="video-source-actions">
+            <button id="chooseSlideVideo" type="button">Choose</button>
+            <button id="clearSlideVideo" type="button">Remove</button>
+          </div>
+          <div id="slideVideoInfo" class="inline-info">No video</div>
+        </section>
+
+        <section class="panel" aria-labelledby="mp4-export-title">
+          <h2 id="mp4-export-title">MP4 Export</h2>
+          <label>
+            <span>API Key</span>
+            <input id="ttsApiKey" type="password" autocomplete="off" placeholder="OPENAI_API_KEY" />
+          </label>
+          <label>
+            <span>Model</span>
+            <select id="ttsModel">
+              <option value="gpt-4o-mini-tts">gpt-4o-mini-tts</option>
+              <option value="tts-1">tts-1</option>
+              <option value="tts-1-hd">tts-1-hd</option>
+            </select>
+          </label>
+          <label>
+            <span>Voice</span>
+            <select id="ttsVoice">
+              <option value="marin">marin</option>
+              <option value="cedar">cedar</option>
+              <option value="coral">coral</option>
+              <option value="nova">nova</option>
+              <option value="alloy">alloy</option>
+              <option value="sage">sage</option>
+              <option value="verse">verse</option>
+              <option value="shimmer">shimmer</option>
+              <option value="onyx">onyx</option>
+              <option value="echo">echo</option>
+              <option value="fable">fable</option>
+              <option value="ash">ash</option>
+              <option value="ballad">ballad</option>
+            </select>
+          </label>
+          <label>
+            <span>Speed</span>
+            <input id="ttsSpeed" type="number" min="0.25" max="4" step="0.05" value="1" />
+          </label>
+          <label>
+            <span>Tone</span>
+            <input id="ttsInstructions" type="text" placeholder="차분하게 읽기" />
+          </label>
+          <div id="exportStatus" class="inline-info">Ready</div>
         </section>
 
         <section class="panel selected-panel" aria-labelledby="selected-title">
@@ -142,7 +196,9 @@
 
       <section class="workspace" aria-label="작업 영역">
         <div class="canvas-scroll">
-          <div id="canvas" class="canvas" tabindex="0" aria-label="편집 캔버스"></div>
+          <div id="canvas" class="canvas" tabindex="0" aria-label="편집 캔버스">
+            <video id="slideVideo" class="canvas-video" muted loop playsinline></video>
+          </div>
         </div>
         <section class="slide-notes" aria-label="슬라이드 노트">
           <div class="slide-notes-header">
@@ -235,6 +291,6 @@
       </section>
     </div>
 
-    <script src="./app.js?v=20260518-theme-toggle" defer></script>
+    <script src="./app.js?v=20260519-video-export" defer></script>
   </body>
 </html>
