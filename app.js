@@ -1772,25 +1772,42 @@ function getGitEditorModel(data) {
   const afterText = getCodeDisplayText(typeof data.afterContent === "string" ? data.afterContent : data.content);
   const beforeLines = splitCodeLines(beforeText);
   const afterLines = splitCodeLines(afterText);
-  const changedLineIndexes = computeChangedAfterLineIndexes(beforeLines, afterLines);
+  const lineEdits = computeAfterLineEdits(beforeLines, afterLines);
+  const changedLineIndexes = lineEdits
+    .map((edit, index) => (edit.changed ? index : -1))
+    .filter((index) => index >= 0);
   return {
     beforeText,
     afterText,
     beforeLines,
     afterLines,
+    lineEdits,
     changedLineIndexes,
   };
 }
 
-function computeChangedAfterLineIndexes(beforeLines, afterLines) {
+function createLineEditState(afterLines) {
+  return afterLines.map(() => ({
+    changed: false,
+    oldText: "",
+    kind: "unchanged",
+  }));
+}
+
+function computeAfterLineEdits(beforeLines, afterLines) {
+  const edits = createLineEditState(afterLines);
   if (afterLines.length === 0) {
     return [];
   }
   if (beforeLines.length === 0 || (beforeLines.length === 1 && beforeLines[0] === "")) {
-    return afterLines.map((_, index) => index);
+    return edits.map(() => ({ changed: true, oldText: "", kind: "added" }));
   }
   if (beforeLines.length * afterLines.length > GIT_DIFF_MAX_LCS_CELLS) {
-    return afterLines.map((line, index) => (beforeLines[index] === line ? -1 : index)).filter((index) => index >= 0);
+    return edits.map((edit, index) =>
+      beforeLines[index] === afterLines[index]
+        ? edit
+        : { changed: true, oldText: beforeLines[index] || "", kind: beforeLines[index] ? "modified" : "added" }
+    );
   }
 
   const rows = beforeLines.length + 1;
@@ -1803,33 +1820,54 @@ function computeChangedAfterLineIndexes(beforeLines, afterLines) {
     }
   }
 
-  const changed = new Set();
+  const deleted = [];
+  const inserted = [];
+  const flushChanges = () => {
+    const pairCount = Math.min(deleted.length, inserted.length);
+    for (const [insertIndex, insertion] of inserted.entries()) {
+      const pairedDeletion = insertIndex < pairCount ? deleted[insertIndex] : "";
+      edits[insertion.index] = {
+        changed: true,
+        oldText: pairedDeletion,
+        kind: pairedDeletion ? "modified" : "added",
+      };
+    }
+    deleted.length = 0;
+    inserted.length = 0;
+  };
   let beforeIndex = 0;
   let afterIndex = 0;
   while (beforeIndex < beforeLines.length && afterIndex < afterLines.length) {
     if (beforeLines[beforeIndex] === afterLines[afterIndex]) {
+      flushChanges();
       beforeIndex += 1;
       afterIndex += 1;
     } else if (table[beforeIndex + 1][afterIndex] >= table[beforeIndex][afterIndex + 1]) {
+      deleted.push(beforeLines[beforeIndex]);
       beforeIndex += 1;
     } else {
-      changed.add(afterIndex);
+      inserted.push({ index: afterIndex, text: afterLines[afterIndex] });
       afterIndex += 1;
     }
   }
+  while (beforeIndex < beforeLines.length) {
+    deleted.push(beforeLines[beforeIndex]);
+    beforeIndex += 1;
+  }
   while (afterIndex < afterLines.length) {
-    changed.add(afterIndex);
+    inserted.push({ index: afterIndex, text: afterLines[afterIndex] });
     afterIndex += 1;
   }
+  flushChanges();
 
-  if (changed.size === 0 && beforeLines.join("\n") !== afterLines.join("\n")) {
-    afterLines.forEach((line, index) => {
-      if (beforeLines[index] !== line) {
-        changed.add(index);
-      }
-    });
+  if (!edits.some((edit) => edit.changed) && beforeLines.join("\n") !== afterLines.join("\n")) {
+    return edits.map((edit, index) =>
+      beforeLines[index] === afterLines[index]
+        ? edit
+        : { changed: true, oldText: beforeLines[index] || "", kind: beforeLines[index] ? "modified" : "added" }
+    );
   }
-  return [...changed].sort((a, b) => a - b);
+  return edits;
 }
 
 function getGitTypingCharacterCount(data) {
@@ -1910,12 +1948,13 @@ function getGitEditorFrame(data, timeSeconds) {
   let hasActiveLine = false;
   const lines = model.afterLines.map((line, index) => {
     if (!changedSet.has(index)) {
-      return { text: line, changed: false, pendingOld: false, cursor: false };
+      return { text: line, changed: false, kind: "unchanged", pendingOld: false, cursor: false };
     }
 
+    const edit = model.lineEdits[index] || { oldText: "", kind: "modified" };
     const revealCost = line.length + 1;
     if (remainingCharacters <= 0) {
-      const oldLine = model.beforeLines[index] || "";
+      const oldLine = edit.oldText || "";
       const isActive = !hasActiveLine;
       if (isActive) {
         activeLineIndex = index;
@@ -1925,6 +1964,7 @@ function getGitEditorFrame(data, timeSeconds) {
       return {
         text: oldLine,
         changed: true,
+        kind: edit.kind,
         pendingOld: Boolean(oldLine && oldLine !== line),
         cursor: isActive,
       };
@@ -1935,11 +1975,11 @@ function getGitEditorFrame(data, timeSeconds) {
       cursorColumn = visibleText.length;
       hasActiveLine = true;
       remainingCharacters = 0;
-      return { text: visibleText, changed: true, pendingOld: false, cursor: true };
+      return { text: visibleText, changed: true, kind: edit.kind, pendingOld: false, cursor: true };
     }
 
     remainingCharacters -= revealCost;
-    return { text: line, changed: true, pendingOld: false, cursor: false };
+    return { text: line, changed: true, kind: edit.kind, pendingOld: false, cursor: false };
   });
 
   if (model.changedLineIndexes.length > 0 && remainingCharacters > 0) {
@@ -4835,6 +4875,7 @@ async function exportProjectAsMp4() {
       };
       if (isDynamicSlide(slide)) {
         setExportModalProgress("Rendering", `슬라이드 ${index + 1} / ${slides.length} 타이핑 프레임을 만들고 있습니다.`, index, slides.length);
+        const isGitTypingSlide = sanitizeSlideKind(slide.kind) === "gitTyping";
         const animation = await renderDynamicSlideFrames(slide, {
           subtitles: projectSettingsState.subtitleEnabled,
           subtitleText: exportNoteSegments[0],
@@ -4843,8 +4884,8 @@ async function exportProjectAsMp4() {
           ...baseSlidePayload,
           notes: exportNoteSegments[0],
           startSoundPath: startSound?.path || null,
-          endOnTtsEnd: true,
-          fitAnimationToDuration: true,
+          endOnTtsEnd: !isGitTypingSlide,
+          fitAnimationToDuration: !isGitTypingSlide,
           framePng: animation.framePng,
           animationFrames: animation.frames,
           frameRate: animation.frameRate,
