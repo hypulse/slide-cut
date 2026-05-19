@@ -162,6 +162,7 @@ const gitTypingSpeed = document.querySelector("#gitTypingSpeed");
 const gitTypingContent = document.querySelector("#gitTypingContent");
 const chatSlideTitle = document.querySelector("#chatSlideTitle");
 const chatTypingSpeed = document.querySelector("#chatTypingSpeed");
+const chatTextScaleButtons = [...document.querySelectorAll("[data-chat-text-scale]")];
 const chatQuestion = document.querySelector("#chatQuestion");
 const chatAnswer = document.querySelector("#chatAnswer");
 const exportModal = document.querySelector("#exportModal");
@@ -367,6 +368,7 @@ const DYNAMIC_FRAME_RATE = VIDEO_EXPORT_FPS;
 const DYNAMIC_MAX_DURATION = 60;
 const DEFAULT_GIT_TYPING_SPEED = 90;
 const DEFAULT_CHAT_TYPING_SPEED = 80;
+const DEFAULT_CHAT_TEXT_SCALE = 1.25;
 const CHAT_ANSWER_DELAY_SECONDS = 0.55;
 const MAX_GIT_COMMIT_OPTIONS = 80;
 const MAX_GIT_FILE_OPTIONS = 300;
@@ -527,6 +529,10 @@ function isDynamicSlide(slide) {
 
 function sanitizeTypingSpeed(value, fallback) {
   return clamp(numberOr(value, fallback), 20, 240);
+}
+
+function sanitizeChatTextScale(value) {
+  return clamp(numberOr(value, DEFAULT_CHAT_TEXT_SCALE), 1, 1.75);
 }
 
 function truncateText(value, maxLength) {
@@ -1743,6 +1749,7 @@ function getChatTypingData(slide) {
     ...createDefaultChatTypingData(),
     ...(slide?.chatTyping || {}),
     typingSpeed: sanitizeTypingSpeed(slide?.chatTyping?.typingSpeed, DEFAULT_CHAT_TYPING_SPEED),
+    textScale: sanitizeChatTextScale(slide?.chatTyping?.textScale),
   };
 }
 
@@ -1882,6 +1889,7 @@ function drawChatQuestionActions(context, rightX, y, iconSize, gap) {
 function drawChatTypingSlide(context, slide, width, height, timeSeconds, options = {}) {
   const data = getChatTypingData(slide);
   const speed = data.typingSpeed;
+  const textScale = sanitizeChatTextScale(data.textScale);
   const questionSource = data.question || "";
   const answerSource = data.answer || "";
   const answerStart = CHAT_ANSWER_DELAY_SECONDS;
@@ -1893,8 +1901,8 @@ function drawChatTypingSlide(context, slide, width, height, timeSeconds, options
   const bottomMargin = Math.round(height * 0.045);
   const shouldReserveSubtitle = Boolean(options.subtitles || options.reserveSubtitles);
   const subtitleReserve = shouldReserveSubtitle ? getSubtitleReservedHeight(context, getSubtitleTextForRender(slide, options), width, height) : 0;
-  const questionSize = clamp(Math.round(width * 0.0175), 16, 23);
-  const answerSize = clamp(Math.round(width * 0.017), 15, 22);
+  const questionSize = clamp(Math.round(width * 0.0175 * textScale), 16, 40);
+  const answerSize = clamp(Math.round(width * 0.017 * textScale), 15, 38);
   const questionLineHeight = Math.round(questionSize * 1.36);
   const answerLineHeight = Math.round(answerSize * 1.52);
   const questionMaxWidth = Math.round(width * 0.68);
@@ -2191,6 +2199,7 @@ function createDefaultChatTypingData() {
     question: "Ask a question here.",
     answer: "Add a response here. In the exported video, it will appear as a live typing animation.",
     typingSpeed: DEFAULT_CHAT_TYPING_SPEED,
+    textScale: DEFAULT_CHAT_TEXT_SCALE,
   };
 }
 
@@ -2452,6 +2461,7 @@ function syncDynamicSlidePanel() {
     const data = getChatTypingData(slide);
     chatSlideTitle.value = data.title;
     chatTypingSpeed.value = String(data.typingSpeed);
+    syncChatTextScaleButtons(data.textScale);
     chatQuestion.value = data.question;
     chatAnswer.value = data.answer;
   }
@@ -3687,6 +3697,7 @@ function normalizeProjectData(data) {
             question: typeof slide.chatTyping?.question === "string" ? slide.chatTyping.question : createDefaultChatTypingData().question,
             answer: typeof slide.chatTyping?.answer === "string" ? slide.chatTyping.answer : createDefaultChatTypingData().answer,
             typingSpeed: sanitizeTypingSpeed(slide.chatTyping?.typingSpeed, DEFAULT_CHAT_TYPING_SPEED),
+            textScale: sanitizeChatTextScale(slide.chatTyping?.textScale),
           }
         : undefined,
     objects: Array.isArray(slide.objects) ? slide.objects.map(normalizeProjectObject).filter(Boolean) : [],
@@ -4183,12 +4194,26 @@ function syncGitTypingInputsToSlide(options = {}) {
   }, options);
 }
 
+function syncChatTextScaleButtons(value) {
+  const normalized = sanitizeChatTextScale(value);
+  for (const button of chatTextScaleButtons) {
+    const buttonValue = sanitizeChatTextScale(button.dataset.chatTextScale);
+    button.classList.toggle("is-active", Math.abs(buttonValue - normalized) < 0.01);
+  }
+}
+
+function getSelectedChatTextScale() {
+  const activeButton = chatTextScaleButtons.find((button) => button.classList.contains("is-active"));
+  return sanitizeChatTextScale(activeButton?.dataset.chatTextScale);
+}
+
 function syncChatTypingInputsToSlide(options = {}) {
   updateActiveDynamicSlide((slide) => {
     slide.chatTyping = {
       ...getChatTypingData(slide),
       title: chatSlideTitle.value,
       typingSpeed: sanitizeTypingSpeed(chatTypingSpeed.value, DEFAULT_CHAT_TYPING_SPEED),
+      textScale: getSelectedChatTextScale(),
       question: chatQuestion.value,
       answer: chatAnswer.value,
     };
@@ -4796,6 +4821,12 @@ for (const input of [gitSlideTitle, gitRepoPath, gitTypingSpeed, gitTypingConten
 for (const input of [chatSlideTitle, chatTypingSpeed, chatQuestion, chatAnswer]) {
   input.addEventListener("input", () => syncChatTypingInputsToSlide());
   input.addEventListener("change", () => syncChatTypingInputsToSlide({ record: true }));
+}
+for (const button of chatTextScaleButtons) {
+  button.addEventListener("click", () => {
+    syncChatTextScaleButtons(button.dataset.chatTextScale);
+    syncChatTypingInputsToSlide({ record: true });
+  });
 }
 editSelectedText.addEventListener("pointerdown", (event) => {
   if (activeTextEditObject === selectedObject) {

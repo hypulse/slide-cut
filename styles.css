@@ -871,7 +871,8 @@ select {
   color: #1d4ed8;
 }
 
-.text-size-buttons {
+.text-size-buttons,
+.chat-size-buttons {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 4px;
@@ -883,7 +884,8 @@ select {
   gap: 4px;
 }
 
-.text-size-buttons button {
+.text-size-buttons button,
+.chat-size-buttons button {
   height: 32px;
   border-radius: 6px;
   font-size: 12px;
@@ -897,7 +899,8 @@ select {
   font-weight: 700;
 }
 
-.text-size-buttons button.is-active {
+.text-size-buttons button.is-active,
+.chat-size-buttons button.is-active {
   border-color: var(--accent);
   background: var(--accent-soft);
   color: #1d4ed8;
@@ -909,7 +912,8 @@ select {
   color: #1d4ed8;
 }
 
-.text-size-buttons button:disabled {
+.text-size-buttons button:disabled,
+.chat-size-buttons button:disabled {
   opacity: 0.42;
   pointer-events: none;
 }

@@ -122,6 +122,15 @@
               <span>Speed</span>
               <input id="chatTypingSpeed" type="number" min="20" max="240" step="5" value="80" />
             </label>
+            <label>
+              <span>Size</span>
+              <div id="chatTextScale" class="chat-size-buttons" role="group" aria-label="GPT 슬라이드 텍스트 크기">
+                <button type="button" data-chat-text-scale="1">100</button>
+                <button type="button" data-chat-text-scale="1.25" class="is-active">125</button>
+                <button type="button" data-chat-text-scale="1.5">150</button>
+                <button type="button" data-chat-text-scale="1.75">175</button>
+              </div>
+            </label>
             <textarea id="chatQuestion" class="dynamic-textarea compact" spellcheck="false" placeholder="Question"></textarea>
             <textarea id="chatAnswer" class="dynamic-textarea" spellcheck="false" placeholder="Answer"></textarea>
           </div>
