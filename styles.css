@@ -1100,8 +1100,8 @@ input[type="checkbox"] {
 }
 
 .dynamic-preview-surface.git {
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: 22px;
+  padding: 34px 48px;
+  background: #10131a;
 }
 
 .dynamic-preview-surface.chat {
@@ -1111,27 +1111,69 @@ input[type="checkbox"] {
   color: #111111;
 }
 
-.dynamic-preview-title {
-  overflow: hidden;
-  font-size: 36px;
-  font-weight: 850;
-  line-height: 1.15;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .dynamic-preview-code {
   overflow: hidden;
-  border: 1px solid rgba(148, 163, 184, 0.32);
-  border-radius: 10px;
-  background: rgba(4, 8, 18, 0.84);
-  padding: 22px;
-  color: #dbeafe;
+  margin: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: #1e1e1e;
+  padding: 18px 22px;
+  color: #d4d4d4;
   font-family: Menlo, Monaco, Consolas, monospace;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
   line-height: 1.45;
-  white-space: pre-wrap;
+  white-space: pre;
+}
+
+.dynamic-preview-code-window {
+  overflow: hidden;
+  min-height: 0;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  background: #252b38;
+}
+
+.dynamic-preview-code-titlebar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 38px;
+  color: #d7dae0;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.dynamic-preview-code-lights {
+  position: absolute;
+  left: 15px;
+  display: flex;
+  gap: 8px;
+}
+
+.dynamic-preview-code-light {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.dynamic-preview-code-light.red {
+  background: #ff5f56;
+}
+
+.dynamic-preview-code-light.yellow {
+  background: #ffbd2e;
+}
+
+.dynamic-preview-code-light.green {
+  background: #27c93f;
+}
+
+.dynamic-preview-code-filename {
+  max-width: 58%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dynamic-preview-chat {

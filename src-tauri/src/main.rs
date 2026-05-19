@@ -131,6 +131,9 @@ struct GitChanges {
     file_path: String,
     title: String,
     content: String,
+    before_content: String,
+    after_content: String,
+    before_path: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -938,6 +941,47 @@ fn read_git_commit_file_change(
     let short_hash = git_output(&root, &["rev-parse", "--short", &commit])
         .map(|value| value.trim().to_string())
         .unwrap_or_else(|_| commit.chars().take(12).collect());
+    let parent_line = git_output(&root, &["rev-list", "--parents", "-n", "1", &commit])?;
+    let parent_commit = parent_line
+        .split_whitespace()
+        .nth(1)
+        .map(ToString::to_string);
+    let name_status = git_output(
+        &root,
+        &[
+            "diff-tree",
+            "--root",
+            "--no-commit-id",
+            "--name-status",
+            "-r",
+            "--find-renames",
+            &commit,
+            "--",
+            &file_path,
+        ],
+    )
+    .unwrap_or_default();
+    let before_path = name_status
+        .lines()
+        .filter_map(|line| {
+            let parts: Vec<&str> = line.split('\t').collect();
+            let status = parts.first().copied().unwrap_or_default();
+            if status.starts_with('R') && parts.len() >= 3 {
+                Some(parts[1].to_string())
+            } else if parts.len() >= 2 {
+                Some(parts[1].to_string())
+            } else {
+                None
+            }
+        })
+        .next()
+        .unwrap_or_else(|| file_path.clone());
+    let after_content =
+        git_output(&root, &["show", &format!("{commit}:{file_path}")]).unwrap_or_default();
+    let before_content = parent_commit
+        .as_deref()
+        .and_then(|parent| git_output(&root, &["show", &format!("{parent}:{before_path}")]).ok())
+        .unwrap_or_default();
     let stat = git_output(
         &root,
         &[
@@ -984,6 +1028,9 @@ fn read_git_commit_file_change(
         file_path: file_path.clone(),
         title: format!("{short_hash} · {file_path}"),
         content: truncate_git_content(content),
+        before_content: truncate_git_content(before_content),
+        after_content: truncate_git_content(after_content),
+        before_path,
     })
 }
 

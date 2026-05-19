@@ -370,6 +370,8 @@ const DEFAULT_GIT_TYPING_SPEED = 90;
 const DEFAULT_CHAT_TYPING_SPEED = 80;
 const DEFAULT_CHAT_TEXT_SCALE = 1.25;
 const CHAT_ANSWER_DELAY_SECONDS = 0.55;
+const GIT_CODE_MAX_RENDER_LINES = 700;
+const GIT_DIFF_MAX_LCS_CELLS = 220000;
 const MAX_GIT_COMMIT_OPTIONS = 80;
 const MAX_GIT_FILE_OPTIONS = 300;
 const SLIDE_KINDS = new Set(["canvas", "gitTyping", "chatTyping"]);
@@ -538,6 +540,22 @@ function sanitizeChatTextScale(value) {
 function truncateText(value, maxLength) {
   const text = String(value || "");
   return text.length > maxLength ? `${text.slice(0, maxLength)}\n\n... truncated ...` : text;
+}
+
+function normalizeCodeText(value) {
+  return String(value || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+}
+
+function splitCodeLines(value) {
+  const normalized = normalizeCodeText(value);
+  if (!normalized) {
+    return [""];
+  }
+  return normalized.split("\n").slice(0, GIT_CODE_MAX_RENDER_LINES);
+}
+
+function getCodeDisplayText(value) {
+  return truncateText(normalizeCodeText(value), 12000);
 }
 
 function sanitizeGitCommitOptions(value) {
@@ -1736,12 +1754,90 @@ function getGitTypingData(slide) {
     ...createDefaultGitTypingData(),
     ...(slide?.gitTyping || {}),
   };
+  const afterContent = typeof data.afterContent === "string" ? data.afterContent : typeof data.content === "string" ? data.content : "";
   return {
     ...data,
     commits: sanitizeGitCommitOptions(data.commits),
     files: sanitizeGitFileOptions(data.files),
     typingSpeed: sanitizeTypingSpeed(slide?.gitTyping?.typingSpeed, DEFAULT_GIT_TYPING_SPEED),
+    beforeContent: typeof data.beforeContent === "string" ? data.beforeContent : "",
+    afterContent,
+    beforePath: typeof data.beforePath === "string" ? data.beforePath : "",
+    content: typeof data.content === "string" ? data.content : afterContent,
   };
+}
+
+function getGitEditorModel(data) {
+  const beforeText = getCodeDisplayText(data.beforeContent);
+  const afterText = getCodeDisplayText(typeof data.afterContent === "string" ? data.afterContent : data.content);
+  const beforeLines = splitCodeLines(beforeText);
+  const afterLines = splitCodeLines(afterText);
+  const changedLineIndexes = computeChangedAfterLineIndexes(beforeLines, afterLines);
+  return {
+    beforeText,
+    afterText,
+    beforeLines,
+    afterLines,
+    changedLineIndexes,
+  };
+}
+
+function computeChangedAfterLineIndexes(beforeLines, afterLines) {
+  if (afterLines.length === 0) {
+    return [];
+  }
+  if (beforeLines.length === 0 || (beforeLines.length === 1 && beforeLines[0] === "")) {
+    return afterLines.map((_, index) => index);
+  }
+  if (beforeLines.length * afterLines.length > GIT_DIFF_MAX_LCS_CELLS) {
+    return afterLines.map((line, index) => (beforeLines[index] === line ? -1 : index)).filter((index) => index >= 0);
+  }
+
+  const rows = beforeLines.length + 1;
+  const cols = afterLines.length + 1;
+  const table = Array.from({ length: rows }, () => new Uint16Array(cols));
+  for (let i = beforeLines.length - 1; i >= 0; i -= 1) {
+    for (let j = afterLines.length - 1; j >= 0; j -= 1) {
+      table[i][j] =
+        beforeLines[i] === afterLines[j] ? table[i + 1][j + 1] + 1 : Math.max(table[i + 1][j], table[i][j + 1]);
+    }
+  }
+
+  const changed = new Set();
+  let beforeIndex = 0;
+  let afterIndex = 0;
+  while (beforeIndex < beforeLines.length && afterIndex < afterLines.length) {
+    if (beforeLines[beforeIndex] === afterLines[afterIndex]) {
+      beforeIndex += 1;
+      afterIndex += 1;
+    } else if (table[beforeIndex + 1][afterIndex] >= table[beforeIndex][afterIndex + 1]) {
+      beforeIndex += 1;
+    } else {
+      changed.add(afterIndex);
+      afterIndex += 1;
+    }
+  }
+  while (afterIndex < afterLines.length) {
+    changed.add(afterIndex);
+    afterIndex += 1;
+  }
+
+  if (changed.size === 0 && beforeLines.join("\n") !== afterLines.join("\n")) {
+    afterLines.forEach((line, index) => {
+      if (beforeLines[index] !== line) {
+        changed.add(index);
+      }
+    });
+  }
+  return [...changed].sort((a, b) => a - b);
+}
+
+function getGitTypingCharacterCount(data) {
+  const model = getGitEditorModel(data);
+  if (model.changedLineIndexes.length === 0) {
+    return model.afterText.length;
+  }
+  return model.changedLineIndexes.reduce((sum, lineIndex) => sum + (model.afterLines[lineIndex]?.length || 0) + 1, 0);
 }
 
 function getChatTypingData(slide) {
@@ -1757,7 +1853,7 @@ function getDynamicSlideDuration(slide) {
   const kind = sanitizeSlideKind(slide?.kind);
   if (kind === "gitTyping") {
     const data = getGitTypingData(slide);
-    return clamp((data.content || "").length / data.typingSpeed + 1.2, 4, DYNAMIC_MAX_DURATION);
+    return clamp(getGitTypingCharacterCount(data) / data.typingSpeed + 1.2, 4, DYNAMIC_MAX_DURATION);
   }
   if (kind === "chatTyping") {
     const data = getChatTypingData(slide);
@@ -1805,36 +1901,208 @@ function drawClippedLines(context, lines, x, y, maxHeight, lineHeight, scrollOff
   context.restore();
 }
 
+function getGitEditorFrame(data, timeSeconds) {
+  const model = getGitEditorModel(data);
+  const changedSet = new Set(model.changedLineIndexes);
+  let remainingCharacters = Math.floor(timeSeconds * data.typingSpeed);
+  let activeLineIndex = model.changedLineIndexes[model.changedLineIndexes.length - 1] || 0;
+  let cursorColumn = 0;
+  let hasActiveLine = false;
+  const lines = model.afterLines.map((line, index) => {
+    if (!changedSet.has(index)) {
+      return { text: line, changed: false, pendingOld: false, cursor: false };
+    }
+
+    const revealCost = line.length + 1;
+    if (remainingCharacters <= 0) {
+      const oldLine = model.beforeLines[index] || "";
+      const isActive = !hasActiveLine;
+      if (isActive) {
+        activeLineIndex = index;
+        cursorColumn = 0;
+        hasActiveLine = true;
+      }
+      return {
+        text: oldLine,
+        changed: true,
+        pendingOld: Boolean(oldLine && oldLine !== line),
+        cursor: isActive,
+      };
+    }
+    if (remainingCharacters < revealCost) {
+      const visibleText = line.slice(0, remainingCharacters);
+      activeLineIndex = index;
+      cursorColumn = visibleText.length;
+      hasActiveLine = true;
+      remainingCharacters = 0;
+      return { text: visibleText, changed: true, pendingOld: false, cursor: true };
+    }
+
+    remainingCharacters -= revealCost;
+    return { text: line, changed: true, pendingOld: false, cursor: false };
+  });
+
+  if (model.changedLineIndexes.length > 0 && remainingCharacters > 0) {
+    activeLineIndex = model.changedLineIndexes[model.changedLineIndexes.length - 1];
+    cursorColumn = lines[activeLineIndex]?.text.length || 0;
+  }
+
+  return {
+    ...model,
+    lines,
+    activeLineIndex,
+    cursorColumn,
+  };
+}
+
+function getSyntaxTokens(line) {
+  const text = String(line || "");
+  if (!text) {
+    return [];
+  }
+  const commentIndex = (() => {
+    const candidates = ["//", "#"].map((marker) => text.indexOf(marker)).filter((index) => index >= 0);
+    return candidates.length ? Math.min(...candidates) : -1;
+  })();
+  const codePart = commentIndex >= 0 ? text.slice(0, commentIndex) : text;
+  const commentPart = commentIndex >= 0 ? text.slice(commentIndex) : "";
+  const tokenPattern =
+    /("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`|\b(?:const|let|var|function|return|if|else|for|while|class|extends|import|from|export|async|await|try|catch|throw|new|this|true|false|null|undefined|type|interface|struct|enum|fn|impl|pub|use|match|Some|None|Ok|Err|def|self|in|and|or|not)\b|\b\d+(?:\.\d+)?\b)/g;
+  const tokens = [];
+  let cursor = 0;
+  for (const match of codePart.matchAll(tokenPattern)) {
+    if (match.index > cursor) {
+      tokens.push({ text: codePart.slice(cursor, match.index), color: "#d4d4d4" });
+    }
+    const token = match[0];
+    const color =
+      token.startsWith("\"") || token.startsWith("'") || token.startsWith("`")
+        ? "#ce9178"
+        : /^\d/.test(token)
+          ? "#b5cea8"
+          : "#569cd6";
+    tokens.push({ text: token, color });
+    cursor = match.index + token.length;
+  }
+  if (cursor < codePart.length) {
+    tokens.push({ text: codePart.slice(cursor), color: "#d4d4d4" });
+  }
+  if (commentPart) {
+    tokens.push({ text: commentPart, color: "#6a9955" });
+  }
+  return tokens;
+}
+
+function drawCodeLine(context, line, x, y, colorOverride = "") {
+  if (colorOverride) {
+    context.fillStyle = colorOverride;
+    context.fillText(line, x, y);
+    return;
+  }
+
+  let drawX = x;
+  for (const token of getSyntaxTokens(line)) {
+    context.fillStyle = token.color;
+    context.fillText(token.text, drawX, y);
+    drawX += context.measureText(token.text).width;
+  }
+}
+
 function drawGitTypingSlide(context, slide, width, height, timeSeconds) {
   const data = getGitTypingData(slide);
-  const content = truncateText(data.content, 9000);
-  const visibleCount = clamp(Math.floor(timeSeconds * data.typingSpeed), 0, content.length);
-  const visibleText = `${content.slice(0, visibleCount)}${visibleCount < content.length ? "▌" : ""}`;
-  const marginX = Math.round(width * 0.05);
-  const marginY = Math.round(height * 0.07);
-  const titleSize = clamp(Math.round(width * 0.033), 28, 44);
-  const codeSize = clamp(Math.round(width * 0.015), 15, 20);
-  const title = data.title || "Git changes";
-  const boxY = marginY + titleSize + 26;
-  const boxHeight = height - boxY - marginY;
+  const frame = getGitEditorFrame(data, timeSeconds);
+  const windowX = Math.round(width * 0.048);
+  const windowY = Math.round(height * 0.075);
+  const windowWidth = width - windowX * 2;
+  const windowHeight = height - windowY * 2;
+  const titleBarHeight = clamp(Math.round(height * 0.065), 38, 54);
+  const codeSize = clamp(Math.round(width * 0.0145), 15, 23);
+  const lineHeight = Math.round(codeSize * 1.55);
+  const gutterWidth = Math.round(codeSize * 3.8);
+  const editorPaddingX = Math.round(codeSize * 1.25);
+  const editorPaddingTop = Math.round(codeSize * 1.05);
+  const fileName = getFileNameFromPath(data.filePath || data.beforePath || data.title || "changes");
+  const editorX = windowX;
+  const editorY = windowY + titleBarHeight;
+  const editorWidth = windowWidth;
+  const editorHeight = windowHeight - titleBarHeight;
+  const codeX = editorX + gutterWidth + editorPaddingX;
+  const codeY = editorY + editorPaddingTop;
+  const viewportHeight = editorHeight - editorPaddingTop * 2;
+  const scrollOffset = clamp(
+    frame.activeLineIndex * lineHeight - viewportHeight * 0.48,
+    0,
+    Math.max(0, frame.lines.length * lineHeight - viewportHeight)
+  );
 
-  context.fillStyle = "#0b1020";
+  context.fillStyle = "#10131a";
   context.fillRect(0, 0, width, height);
-  context.fillStyle = "#f8fafc";
-  context.font = `850 ${titleSize}px Pretendard, sans-serif`;
-  context.textBaseline = "top";
-  context.textAlign = "left";
-  context.fillText(title, marginX, marginY);
 
-  context.fillStyle = "rgba(4, 8, 18, 0.86)";
-  fillRoundedRect(context, marginX, boxY, width - marginX * 2, boxHeight, 10);
-  context.strokeStyle = "rgba(148, 163, 184, 0.34)";
+  context.fillStyle = "#1f2430";
+  fillRoundedRect(context, windowX, windowY, windowWidth, windowHeight, 12);
+  context.save();
+  traceRoundedRect(context, windowX, windowY, windowWidth, windowHeight, 12);
+  context.clip();
+  context.fillStyle = "#252b38";
+  context.fillRect(windowX, windowY, windowWidth, titleBarHeight);
+  context.fillStyle = "#1e1e1e";
+  context.fillRect(editorX, editorY, editorWidth, editorHeight);
+  context.restore();
+  context.strokeStyle = "rgba(255, 255, 255, 0.12)";
   context.lineWidth = 1;
-  context.strokeRect(marginX + 0.5, boxY + 0.5, width - marginX * 2 - 1, boxHeight - 1);
+  strokeRoundedRect(context, windowX + 0.5, windowY + 0.5, windowWidth - 1, windowHeight - 1, 12);
 
-  context.fillStyle = "#dbeafe";
+  const lightY = windowY + Math.round(titleBarHeight / 2);
+  const lightRadius = clamp(Math.round(titleBarHeight * 0.12), 5, 7);
+  [
+    ["#ff5f56", windowX + 22],
+    ["#ffbd2e", windowX + 42],
+    ["#27c93f", windowX + 62],
+  ].forEach(([color, x]) => {
+    context.fillStyle = color;
+    context.beginPath();
+    context.arc(x, lightY, lightRadius, 0, Math.PI * 2);
+    context.fill();
+  });
+
+  context.fillStyle = "#d7dae0";
+  context.font = `700 ${clamp(Math.round(codeSize * 0.86), 12, 16)}px Pretendard, sans-serif`;
+  context.textBaseline = "top";
+  context.textAlign = "center";
+  context.fillText(fileName, windowX + windowWidth / 2, windowY + Math.round((titleBarHeight - codeSize) / 2));
+
+  context.save();
+  context.beginPath();
+  context.rect(editorX, editorY, editorWidth, editorHeight);
+  context.clip();
   context.font = `600 ${codeSize}px Menlo, Monaco, Consolas, monospace`;
-  drawWrappedText(context, visibleText, marginX + 24, boxY + 22, width - marginX * 2 - 48, Math.round(codeSize * 1.45), boxHeight - 44);
+  context.textAlign = "right";
+  context.textBaseline = "top";
+  for (const [index, line] of frame.lines.entries()) {
+    const lineY = codeY + index * lineHeight - scrollOffset;
+    if (lineY + lineHeight < editorY || lineY > editorY + editorHeight) {
+      continue;
+    }
+
+    if (line.changed) {
+      context.fillStyle = line.pendingOld ? "rgba(248, 81, 73, 0.16)" : "rgba(46, 160, 67, 0.2)";
+      context.fillRect(editorX, lineY - 2, editorWidth, lineHeight);
+      context.fillStyle = line.pendingOld ? "#f85149" : "#3fb950";
+      context.fillRect(editorX, lineY - 2, 4, lineHeight);
+    }
+
+    context.fillStyle = "#858585";
+    context.fillText(String(index + 1), editorX + gutterWidth - Math.round(codeSize * 0.9), lineY);
+    context.textAlign = "left";
+    drawCodeLine(context, line.text, codeX, lineY, line.pendingOld ? "#fca5a5" : "");
+    if (line.cursor) {
+      const cursorX = codeX + context.measureText(line.text.slice(0, frame.cursorColumn)).width + 1;
+      context.fillStyle = "#f8fafc";
+      context.fillRect(cursorX, lineY + 1, 2, Math.round(lineHeight * 0.82));
+    }
+    context.textAlign = "right";
+  }
+  context.restore();
 }
 
 function drawChatCopyIcon(context, x, y, size) {
@@ -2189,6 +2457,9 @@ function createDefaultGitTypingData() {
     commits: [],
     files: [],
     content: "저장소를 선택한 뒤 커밋과 파일을 불러오세요.",
+    beforeContent: "",
+    afterContent: "저장소를 선택한 뒤 커밋과 파일을 불러오세요.",
+    beforePath: "",
     typingSpeed: DEFAULT_GIT_TYPING_SPEED,
   };
 }
@@ -2209,7 +2480,7 @@ function createDynamicSlide(kind) {
   slide.color = kind === "gitTyping" ? "#0b1020" : "#f4f7fb";
   slide.notes =
     kind === "gitTyping"
-      ? "Git 변경 내용을 실시간으로 타이핑하듯 보여줍니다."
+      ? "Git 변경 내용을 코드 에디터에서 수정하는 장면처럼 보여줍니다."
       : "GPT 질문과 응답이 실시간 대화처럼 출력됩니다.";
   if (kind === "gitTyping") {
     slide.gitTyping = createDefaultGitTypingData();
@@ -2405,9 +2676,23 @@ function renderDynamicSlidePreview(slide) {
   if (kind === "gitTyping") {
     const data = getGitTypingData(slide);
     const surface = createPreviewElement("div", "dynamic-preview-surface git");
-    const title = createPreviewElement("div", "dynamic-preview-title", data.title);
-    const code = createPreviewElement("pre", "dynamic-preview-code", truncateText(data.content, 2400));
-    surface.append(title, code);
+    const window = createPreviewElement("div", "dynamic-preview-code-window");
+    const titleBar = createPreviewElement("div", "dynamic-preview-code-titlebar");
+    const lights = createPreviewElement("div", "dynamic-preview-code-lights");
+    lights.append(
+      createPreviewElement("span", "dynamic-preview-code-light red"),
+      createPreviewElement("span", "dynamic-preview-code-light yellow"),
+      createPreviewElement("span", "dynamic-preview-code-light green")
+    );
+    const title = createPreviewElement("div", "dynamic-preview-code-filename", getFileNameFromPath(data.filePath || data.title));
+    const code = createPreviewElement(
+      "pre",
+      "dynamic-preview-code",
+      truncateText(typeof data.afterContent === "string" ? data.afterContent : data.content, 2400)
+    );
+    titleBar.append(lights, title);
+    window.append(titleBar, code);
+    surface.append(window);
     dynamicSlidePreview.append(surface);
     return;
   }
@@ -3685,6 +3970,14 @@ function normalizeProjectData(data) {
             commits: sanitizeGitCommitOptions(slide.gitTyping?.commits),
             files: sanitizeGitFileOptions(slide.gitTyping?.files),
             content: typeof slide.gitTyping?.content === "string" ? slide.gitTyping.content : createDefaultGitTypingData().content,
+            beforeContent: typeof slide.gitTyping?.beforeContent === "string" ? slide.gitTyping.beforeContent : "",
+            afterContent:
+              typeof slide.gitTyping?.afterContent === "string"
+                ? slide.gitTyping.afterContent
+                : typeof slide.gitTyping?.content === "string"
+                  ? slide.gitTyping.content
+                  : createDefaultGitTypingData().afterContent,
+            beforePath: typeof slide.gitTyping?.beforePath === "string" ? slide.gitTyping.beforePath : "",
             typingSpeed: sanitizeTypingSpeed(slide.gitTyping?.typingSpeed, DEFAULT_GIT_TYPING_SPEED),
           }
         : undefined,
@@ -4190,6 +4483,7 @@ function syncGitTypingInputsToSlide(options = {}) {
       filePath: gitFileSelect.value,
       typingSpeed: sanitizeTypingSpeed(gitTypingSpeed.value, DEFAULT_GIT_TYPING_SPEED),
       content: gitTypingContent.value,
+      afterContent: gitTypingContent.value,
     };
   }, options);
 }
@@ -4239,6 +4533,9 @@ async function chooseGitRepositoryForSlide() {
       commits: [],
       files: [],
       content: "저장소의 커밋 기록을 불러오세요.",
+      beforeContent: "",
+      afterContent: "저장소의 커밋 기록을 불러오세요.",
+      beforePath: "",
     };
   }, { record: true });
   syncDynamicSlidePanel();
@@ -4293,6 +4590,11 @@ async function loadGitCommitsForSlide() {
         content: selectedCommit
           ? "커밋의 변경 파일 목록을 불러오는 중입니다."
           : "이 저장소에서 읽을 커밋을 찾지 못했습니다.",
+        beforeContent: "",
+        afterContent: selectedCommit
+          ? "커밋의 변경 파일 목록을 불러오는 중입니다."
+          : "이 저장소에서 읽을 커밋을 찾지 못했습니다.",
+        beforePath: "",
       };
     }, { record: !selectedCommit });
     syncDynamicSlidePanel();
@@ -4342,6 +4644,14 @@ async function loadGitFilesForSlide(options = {}) {
               ? "Load Diff를 눌러 선택한 파일의 변경 내용을 불러오세요."
               : "이 커밋에서 변경된 파일을 찾지 못했습니다."
             : current.content,
+        beforeContent: "",
+        afterContent:
+          options.clearContent || !current.content
+            ? selectedFilePath
+              ? "Load Diff를 눌러 선택한 파일의 변경 내용을 불러오세요."
+              : "이 커밋에서 변경된 파일을 찾지 못했습니다."
+            : current.afterContent,
+        beforePath: "",
       };
     }, { record: Boolean(options.record) });
     syncDynamicSlidePanel();
@@ -4379,7 +4689,10 @@ async function loadGitFileChangeForSlide() {
         commitLabel: current.commitLabel || result.commitHash || commitHash,
         filePath: result.filePath || filePath,
         title: result.title || "Git Diff",
-        content: result.content || "",
+        content: result.afterContent || result.beforeContent || result.content || "",
+        beforeContent: result.beforeContent || "",
+        afterContent: result.afterContent || result.content || "",
+        beforePath: result.beforePath || "",
       };
     }, { record: true });
     syncDynamicSlidePanel();
