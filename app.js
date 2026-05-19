@@ -110,6 +110,7 @@ const ttsModel = document.querySelector("#ttsModel");
 const ttsVoice = document.querySelector("#ttsVoice");
 const ttsSpeed = document.querySelector("#ttsSpeed");
 const ttsInstructions = document.querySelector("#ttsInstructions");
+const subtitleEnabled = document.querySelector("#subtitleEnabled");
 const exportModal = document.querySelector("#exportModal");
 const exportModalPhase = document.querySelector("#exportModalPhase");
 const exportProgress = document.querySelector("#exportProgress");
@@ -129,11 +130,11 @@ const selectedH = document.querySelector("#selectedH");
 const selectedR = document.querySelector("#selectedR");
 const selectedTextSize = document.querySelector("#selectedTextSize");
 const textSizeButtons = [...document.querySelectorAll("[data-text-size]")];
+const textAlignButtons = [...document.querySelectorAll("[data-text-align]")];
 const selectedTextColor = document.querySelector("#selectedTextColor");
 const duplicateSelected = document.querySelector("#duplicateSelected");
 const editSelectedText = document.querySelector("#editSelectedText");
 const deleteSelected = document.querySelector("#deleteSelected");
-const alignButtons = [...document.querySelectorAll("[data-align]")];
 const arrangeButtons = {
   backward: document.querySelector("#sendBackward"),
   forward: document.querySelector("#bringForward"),
@@ -194,6 +195,7 @@ const TEXT_SIZE_PRESETS = {
   h2: { fontSize: 40, lineHeight: 50 },
   h1: { fontSize: 56, lineHeight: 70 },
 };
+const TEXT_ALIGNMENTS = new Set(["left", "center", "right"]);
 const DEFAULT_TEXT_COLOR = "#111827";
 const COLOR_PRESETS = {
   light: { canvasColor: "#ffffff", textColor: "#111827" },
@@ -233,6 +235,8 @@ const DEFAULT_TTS_SETTINGS = {
   instructions: TTS_PRESETS.animeCute.instructions,
 };
 const TTS_SETTINGS_STORAGE_KEY = "simpleSlideTtsSettings";
+const DEFAULT_SUBTITLE_ENABLED = true;
+const SUBTITLE_MAX_LINES = 2;
 const VIDEO_EXPORT_FPS = 30;
 const VIDEO_EXPORT_FALLBACK_DURATION = 3;
 
@@ -262,6 +266,10 @@ function clamp(value, min, max) {
 function numberOr(value, fallback) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function sanitizeTextAlign(value) {
+  return TEXT_ALIGNMENTS.has(value) ? value : "left";
 }
 
 function getFileNameFromPath(path) {
@@ -478,13 +486,13 @@ function syncSelectedInputs() {
   for (const input of [selectedX, selectedY, selectedW, selectedH, selectedR]) {
     input.disabled = !hasSelection;
   }
-  for (const button of alignButtons) {
-    button.disabled = selectedObjects.length < 2;
-  }
   for (const button of Object.values(arrangeButtons)) {
     button.disabled = !hasSelection;
   }
   for (const button of textSizeButtons) {
+    button.disabled = !hasTextSelection;
+  }
+  for (const button of textAlignButtons) {
     button.disabled = !hasTextSelection;
   }
   duplicateSelected.disabled = !hasSelection;
@@ -500,6 +508,7 @@ function syncSelectedInputs() {
     selectedH.value = "";
     selectedR.value = "";
     setActiveTextSizeButton("h3");
+    setActiveTextAlignButton("left");
     selectedTextColor.value = defaultTextColor;
     updateStatusBar();
     return;
@@ -512,6 +521,7 @@ function syncSelectedInputs() {
   selectedH.value = Math.round(state.height);
   selectedR.value = Math.round(state.rotation);
   setActiveTextSizeButton(selectedObject.dataset.textSize || "h3");
+  setActiveTextAlignButton(selectedObject.dataset.textAlign || "left");
   selectedTextColor.value = selectedObject.dataset.textColor || defaultTextColor;
   if (selectedObject.dataset.type === "shape") {
     strokeColor.value = sanitizeColor(selectedObject.dataset.strokeColor, DEFAULT_STROKE_COLOR);
@@ -523,6 +533,13 @@ function syncSelectedInputs() {
 function setActiveTextSizeButton(sizeKey) {
   for (const button of textSizeButtons) {
     button.classList.toggle("is-active", button.dataset.textSize === sizeKey);
+  }
+}
+
+function setActiveTextAlignButton(align) {
+  const safeAlign = sanitizeTextAlign(align);
+  for (const button of textAlignButtons) {
+    button.classList.toggle("is-active", button.dataset.textAlign === safeAlign);
   }
 }
 
@@ -625,6 +642,7 @@ function addTextObject(text, statusMessage = "텍스트를 붙여넣었습니다
   element.dataset.id = `object-${++objectSeed}`;
   element.dataset.text = cleanText;
   element.dataset.textSize = "h3";
+  element.dataset.textAlign = "left";
   element.dataset.textColor = defaultTextColor;
   canvas.append(element);
   attachObjectEvents(element);
@@ -965,7 +983,7 @@ function renderTextObject(element) {
   const context = textCanvas.getContext("2d");
   context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
   context.__textColor = element.dataset.textColor || DEFAULT_TEXT_COLOR;
-  drawTextLines(context, text, width, height, true, element.dataset.textSize || "h3");
+  drawTextLines(context, text, width, height, true, element.dataset.textSize || "h3", element.dataset.textAlign || "left");
   delete context.__textColor;
 }
 
@@ -1043,6 +1061,7 @@ function startTextEdit(element) {
   editor.style.fontSize = `${preset.fontSize}px`;
   editor.style.lineHeight = `${preset.lineHeight}px`;
   editor.style.color = element.dataset.textColor || DEFAULT_TEXT_COLOR;
+  editor.style.textAlign = sanitizeTextAlign(element.dataset.textAlign);
   window.requestAnimationFrame(() => {
     editor.focus({ preventScroll: true });
     selectEditableContent(editor);
@@ -1277,8 +1296,9 @@ function wrapTextLines(context, text, width) {
   return output;
 }
 
-function drawTextLines(context, text, width, height, shouldClear = false, textSizeKey = "h3") {
+function drawTextLines(context, text, width, height, shouldClear = false, textSizeKey = "h3", textAlign = "left") {
   const preset = getTextPreset(textSizeKey);
+  const safeAlign = sanitizeTextAlign(textAlign);
   if (shouldClear) {
     context.clearRect(0, 0, width, height);
   }
@@ -1288,6 +1308,7 @@ function drawTextLines(context, text, width, height, shouldClear = false, textSi
   context.clip();
   context.fillStyle = context.__textColor || DEFAULT_TEXT_COLOR;
   context.textBaseline = "top";
+  context.textAlign = safeAlign;
   context.font = `600 ${preset.fontSize}px Pretendard, sans-serif`;
 
   for (const [index, line] of wrapTextLines(context, text, width).entries()) {
@@ -1295,7 +1316,13 @@ function drawTextLines(context, text, width, height, shouldClear = false, textSi
     if (y >= height) {
       break;
     }
-    context.fillText(line, TEXT_PADDING_X, y);
+    const x =
+      safeAlign === "center"
+        ? width / 2
+        : safeAlign === "right"
+          ? width - TEXT_PADDING_X
+          : TEXT_PADDING_X;
+    context.fillText(line, x, y);
   }
 
   context.restore();
@@ -1303,8 +1330,79 @@ function drawTextLines(context, text, width, height, shouldClear = false, textSi
 
 function drawTextObject(context, object, width, height) {
   context.__textColor = object.dataset.textColor || DEFAULT_TEXT_COLOR;
-  drawTextLines(context, object.dataset.text || "", width, height, false, object.dataset.textSize || "h3");
+  drawTextLines(
+    context,
+    object.dataset.text || "",
+    width,
+    height,
+    false,
+    object.dataset.textSize || "h3",
+    object.dataset.textAlign || "left"
+  );
   delete context.__textColor;
+}
+
+function fillRoundedRect(context, x, y, width, height, radius) {
+  const safeRadius = Math.min(radius, width / 2, height / 2);
+  context.beginPath();
+  context.moveTo(x + safeRadius, y);
+  context.lineTo(x + width - safeRadius, y);
+  context.quadraticCurveTo(x + width, y, x + width, y + safeRadius);
+  context.lineTo(x + width, y + height - safeRadius);
+  context.quadraticCurveTo(x + width, y + height, x + width - safeRadius, y + height);
+  context.lineTo(x + safeRadius, y + height);
+  context.quadraticCurveTo(x, y + height, x, y + height - safeRadius);
+  context.lineTo(x, y + safeRadius);
+  context.quadraticCurveTo(x, y, x + safeRadius, y);
+  context.closePath();
+  context.fill();
+}
+
+function trimSubtitleLines(lines, maxLines) {
+  if (lines.length <= maxLines) {
+    return lines;
+  }
+  const output = lines.slice(0, maxLines);
+  const lastIndex = output.length - 1;
+  output[lastIndex] = `${output[lastIndex].replace(/\s+$/g, "")}...`;
+  return output;
+}
+
+function drawSubtitleBox(context, text, width, height) {
+  const cleanText = String(text || "").trim();
+  if (!cleanText) {
+    return;
+  }
+
+  const fontSize = clamp(Math.round(width * 0.032), 22, 34);
+  const lineHeight = Math.round(fontSize * 1.34);
+  const paddingX = Math.round(fontSize * 0.86);
+  const paddingY = Math.round(fontSize * 0.52);
+  const maxTextWidth = Math.round(width * 0.78);
+  const bottomOffset = Math.round(height * 0.095);
+
+  context.save();
+  context.font = `700 ${fontSize}px Pretendard, sans-serif`;
+  const lines = trimSubtitleLines(wrapTextLines(context, cleanText, maxTextWidth + TEXT_PADDING_X * 2), SUBTITLE_MAX_LINES);
+  const measuredWidth = Math.min(
+    maxTextWidth,
+    Math.max(...lines.map((line) => context.measureText(line).width), fontSize * 4)
+  );
+  const boxWidth = Math.min(width - 48, Math.ceil(measuredWidth + paddingX * 2));
+  const boxHeight = Math.ceil(lines.length * lineHeight + paddingY * 2);
+  const boxX = (width - boxWidth) / 2;
+  const boxY = height - bottomOffset - boxHeight;
+
+  context.fillStyle = "rgba(0, 0, 0, 0.8)";
+  fillRoundedRect(context, boxX, boxY, boxWidth, boxHeight, 6);
+  context.fillStyle = "#ffffff";
+  context.textAlign = "center";
+  context.textBaseline = "top";
+  context.font = `700 ${fontSize}px Pretendard, sans-serif`;
+  for (const [index, line] of lines.entries()) {
+    context.fillText(line, width / 2, boxY + paddingY + index * lineHeight);
+  }
+  context.restore();
 }
 
 function drawShapeData(context, data, width, height) {
@@ -1409,13 +1507,17 @@ async function renderSlideToDataUrl(slide, options = {}) {
       drawFittedImage(context, image, object.width, object.height);
     } else if (object.type === "text") {
       context.__textColor = object.textColor || DEFAULT_TEXT_COLOR;
-      drawTextLines(context, object.text || "", object.width, object.height, false, object.textSize || "h3");
+      drawTextLines(context, object.text || "", object.width, object.height, false, object.textSize || "h3", object.textAlign || "left");
       delete context.__textColor;
     } else if (object.type === "shape") {
       drawShapeData(context, object, object.width, object.height);
     }
 
     context.restore();
+  }
+
+  if (options.subtitles) {
+    drawSubtitleBox(context, slide.notes, exportCanvas.width, exportCanvas.height);
   }
 
   return exportCanvas.toDataURL("image/png");
@@ -1522,6 +1624,7 @@ function serializeObject(object) {
     ...base,
     text: object.dataset.text || "",
     textSize: object.dataset.textSize || "h3",
+    textAlign: sanitizeTextAlign(object.dataset.textAlign),
     textColor: object.dataset.textColor || DEFAULT_TEXT_COLOR,
   };
 }
@@ -1568,6 +1671,7 @@ function addTextObjectFromData(data) {
   element.dataset.id = `object-${++objectSeed}`;
   element.dataset.text = data.text || "";
   element.dataset.textSize = data.textSize || "h3";
+  element.dataset.textAlign = sanitizeTextAlign(data.textAlign);
   element.dataset.textColor = data.textColor || DEFAULT_TEXT_COLOR;
   canvas.append(element);
   attachObjectEvents(element);
@@ -1684,7 +1788,7 @@ function renderSlidePreview(slide, previewCanvas) {
       context.strokeRect(0, 0, object.width, object.height);
     } else if (object.type === "text") {
       context.__textColor = object.textColor || DEFAULT_TEXT_COLOR;
-      drawTextLines(context, object.text || "", object.width, object.height, false, object.textSize || "h3");
+      drawTextLines(context, object.text || "", object.width, object.height, false, object.textSize || "h3", object.textAlign || "left");
       delete context.__textColor;
     } else if (object.type === "shape") {
       drawShapeData(context, object, object.width, object.height);
@@ -2451,6 +2555,7 @@ function normalizeProjectObject(object) {
     ...base,
     text: typeof object.text === "string" ? object.text : "",
     textSize: TEXT_SIZE_PRESETS[object.textSize] ? object.textSize : "h3",
+    textAlign: sanitizeTextAlign(object.textAlign),
     textColor: sanitizeColor(object.textColor, DEFAULT_TEXT_COLOR),
   };
 }
@@ -2640,8 +2745,10 @@ function loadTtsSettings() {
     } else {
       applyTtsPreset(presetKey, { silent: true, persist: false });
     }
+    subtitleEnabled.checked = saved.subtitles !== undefined ? Boolean(saved.subtitles) : DEFAULT_SUBTITLE_ENABLED;
   } catch {
     applyTtsPreset(defaultPresetKey, { silent: true, persist: false });
+    subtitleEnabled.checked = DEFAULT_SUBTITLE_ENABLED;
   }
 }
 
@@ -2652,6 +2759,7 @@ function saveTtsSettings(options = {}) {
     voice: ttsVoice.value,
     speed: clamp(numberOr(ttsSpeed.value, DEFAULT_TTS_SETTINGS.speed), 0.25, 4),
     instructions: ttsInstructions.value.trim(),
+    subtitles: subtitleEnabled.checked,
     customized: Boolean(options.customized),
   };
   localStorage.setItem(TTS_SETTINGS_STORAGE_KEY, JSON.stringify(settings));
@@ -2864,7 +2972,10 @@ async function exportProjectAsMp4() {
         color: sanitizeColor(slide.color, "#ffffff"),
         notes: typeof slide.notes === "string" ? slide.notes : "",
         videoPath: video?.path || null,
-        framePng: await renderSlideToDataUrl(slide, { transparentBackground: Boolean(video) }),
+        framePng: await renderSlideToDataUrl(slide, {
+          transparentBackground: Boolean(video),
+          subtitles: subtitleEnabled.checked,
+        }),
       });
     }
 
@@ -2960,6 +3071,22 @@ function applySelectedTextColorChange(shouldRecord = false) {
   }
 }
 
+function applySelectedTextAlignChange(align) {
+  if (!selectedObject || selectedObject.dataset.type !== "text") {
+    return;
+  }
+
+  const safeAlign = sanitizeTextAlign(align);
+  selectedObject.dataset.textAlign = safeAlign;
+  setActiveTextAlignButton(safeAlign);
+  const editor = selectedObject.querySelector(".text-editor");
+  editor.style.textAlign = safeAlign;
+  renderTextObject(selectedObject);
+  setStatus(`텍스트 정렬을 ${safeAlign}로 변경했습니다.`);
+  renderSlideList();
+  recordHistory();
+}
+
 function applyColorPreset(presetKey) {
   const preset = COLOR_PRESETS[presetKey];
   if (!preset) {
@@ -3004,101 +3131,6 @@ function applySelectedShapeStyleChange(shouldRecord = false) {
   if (shouldRecord) {
     recordHistory();
   }
-}
-
-function getSelectionBounds() {
-  const states = selectedObjects.map(getState);
-  const left = Math.min(...states.map((state) => state.x));
-  const top = Math.min(...states.map((state) => state.y));
-  const right = Math.max(...states.map((state) => state.x + state.width));
-  const bottom = Math.max(...states.map((state) => state.y + state.height));
-  return {
-    left,
-    top,
-    right,
-    bottom,
-    center: (left + right) / 2,
-    middle: (top + bottom) / 2,
-  };
-}
-
-function statesOverlap(states) {
-  for (let i = 0; i < states.length; i += 1) {
-    const a = states[i];
-    for (let j = i + 1; j < states.length; j += 1) {
-      const b = states[j];
-      const overlapsX = a.x < b.x + b.width && a.x + a.width > b.x;
-      const overlapsY = a.y < b.y + b.height && a.y + a.height > b.y;
-      if (overlapsX && overlapsY) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
-function preventAlignmentOverlap(items, preservedAxis) {
-  const gap = 8;
-  const primary = preservedAxis;
-  const secondary = preservedAxis === "x" ? "y" : "x";
-  const sizeKey = preservedAxis === "x" ? "width" : "height";
-  const ordered = [...items].sort((a, b) => {
-    const primaryDiff = a.original[primary] - b.original[primary];
-    return primaryDiff || a.original[secondary] - b.original[secondary];
-  });
-
-  let cursor = -Infinity;
-  for (const item of ordered) {
-    if (item.next[primary] < cursor) {
-      item.next[primary] = cursor;
-    }
-    cursor = item.next[primary] + item.next[sizeKey] + gap;
-  }
-}
-
-function alignSelectedObjects(mode) {
-  if (selectedObjects.length < 2) {
-    return;
-  }
-
-  const bounds = getSelectionBounds();
-  const items = selectedObjects.map((object) => {
-    const state = getState(object);
-    const nextState = { ...state };
-
-    if (mode === "left") {
-      nextState.x = bounds.left;
-    } else if (mode === "center") {
-      nextState.x = bounds.center - state.width / 2;
-    } else if (mode === "right") {
-      nextState.x = bounds.right - state.width;
-    } else if (mode === "top") {
-      nextState.y = bounds.top;
-    } else if (mode === "middle") {
-      nextState.y = bounds.middle - state.height / 2;
-    } else if (mode === "bottom") {
-      nextState.y = bounds.bottom - state.height;
-    }
-
-    return {
-      object,
-      original: state,
-      next: nextState,
-    };
-  });
-
-  if (statesOverlap(items.map((item) => item.next))) {
-    const preservedAxis = mode === "left" || mode === "center" || mode === "right" ? "y" : "x";
-    preventAlignmentOverlap(items, preservedAxis);
-  }
-
-  for (const item of items) {
-    applyState(item.object, item.next);
-  }
-
-  renderSlideList();
-  setStatus(`선택한 ${selectedObjects.length}개 오브젝트를 겹치지 않게 정렬했습니다.`);
-  recordHistory();
 }
 
 applyCanvas.addEventListener("click", () => {
@@ -3204,6 +3236,7 @@ ttsPreset.addEventListener("change", () => applyTtsPreset(ttsPreset.value));
 for (const input of [ttsModel, ttsVoice, ttsSpeed, ttsInstructions]) {
   input.addEventListener("change", () => saveTtsSettings({ customized: true }));
 }
+subtitleEnabled.addEventListener("change", () => saveTtsSettings({ customized: true }));
 ttsSpeed.addEventListener("blur", () => {
   ttsSpeed.value = String(clamp(numberOr(ttsSpeed.value, DEFAULT_TTS_SETTINGS.speed), 0.25, 4));
   saveTtsSettings({ customized: true });
@@ -3257,11 +3290,11 @@ for (const input of [selectedX, selectedY, selectedW, selectedH, selectedR]) {
 for (const button of textSizeButtons) {
   button.addEventListener("click", () => applySelectedTextSizeChange(button.dataset.textSize));
 }
+for (const button of textAlignButtons) {
+  button.addEventListener("click", () => applySelectedTextAlignChange(button.dataset.textAlign));
+}
 selectedTextColor.addEventListener("input", () => applySelectedTextColorChange());
 selectedTextColor.addEventListener("change", () => applySelectedTextColorChange(true));
-for (const button of alignButtons) {
-  button.addEventListener("click", () => alignSelectedObjects(button.dataset.align));
-}
 
 deleteSelected.addEventListener("click", () => {
   deleteSelectedObjects();

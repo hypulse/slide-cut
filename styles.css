@@ -726,7 +726,20 @@ select {
   gap: 4px;
 }
 
+.text-align-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+}
+
 .text-size-buttons button {
+  height: 32px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.text-align-buttons button {
   height: 32px;
   border-radius: 6px;
   font-size: 12px;
@@ -739,7 +752,18 @@ select {
   color: #1d4ed8;
 }
 
+.text-align-buttons button.is-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: #1d4ed8;
+}
+
 .text-size-buttons button:disabled {
+  opacity: 0.42;
+  pointer-events: none;
+}
+
+.text-align-buttons button:disabled {
   opacity: 0.42;
   pointer-events: none;
 }
@@ -753,23 +777,24 @@ input[type="color"] {
   background: #ffffff;
 }
 
+input[type="checkbox"] {
+  justify-self: start;
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
+
 .selected-panel.is-empty label,
-.selected-panel.is-empty .align-controls,
 .selected-panel.is-empty .arrange-controls,
 .selected-panel.is-empty .selected-actions {
   opacity: 0.42;
   pointer-events: none;
 }
 
-.align-controls,
 .arrange-controls {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6px;
-}
-
-.arrange-controls {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
 }
 
 .selected-actions {
@@ -778,14 +803,12 @@ input[type="color"] {
   gap: 6px;
 }
 
-.align-controls button,
 .arrange-controls button,
 .selected-actions button {
   height: 30px;
   font-size: 12px;
 }
 
-.align-controls button:disabled,
 .arrange-controls button:disabled,
 .selected-actions button:disabled {
   opacity: 0.42;

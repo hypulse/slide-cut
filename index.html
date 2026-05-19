@@ -135,6 +135,10 @@
             <span>Tone</span>
             <input id="ttsInstructions" type="text" placeholder="차분하게 읽기" />
           </label>
+          <label>
+            <span>Subtitle</span>
+            <input id="subtitleEnabled" type="checkbox" checked />
+          </label>
         </section>
 
         <section class="panel selected-panel" aria-labelledby="selected-title">
@@ -175,14 +179,14 @@
             <span>Color</span>
             <input id="selectedTextColor" type="color" value="#111827" />
           </label>
-          <div class="align-controls" aria-label="선택 정렬">
-            <button type="button" data-align="left">Left</button>
-            <button type="button" data-align="center">Center</button>
-            <button type="button" data-align="right">Right</button>
-            <button type="button" data-align="top">Top</button>
-            <button type="button" data-align="middle">Middle</button>
-            <button type="button" data-align="bottom">Bottom</button>
-          </div>
+          <label>
+            <span>Align</span>
+            <div id="selectedTextAlign" class="text-align-buttons" role="group" aria-label="텍스트 정렬">
+              <button type="button" data-text-align="left">Left</button>
+              <button type="button" data-text-align="center">Center</button>
+              <button type="button" data-text-align="right">Right</button>
+            </div>
+          </label>
           <div class="arrange-controls" aria-label="레이어 순서">
             <button id="sendBackward" type="button">Backward</button>
             <button id="bringForward" type="button">Forward</button>
