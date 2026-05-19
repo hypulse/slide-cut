@@ -74,6 +74,8 @@ const nativeApi = window.simpleSlideNative || (tauriInvoke ? {
     });
   },
   exportVideo: (payload) => tauriInvoke("export_video", { payload }),
+  cancelVideoExport: (exportId) => tauriInvoke("cancel_video_export", { exportId }),
+  listenVideoExportProgress: (handler) => window.__TAURI__?.event?.listen?.("video-export-progress", (event) => handler(event.payload)),
 } : null);
 
 const projectNameInput = document.querySelector("#projectNameInput");
@@ -108,7 +110,11 @@ const ttsModel = document.querySelector("#ttsModel");
 const ttsVoice = document.querySelector("#ttsVoice");
 const ttsSpeed = document.querySelector("#ttsSpeed");
 const ttsInstructions = document.querySelector("#ttsInstructions");
-const exportStatus = document.querySelector("#exportStatus");
+const exportModal = document.querySelector("#exportModal");
+const exportModalPhase = document.querySelector("#exportModalPhase");
+const exportProgress = document.querySelector("#exportProgress");
+const exportModalStatus = document.querySelector("#exportModalStatus");
+const cancelExport = document.querySelector("#cancelExport");
 const appSettings = document.querySelector("#appSettings");
 const closeAppSettings = document.querySelector("#closeAppSettings");
 const saveAppSettingsButton = document.querySelector("#saveAppSettings");
@@ -178,6 +184,7 @@ let appSettingsState = {
   openAiApiKey: "",
   ttsPreset: "animeCute",
 };
+let activeExportJob = null;
 
 const TEXT_PADDING_X = 10;
 const TEXT_PADDING_Y = 8;
@@ -237,12 +244,6 @@ function setStatus(message) {
     statusTimer = window.setTimeout(() => {
       statusText.classList.remove("is-visible");
     }, 2200);
-  }
-}
-
-function setExportStatus(message) {
-  if (exportStatus) {
-    exportStatus.textContent = message;
   }
 }
 
@@ -2745,6 +2746,84 @@ function hideAppSettings() {
   appSettings.hidden = true;
 }
 
+function createExportId() {
+  return `export-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function setExportModalProgress(phase, message, current = 0, total = 1) {
+  const safeTotal = Math.max(1, Number(total) || 1);
+  const safeCurrent = clamp(Number(current) || 0, 0, safeTotal);
+  exportModalPhase.textContent = phase;
+  exportModalStatus.textContent = message;
+  exportProgress.value = Math.round((safeCurrent / safeTotal) * 100);
+}
+
+function throwIfExportCancelled() {
+  if (activeExportJob?.cancelled) {
+    throw new Error("MP4 추출을 취소했습니다.");
+  }
+}
+
+async function beginExportJob(exportId) {
+  activeExportJob = {
+    id: exportId,
+    cancelled: false,
+    unlisten: null,
+  };
+  cancelExport.disabled = false;
+  document.body.classList.add("is-exporting");
+  exportModal.hidden = false;
+  setExportModalProgress("Preparing", "Export 준비 중입니다.", 0, 1);
+
+  if (nativeApi?.listenVideoExportProgress) {
+    try {
+      activeExportJob.unlisten = await nativeApi.listenVideoExportProgress((progress) => {
+        if (!activeExportJob || progress?.exportId !== activeExportJob.id) {
+          return;
+        }
+        setExportModalProgress(
+          progress.phase || "Exporting",
+          progress.message || "MP4를 생성하고 있습니다.",
+          progress.current,
+          progress.total
+        );
+      });
+    } catch {
+      activeExportJob.unlisten = null;
+    }
+  }
+}
+
+async function finishExportJob() {
+  const job = activeExportJob;
+  if (job?.unlisten) {
+    try {
+      job.unlisten();
+    } catch {
+      // Ignore stale listeners.
+    }
+  }
+  activeExportJob = null;
+  document.body.classList.remove("is-exporting");
+  exportModal.hidden = true;
+}
+
+async function cancelActiveExportJob() {
+  if (!activeExportJob || activeExportJob.cancelled) {
+    return;
+  }
+  activeExportJob.cancelled = true;
+  cancelExport.disabled = true;
+  setExportModalProgress("Cancelling", "MP4 추출을 취소하는 중입니다.", 1, 1);
+  if (nativeApi?.cancelVideoExport) {
+    try {
+      await nativeApi.cancelVideoExport(activeExportJob.id);
+    } catch {
+      // The frontend render phase can still cancel even if the native command has not started.
+    }
+  }
+}
+
 async function exportProjectAsMp4() {
   if (!nativeApi?.exportVideo || !nativeApi?.selectMp4Output) {
     setStatus("MP4 추출은 Tauri 데스크톱 앱에서 사용할 수 있습니다.");
@@ -2766,16 +2845,18 @@ async function exportProjectAsMp4() {
   }
 
   const previousDisabled = exportMp4.disabled;
+  const exportId = createExportId();
   exportMp4.disabled = true;
-  setExportStatus("Rendering slides...");
+  await beginExportJob(exportId);
   setStatus("슬라이드를 영상 추출용 프레임으로 렌더링하고 있습니다.");
 
   try {
     const renderedSlides = [];
     for (let index = 0; index < slides.length; index += 1) {
+      throwIfExportCancelled();
       const slide = slides[index];
       const video = normalizeSlideVideo(slide.video);
-      setExportStatus(`Rendering ${index + 1} / ${slides.length}`);
+      setExportModalProgress("Rendering", `슬라이드 ${index + 1} / ${slides.length} 렌더링 중입니다.`, index, slides.length);
       renderedSlides.push({
         index,
         width: roundedCanvasSize(slide.width),
@@ -2787,22 +2868,24 @@ async function exportProjectAsMp4() {
       });
     }
 
-    setExportStatus("Generating MP4...");
+    throwIfExportCancelled();
+    setExportModalProgress("Encoding", "TTS와 MP4 세그먼트를 생성하고 있습니다.", 0, 1);
     const result = await nativeApi.exportVideo({
+      exportId,
       outputPath,
       fps: VIDEO_EXPORT_FPS,
       fallbackDurationSeconds: VIDEO_EXPORT_FALLBACK_DURATION,
       tts: getTtsSettings(),
       slides: renderedSlides,
     });
-    setExportStatus("Exported");
+    setExportModalProgress("Done", "MP4 추출이 완료되었습니다.", 1, 1);
     setStatus(`MP4로 추출했습니다: ${result?.outputPath || outputPath}`);
   } catch (error) {
     const message = error?.message || String(error) || "MP4 추출에 실패했습니다.";
-    setExportStatus("Export failed");
     setStatus(message);
   } finally {
     exportMp4.disabled = previousDisabled;
+    await finishExportJob();
   }
 }
 
@@ -3149,6 +3232,7 @@ editSelectedText.addEventListener("click", () => {
 duplicateSelected.addEventListener("click", duplicateSelectedObjects);
 savePng.addEventListener("click", saveCanvasAsPng);
 exportMp4.addEventListener("click", exportProjectAsMp4);
+cancelExport.addEventListener("click", cancelActiveExportJob);
 saveProject.addEventListener("click", saveProjectFile);
 openProject.addEventListener("click", importNativeProjectFile);
 projectFileInput.addEventListener("change", () => {
@@ -3199,6 +3283,13 @@ document.addEventListener("pointercancel", handlePointerEnd);
 document.addEventListener("paste", handlePaste);
 document.addEventListener("keydown", (event) => {
   const key = event.key.toLowerCase();
+  if (activeExportJob) {
+    event.preventDefault();
+    if (key === "escape") {
+      cancelActiveExportJob();
+    }
+    return;
+  }
   const isEditableTarget = isEditableShortcutTarget(event.target);
   if (isPrimaryShortcut(event) && key === "s") {
     event.preventDefault();

@@ -3,18 +3,23 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::{
+    collections::HashSet,
     env, fs,
     path::{Path, PathBuf},
-    process::Command,
-    time::{SystemTime, UNIX_EPOCH},
+    process::{Command, Stdio},
+    sync::{Mutex, OnceLock},
+    thread,
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 
 const PROJECTS_DIRNAME: &str = "projects";
 const PROJECT_FILE: &str = "project.json";
 const META_FILE: &str = "meta.json";
 const APP_SETTINGS_FILE: &str = "settings.json";
 const DEFAULT_PROJECT_NAME: &str = "Untitled";
+const VIDEO_EXPORT_PROGRESS_EVENT: &str = "video-export-progress";
+static CANCELLED_EXPORTS: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -66,6 +71,7 @@ impl Default for AppSettings {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct VideoExportPayload {
+    export_id: String,
     output_path: String,
     slides: Vec<VideoExportSlide>,
     tts: TtsSettings,
@@ -98,6 +104,16 @@ struct TtsSettings {
 struct VideoExportResult {
     output_path: String,
     slide_count: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct VideoExportProgress {
+    export_id: String,
+    phase: String,
+    message: String,
+    current: usize,
+    total: usize,
 }
 
 #[derive(Debug)]
@@ -162,6 +178,59 @@ fn clean_app_settings(settings: AppSettings) -> AppSettings {
         open_ai_api_key: settings.open_ai_api_key.trim().to_string(),
         tts_preset: preset.to_string(),
     }
+}
+
+fn cancelled_exports() -> &'static Mutex<HashSet<String>> {
+    CANCELLED_EXPORTS.get_or_init(|| Mutex::new(HashSet::new()))
+}
+
+fn mark_export_cancelled(export_id: &str) -> Result<(), String> {
+    let mut cancelled = cancelled_exports()
+        .lock()
+        .map_err(|_| "취소 상태를 잠그지 못했습니다.".to_string())?;
+    cancelled.insert(export_id.to_string());
+    Ok(())
+}
+
+fn clear_export_cancelled(export_id: &str) {
+    if let Ok(mut cancelled) = cancelled_exports().lock() {
+        cancelled.remove(export_id);
+    }
+}
+
+fn is_export_cancelled(export_id: &str) -> bool {
+    cancelled_exports()
+        .lock()
+        .map(|cancelled| cancelled.contains(export_id))
+        .unwrap_or(false)
+}
+
+fn check_export_cancelled(export_id: &str) -> Result<(), String> {
+    if is_export_cancelled(export_id) {
+        Err("MP4 추출을 취소했습니다.".to_string())
+    } else {
+        Ok(())
+    }
+}
+
+fn emit_export_progress(
+    app: &AppHandle,
+    export_id: &str,
+    phase: &str,
+    message: &str,
+    current: usize,
+    total: usize,
+) {
+    let _ = app.emit(
+        VIDEO_EXPORT_PROGRESS_EVENT,
+        VideoExportProgress {
+            export_id: export_id.to_string(),
+            phase: phase.to_string(),
+            message: message.to_string(),
+            current,
+            total: total.max(1),
+        },
+    );
 }
 
 fn project_dir(app: &AppHandle, project_id: &str) -> Result<PathBuf, String> {
@@ -350,6 +419,14 @@ fn save_app_settings(app: AppHandle, settings: AppSettings) -> Result<AppSetting
     Ok(settings)
 }
 
+#[tauri::command]
+fn cancel_video_export(export_id: String) -> Result<(), String> {
+    if export_id.trim().is_empty() {
+        return Ok(());
+    }
+    mark_export_cancelled(&export_id)
+}
+
 fn app_cache_dir(app: &AppHandle) -> Result<PathBuf, String> {
     app.path()
         .app_cache_dir()
@@ -426,10 +503,28 @@ fn find_tool(name: &str, env_name: &str, version_arg: &str) -> Result<PathBuf, S
     ))
 }
 
-fn run_command(mut command: Command, label: &str) -> Result<(), String> {
-    let output = command
-        .output()
+fn run_command(mut command: Command, label: &str, export_id: &str) -> Result<(), String> {
+    check_export_cancelled(export_id)?;
+    let mut child = command
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
         .map_err(|error| format!("{label} 실행에 실패했습니다: {error}"))?;
+    loop {
+        if is_export_cancelled(export_id) {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err("MP4 추출을 취소했습니다.".to_string());
+        }
+        match child.try_wait() {
+            Ok(Some(_)) => break,
+            Ok(None) => thread::sleep(Duration::from_millis(120)),
+            Err(error) => return Err(format!("{label} 상태를 확인하지 못했습니다: {error}")),
+        }
+    }
+    let output = child
+        .wait_with_output()
+        .map_err(|error| format!("{label} 결과를 읽지 못했습니다: {error}"))?;
     if output.status.success() {
         return Ok(());
     }
@@ -505,7 +600,9 @@ fn generate_tts_audio(
     work_dir: &Path,
     settings: &TtsSettings,
     notes: &str,
+    export_id: &str,
 ) -> Result<PathBuf, String> {
+    check_export_cancelled(export_id)?;
     let notes = notes.trim();
     if notes.chars().count() > 4096 {
         return Err("슬라이드 노트는 TTS 한 번당 4096자 이하여야 합니다.".to_string());
@@ -535,7 +632,7 @@ fn generate_tts_audio(
 
     let mut command = Command::new(curl);
     command.arg("-K").arg(&config_path);
-    let result = run_command(command, "OpenAI TTS 요청");
+    let result = run_command(command, "OpenAI TTS 요청", export_id);
     let _ = fs::remove_file(&config_path);
     let _ = fs::remove_file(&request_path);
     result?;
@@ -546,7 +643,12 @@ fn generate_tts_audio(
     Ok(cache_path)
 }
 
-fn create_silence_audio(ffmpeg: &Path, path: &Path, duration_seconds: f64) -> Result<(), String> {
+fn create_silence_audio(
+    ffmpeg: &Path,
+    path: &Path,
+    duration_seconds: f64,
+    export_id: &str,
+) -> Result<(), String> {
     let mut command = Command::new(ffmpeg);
     command
         .args(["-y", "-f", "lavfi"])
@@ -556,7 +658,7 @@ fn create_silence_audio(ffmpeg: &Path, path: &Path, duration_seconds: f64) -> Re
         .arg(format_seconds(duration_seconds))
         .args(["-c:a", "aac", "-b:a", "128k"])
         .arg(path);
-    run_command(command, "무음 오디오 생성")
+    run_command(command, "무음 오디오 생성", export_id)
 }
 
 fn probe_audio_duration(ffprobe: &Path, path: &Path, fallback: f64) -> Result<f64, String> {
@@ -586,6 +688,7 @@ fn create_static_segment(
     width: u32,
     height: u32,
     fps: u32,
+    export_id: &str,
 ) -> Result<(), String> {
     let filter = format!(
         "scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=white,format=yuv420p"
@@ -609,7 +712,7 @@ fn create_static_segment(
         .args(["-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k"])
         .args(["-shortest", "-movflags", "+faststart"])
         .arg(output_path);
-    run_command(command, "정적 슬라이드 세그먼트 생성")
+    run_command(command, "정적 슬라이드 세그먼트 생성", export_id)
 }
 
 fn create_video_segment(
@@ -619,6 +722,7 @@ fn create_video_segment(
     width: u32,
     height: u32,
     fps: u32,
+    export_id: &str,
 ) -> Result<(), String> {
     let video_path = prepared
         .video_path
@@ -649,7 +753,7 @@ fn create_video_segment(
         .args(["-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k"])
         .args(["-shortest", "-movflags", "+faststart"])
         .arg(output_path);
-    run_command(command, "영상 배경 슬라이드 세그먼트 생성")
+    run_command(command, "영상 배경 슬라이드 세그먼트 생성", export_id)
 }
 
 fn concat_segments(
@@ -657,6 +761,7 @@ fn concat_segments(
     work_dir: &Path,
     segments: &[PathBuf],
     output_path: &Path,
+    export_id: &str,
 ) -> Result<(), String> {
     let filelist_path = work_dir.join("segments.txt");
     let mut filelist = String::new();
@@ -672,107 +777,180 @@ fn concat_segments(
         .arg(&filelist_path)
         .args(["-c", "copy", "-movflags", "+faststart"])
         .arg(output_path);
-    run_command(command, "MP4 세그먼트 병합")
+    run_command(command, "MP4 세그먼트 병합", export_id)
 }
 
 #[tauri::command]
 fn export_video(app: AppHandle, payload: VideoExportPayload) -> Result<VideoExportResult, String> {
-    if payload.slides.is_empty() {
-        return Err("추출할 슬라이드가 없습니다.".to_string());
-    }
-    if payload.output_path.trim().is_empty() {
-        return Err("MP4 저장 경로가 없습니다.".to_string());
-    }
-
-    let ffmpeg = find_tool("ffmpeg", "SIMPLE_SLIDE_FFMPEG", "-version")?;
-    let ffprobe = find_tool("ffprobe", "SIMPLE_SLIDE_FFPROBE", "-version")?;
-    let needs_tts = payload
-        .slides
-        .iter()
-        .any(|slide| !slide.notes.trim().is_empty());
-    let curl = if needs_tts {
-        Some(find_tool("curl", "SIMPLE_SLIDE_CURL", "--version")?)
+    let export_id = if payload.export_id.trim().is_empty() {
+        format!("video-export-{}", now_millis()?)
     } else {
-        None
+        payload.export_id.clone()
     };
+    clear_export_cancelled(&export_id);
+    let result = (|| {
+        if payload.slides.is_empty() {
+            return Err("추출할 슬라이드가 없습니다.".to_string());
+        }
+        if payload.output_path.trim().is_empty() {
+            return Err("MP4 저장 경로가 없습니다.".to_string());
+        }
 
-    let export_id = format!("video-export-{}", now_millis()?);
-    let work_dir = app_cache_dir(&app)?.join("video-export").join(export_id);
-    fs::create_dir_all(&work_dir).map_err(|error| error.to_string())?;
-    let fps = payload.fps.unwrap_or(30).clamp(1, 60);
-    let fallback_duration = payload
-        .fallback_duration_seconds
-        .unwrap_or(3.0)
-        .clamp(1.0, 30.0);
-    let width = even_dimension(payload.slides[0].width);
-    let height = even_dimension(payload.slides[0].height);
-
-    let mut prepared_slides = Vec::new();
-    for (index, slide) in payload.slides.iter().enumerate() {
-        let frame_path = work_dir.join(format!("frame-{index:04}.png"));
-        fs::write(&frame_path, decode_png_data_url(&slide.frame_png)?)
-            .map_err(|error| error.to_string())?;
-
-        let trimmed_notes = slide.notes.trim();
-        let audio_path = if trimmed_notes.is_empty() {
-            let path = work_dir.join(format!("silence-{index:04}.m4a"));
-            create_silence_audio(&ffmpeg, &path, fallback_duration)?;
-            path
+        emit_export_progress(
+            &app,
+            &export_id,
+            "Preparing",
+            "FFmpeg 도구를 확인하고 있습니다.",
+            0,
+            1,
+        );
+        let ffmpeg = find_tool("ffmpeg", "SIMPLE_SLIDE_FFMPEG", "-version")?;
+        let ffprobe = find_tool("ffprobe", "SIMPLE_SLIDE_FFPROBE", "-version")?;
+        let needs_tts = payload
+            .slides
+            .iter()
+            .any(|slide| !slide.notes.trim().is_empty());
+        check_export_cancelled(&export_id)?;
+        let curl = if needs_tts {
+            Some(find_tool("curl", "SIMPLE_SLIDE_CURL", "--version")?)
         } else {
-            generate_tts_audio(
+            None
+        };
+
+        let work_dir = app_cache_dir(&app)?
+            .join("video-export")
+            .join(format!("work-{}", now_millis()?));
+        fs::create_dir_all(&work_dir).map_err(|error| error.to_string())?;
+        let fps = payload.fps.unwrap_or(30).clamp(1, 60);
+        let fallback_duration = payload
+            .fallback_duration_seconds
+            .unwrap_or(3.0)
+            .clamp(1.0, 30.0);
+        let width = even_dimension(payload.slides[0].width);
+        let height = even_dimension(payload.slides[0].height);
+
+        let mut prepared_slides = Vec::new();
+        for (index, slide) in payload.slides.iter().enumerate() {
+            check_export_cancelled(&export_id)?;
+            emit_export_progress(
                 &app,
-                curl.as_ref().unwrap(),
-                &work_dir,
-                &payload.tts,
-                trimmed_notes,
-            )?
-        };
-        let duration = if trimmed_notes.is_empty() {
-            fallback_duration
-        } else {
-            probe_audio_duration(&ffprobe, &audio_path, fallback_duration)?
-        };
-        let video_path = slide
-            .video_path
-            .as_deref()
-            .filter(|path| !path.trim().is_empty())
-            .map(PathBuf::from);
-        if let Some(path) = video_path.as_ref() {
-            if !path.exists() {
-                return Err(format!(
-                    "영상 파일을 찾지 못했습니다: {}",
-                    path.to_string_lossy()
-                ));
+                &export_id,
+                "Audio",
+                &format!(
+                    "슬라이드 {} / {} 오디오를 준비하고 있습니다.",
+                    index + 1,
+                    payload.slides.len()
+                ),
+                index,
+                payload.slides.len(),
+            );
+            let frame_path = work_dir.join(format!("frame-{index:04}.png"));
+            fs::write(&frame_path, decode_png_data_url(&slide.frame_png)?)
+                .map_err(|error| error.to_string())?;
+
+            let trimmed_notes = slide.notes.trim();
+            let audio_path = if trimmed_notes.is_empty() {
+                let path = work_dir.join(format!("silence-{index:04}.m4a"));
+                create_silence_audio(&ffmpeg, &path, fallback_duration, &export_id)?;
+                path
+            } else {
+                generate_tts_audio(
+                    &app,
+                    curl.as_ref().unwrap(),
+                    &work_dir,
+                    &payload.tts,
+                    trimmed_notes,
+                    &export_id,
+                )?
+            };
+            let duration = if trimmed_notes.is_empty() {
+                fallback_duration
+            } else {
+                probe_audio_duration(&ffprobe, &audio_path, fallback_duration)?
+            };
+            let video_path = slide
+                .video_path
+                .as_deref()
+                .filter(|path| !path.trim().is_empty())
+                .map(PathBuf::from);
+            if let Some(path) = video_path.as_ref() {
+                if !path.exists() {
+                    return Err(format!(
+                        "영상 파일을 찾지 못했습니다: {}",
+                        path.to_string_lossy()
+                    ));
+                }
             }
+            prepared_slides.push(PreparedSlide {
+                frame_path,
+                audio_path,
+                video_path,
+                duration_seconds: duration,
+            });
         }
-        prepared_slides.push(PreparedSlide {
-            frame_path,
-            audio_path,
-            video_path,
-            duration_seconds: duration,
-        });
-    }
 
-    let mut segments = Vec::new();
-    for (index, prepared) in prepared_slides.iter().enumerate() {
-        let segment_path = work_dir.join(format!("segment-{index:04}.mp4"));
-        if prepared.video_path.is_some() {
-            create_video_segment(&ffmpeg, prepared, &segment_path, width, height, fps)?;
-        } else {
-            create_static_segment(&ffmpeg, prepared, &segment_path, width, height, fps)?;
+        let mut segments = Vec::new();
+        for (index, prepared) in prepared_slides.iter().enumerate() {
+            check_export_cancelled(&export_id)?;
+            emit_export_progress(
+                &app,
+                &export_id,
+                "Encoding",
+                &format!(
+                    "슬라이드 {} / {} MP4 세그먼트를 생성하고 있습니다.",
+                    index + 1,
+                    prepared_slides.len()
+                ),
+                index,
+                prepared_slides.len(),
+            );
+            let segment_path = work_dir.join(format!("segment-{index:04}.mp4"));
+            if prepared.video_path.is_some() {
+                create_video_segment(
+                    &ffmpeg,
+                    prepared,
+                    &segment_path,
+                    width,
+                    height,
+                    fps,
+                    &export_id,
+                )?;
+            } else {
+                create_static_segment(
+                    &ffmpeg,
+                    prepared,
+                    &segment_path,
+                    width,
+                    height,
+                    fps,
+                    &export_id,
+                )?;
+            }
+            segments.push(segment_path);
         }
-        segments.push(segment_path);
-    }
 
-    let output_path = PathBuf::from(payload.output_path);
-    if let Some(parent) = output_path.parent() {
-        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    }
-    concat_segments(&ffmpeg, &work_dir, &segments, &output_path)?;
-    Ok(VideoExportResult {
-        output_path: output_path.to_string_lossy().to_string(),
-        slide_count: prepared_slides.len(),
-    })
+        check_export_cancelled(&export_id)?;
+        emit_export_progress(
+            &app,
+            &export_id,
+            "Finalizing",
+            "MP4 파일을 병합하고 있습니다.",
+            0,
+            1,
+        );
+        let output_path = PathBuf::from(payload.output_path);
+        if let Some(parent) = output_path.parent() {
+            fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+        }
+        concat_segments(&ffmpeg, &work_dir, &segments, &output_path, &export_id)?;
+        emit_export_progress(&app, &export_id, "Done", "MP4 추출이 완료되었습니다.", 1, 1);
+        Ok(VideoExportResult {
+            output_path: output_path.to_string_lossy().to_string(),
+            slide_count: prepared_slides.len(),
+        })
+    })();
+    clear_export_cancelled(&export_id);
+    result
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -790,6 +968,7 @@ pub fn run() {
             read_project_file,
             get_app_settings,
             save_app_settings,
+            cancel_video_export,
             export_video
         ])
         .run(tauri::generate_context!())

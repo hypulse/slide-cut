@@ -6,7 +6,7 @@
     <title>Simple Slide</title>
     <link rel="preconnect" href="https://cdn.jsdelivr.net" />
     <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
-    <link rel="stylesheet" href="./styles.css?v=20260519-tts-settings" />
+    <link rel="stylesheet" href="./styles.css?v=20260519-export-modal" />
   </head>
   <body>
     <div class="app-frame">
@@ -135,7 +135,6 @@
             <span>Tone</span>
             <input id="ttsInstructions" type="text" placeholder="차분하게 읽기" />
           </label>
-          <div id="exportStatus" class="inline-info">Ready</div>
         </section>
 
         <section class="panel selected-panel" aria-labelledby="selected-title">
@@ -279,6 +278,18 @@
 
     <div id="statusText" class="status-toast" role="status" aria-live="polite"></div>
 
+    <div id="exportModal" class="export-modal" role="dialog" aria-modal="true" aria-labelledby="export-modal-title" hidden>
+      <section class="export-modal-panel">
+        <header class="export-modal-header">
+          <h2 id="export-modal-title">MP4 Export</h2>
+          <span id="exportModalPhase">Preparing</span>
+        </header>
+        <progress id="exportProgress" max="100" value="0"></progress>
+        <div id="exportModalStatus" class="export-modal-status">Export 준비 중입니다.</div>
+        <button id="cancelExport" class="danger" type="button">Cancel</button>
+      </section>
+    </div>
+
     <div id="projectLibrary" class="project-library" hidden>
       <section class="project-library-panel" aria-labelledby="project-library-title">
         <header class="project-library-header">
@@ -321,6 +332,6 @@
       </section>
     </div>
 
-    <script src="./app.js?v=20260519-tts-settings" defer></script>
+    <script src="./app.js?v=20260519-export-modal" defer></script>
   </body>
 </html>
