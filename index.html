@@ -6,7 +6,7 @@
     <title>Simple Slide</title>
     <link rel="preconnect" href="https://cdn.jsdelivr.net" />
     <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
-    <link rel="stylesheet" href="./styles.css?v=20260519-export-modal" />
+    <link rel="stylesheet" href="./styles.css?v=20260519-icons" />
   </head>
   <body>
     <div class="app-frame">
@@ -17,20 +17,20 @@
         </div>
         <div class="top-actions" aria-label="Quick actions">
           <span class="menu-group" aria-label="Project">
-            <button id="projectLibraryButton" type="button">Projects</button>
-            <button id="appSettingsButton" type="button">Settings</button>
-            <button id="saveProject" type="button">Export Project</button>
-            <button id="openProject" type="button">Import Project</button>
+            <button id="projectLibraryButton" type="button" data-icon="folder-open">Projects</button>
+            <button id="appSettingsButton" type="button" data-icon="settings">Settings</button>
+            <button id="saveProject" type="button" data-icon="file-up">Export Project</button>
+            <button id="openProject" type="button" data-icon="file-down">Import Project</button>
           </span>
           <span class="menu-divider native-divider" aria-hidden="true"></span>
           <span class="menu-group" aria-label="Insert">
-            <button id="pasteImage" type="button">Paste Image</button>
-            <button id="addTextBox" type="button">Add Text</button>
+            <button id="pasteImage" type="button" data-icon="clipboard">Paste Image</button>
+            <button id="addTextBox" type="button" data-icon="type">Add Text</button>
           </span>
           <span class="menu-divider" aria-hidden="true"></span>
           <span class="menu-group" aria-label="Export">
-            <button id="savePng" type="button">Export PNG</button>
-            <button id="exportMp4" type="button">Export Video</button>
+            <button id="savePng" type="button" data-icon="image-down">Export PNG</button>
+            <button id="exportMp4" type="button" data-icon="film">Export Video</button>
           </span>
           <input id="projectFileInput" type="file" accept=".simpleslide.json,application/json,.json" hidden />
           <input id="videoFileInput" type="file" accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.m4v,.webm" hidden />
@@ -43,10 +43,10 @@
         <section class="panel" aria-labelledby="draw-title">
           <h2 id="draw-title">Draw</h2>
           <div id="drawTools" class="draw-tool-buttons" role="group" aria-label="그리기 도구">
-            <button type="button" data-draw-tool="select" class="is-active">Select</button>
-            <button type="button" data-draw-tool="line">Line</button>
-            <button type="button" data-draw-tool="arrow">Arrow</button>
-            <button type="button" data-draw-tool="pen">Pen</button>
+            <button type="button" data-draw-tool="select" data-icon="mouse-pointer-2" class="is-active">Select</button>
+            <button type="button" data-draw-tool="line" data-icon="slash">Line</button>
+            <button type="button" data-draw-tool="arrow" data-icon="arrow-up-right">Arrow</button>
+            <button type="button" data-draw-tool="pen" data-icon="pencil-line">Pen</button>
           </div>
           <label>
             <span>Stroke</span>
@@ -61,8 +61,8 @@
         <section class="panel" aria-labelledby="slide-video-title">
           <h2 id="slide-video-title">Background Video</h2>
           <div class="video-source-actions">
-            <button id="chooseSlideVideo" type="button">Choose Video</button>
-            <button id="clearSlideVideo" type="button">Remove</button>
+            <button id="chooseSlideVideo" type="button" data-icon="video">Choose Video</button>
+            <button id="clearSlideVideo" type="button" data-icon="x">Remove</button>
           </div>
           <div id="slideVideoInfo" class="inline-info">No video selected</div>
         </section>
@@ -82,9 +82,9 @@
               <input id="gitRepoPath" type="text" readonly />
             </label>
             <div class="dynamic-actions">
-              <button id="chooseGitRepo" type="button">Choose Repository</button>
-              <button id="loadGitCommits" type="button">Load Commits</button>
-              <button id="refreshGitDiff" type="button">Load Diff</button>
+              <button id="chooseGitRepo" type="button" data-icon="folder-git-2">Choose Repository</button>
+              <button id="loadGitCommits" type="button" data-icon="git-commit-horizontal">Load Commits</button>
+              <button id="refreshGitDiff" type="button" data-icon="file-diff">Load Diff</button>
             </div>
             <label>
               <span>Commit</span>
@@ -156,21 +156,21 @@
           <label>
             <span>Text Align</span>
             <div id="selectedTextAlign" class="text-align-buttons" role="group" aria-label="텍스트 정렬">
-              <button type="button" data-text-align="left">Left</button>
-              <button type="button" data-text-align="center">Center</button>
-              <button type="button" data-text-align="right">Right</button>
+              <button type="button" data-text-align="left" data-icon="align-left">Left</button>
+              <button type="button" data-text-align="center" data-icon="align-center">Center</button>
+              <button type="button" data-text-align="right" data-icon="align-right">Right</button>
             </div>
           </label>
           <div class="arrange-controls" aria-label="레이어 순서">
-            <button id="sendBackward" type="button">Backward</button>
-            <button id="bringForward" type="button">Forward</button>
-            <button id="sendToBack" type="button">Back</button>
-            <button id="bringToFront" type="button">Front</button>
+            <button id="sendBackward" type="button" data-icon="step-back">Backward</button>
+            <button id="bringForward" type="button" data-icon="step-forward">Forward</button>
+            <button id="sendToBack" type="button" data-icon="send-to-back">Back</button>
+            <button id="bringToFront" type="button" data-icon="bring-to-front">Front</button>
           </div>
           <div class="selected-actions">
-            <button id="duplicateSelected" type="button">Duplicate</button>
-            <button id="editSelectedText" type="button">Edit Text</button>
-            <button id="deleteSelected" class="danger" type="button">Delete</button>
+            <button id="duplicateSelected" type="button" data-icon="copy">Duplicate</button>
+            <button id="editSelectedText" type="button" data-icon="edit-3">Edit Text</button>
+            <button id="deleteSelected" class="danger" type="button" data-icon="trash-2">Delete</button>
           </div>
         </section>
       </aside>
@@ -197,14 +197,14 @@
             <h2>Slides</h2>
             <span id="slideSummary" class="slide-summary">1 / 1</span>
           </div>
-          <button id="duplicateSlide" type="button">Duplicate</button>
+          <button id="duplicateSlide" type="button" data-icon="copy">Duplicate</button>
         </div>
         <div id="slideList" class="slide-list"></div>
         <div class="slide-footer-actions">
-          <button id="deleteSlide" class="danger" type="button">Delete</button>
-          <button id="addSlide" class="add-slide-button" type="button">Add Slide</button>
-          <button id="addGitTypingSlide" type="button">Git Slide</button>
-          <button id="addChatTypingSlide" type="button">GPT Slide</button>
+          <button id="deleteSlide" class="danger" type="button" data-icon="trash-2">Delete</button>
+          <button id="addSlide" class="add-slide-button" type="button" data-icon="plus">Add Slide</button>
+          <button id="addGitTypingSlide" type="button" data-icon="folder-git-2">Git Slide</button>
+          <button id="addChatTypingSlide" type="button" data-icon="message-square">GPT Slide</button>
         </div>
       </aside>
       </main>
@@ -267,7 +267,7 @@
         </header>
         <progress id="exportProgress" max="100" value="0"></progress>
         <div id="exportModalStatus" class="export-modal-status">Preparing export...</div>
-        <button id="cancelExport" class="danger" type="button">Cancel</button>
+        <button id="cancelExport" class="danger" type="button" data-icon="x">Cancel</button>
       </section>
     </div>
 
@@ -278,10 +278,10 @@
             <h2 id="project-library-title">Projects</h2>
             <p>Auto-saved projects on this device.</p>
           </div>
-          <button id="closeProjectLibrary" type="button">Close</button>
+          <button id="closeProjectLibrary" type="button" data-icon="x">Close</button>
         </header>
         <div class="project-library-actions">
-          <button id="libraryNewProject" type="button">New Project</button>
+          <button id="libraryNewProject" type="button" data-icon="plus">New Project</button>
         </div>
         <div id="projectLibraryList" class="project-library-list"></div>
       </section>
@@ -294,7 +294,7 @@
             <h2 id="app-settings-title">Settings</h2>
             <p>The OpenAI API key is app-wide. Other settings are saved with this project.</p>
           </div>
-          <button id="closeAppSettings" type="button">Close</button>
+          <button id="closeAppSettings" type="button" data-icon="x">Close</button>
         </header>
         <label>
           <span>OpenAI API Key</span>
@@ -361,16 +361,17 @@
           <span>Export Folder</span>
           <span class="settings-path-row">
             <input id="settingsExportDir" type="text" readonly placeholder="Downloads" />
-            <button id="chooseExportDir" type="button">Choose</button>
-            <button id="resetExportDir" type="button">Reset</button>
+            <button id="chooseExportDir" type="button" data-icon="folder-open">Choose</button>
+            <button id="resetExportDir" type="button" data-icon="rotate-ccw">Reset</button>
           </span>
         </label>
         <div class="app-settings-actions">
-          <button id="saveAppSettings" type="button">Save</button>
+          <button id="saveAppSettings" type="button" data-icon="save">Save</button>
         </div>
       </section>
     </div>
 
-    <script src="./app.js?v=20260519-settings-canvas" defer></script>
+    <script src="./vendor/lucide.min.js" defer></script>
+    <script src="./app.js?v=20260519-icons" defer></script>
   </body>
 </html>

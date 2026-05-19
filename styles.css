@@ -44,6 +44,20 @@ button {
   cursor: pointer;
 }
 
+button.has-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.button-icon {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  stroke-width: 2.2;
+}
+
 button:hover {
   border-color: #9da7b8;
   background: #f2f5f9;
@@ -62,7 +76,7 @@ button.danger {
 
 .top-menu {
   display: grid;
-  grid-template-columns: 330px minmax(0, auto) minmax(0, 1fr);
+  grid-template-columns: 300px minmax(0, auto) minmax(0, 1fr);
   align-items: center;
   gap: 12px;
   overflow: hidden;
@@ -88,10 +102,15 @@ button.danger {
 .top-actions button {
   height: 28px;
   border-radius: 5px;
-  padding: 0 10px;
+  padding: 0 8px;
   font-size: 12px;
   font-weight: 700;
   white-space: nowrap;
+}
+
+.top-actions .button-icon {
+  width: 13px;
+  height: 13px;
 }
 
 .menu-divider {
@@ -388,7 +407,7 @@ button.danger {
 
 .project-item-actions {
   display: grid;
-  grid-template-columns: repeat(3, 76px);
+  grid-template-columns: repeat(3, 92px);
   gap: 6px;
 }
 
@@ -456,10 +475,19 @@ button.danger {
 .add-slide-button {
   width: 100%;
   height: 34px;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 800;
-  padding: 0 8px;
+  padding: 0 5px;
   white-space: nowrap;
+}
+
+.slide-footer-actions button.has-icon {
+  gap: 4px;
+}
+
+.slide-footer-actions .button-icon {
+  width: 13px;
+  height: 13px;
 }
 
 .slide-list {
@@ -564,7 +592,7 @@ button.danger {
 }
 
 .project-name-input {
-  width: 190px;
+  width: 160px;
   height: 28px;
   border: 1px solid transparent;
   border-radius: 5px;

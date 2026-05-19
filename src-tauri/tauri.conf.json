@@ -5,8 +5,8 @@
   "identifier": "com.seungjae.simpleslide",
   "build": {
     "frontendDist": "../web-dist",
-    "beforeDevCommand": "rm -rf web-dist && mkdir web-dist && cp index.html styles.css app.js web-dist/",
-    "beforeBuildCommand": "rm -rf web-dist && mkdir web-dist && cp index.html styles.css app.js web-dist/"
+    "beforeDevCommand": "rm -rf web-dist && mkdir -p web-dist/vendor && cp index.html styles.css app.js web-dist/ && cp node_modules/lucide/dist/umd/lucide.min.js web-dist/vendor/",
+    "beforeBuildCommand": "rm -rf web-dist && mkdir -p web-dist/vendor && cp index.html styles.css app.js web-dist/ && cp node_modules/lucide/dist/umd/lucide.min.js web-dist/vendor/"
   },
   "app": {
     "withGlobalTauri": true,

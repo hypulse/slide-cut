@@ -304,6 +304,50 @@ function setStatus(message) {
   }
 }
 
+function toLucideIconKey(name) {
+  return String(name || "")
+    .split("-")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join("");
+}
+
+function hydrateButtonIcons(root = document) {
+  const lucideApi = window.lucide;
+  if (!lucideApi?.icons || !lucideApi?.createElement) {
+    return;
+  }
+
+  for (const button of root.querySelectorAll("button[data-icon]")) {
+    if (button.querySelector(".button-icon")) {
+      button.classList.add("has-icon");
+      continue;
+    }
+    const icon = lucideApi.icons[toLucideIconKey(button.dataset.icon)];
+    if (!icon) {
+      continue;
+    }
+    const svg = lucideApi.createElement(icon, {
+      class: "button-icon",
+      "aria-hidden": "true",
+      focusable: "false",
+    });
+    button.prepend(svg);
+    button.classList.add("has-icon");
+  }
+}
+
+function setButtonLabel(button, label) {
+  if (!button) {
+    return;
+  }
+  const icon = button.querySelector(".button-icon");
+  button.textContent = label;
+  if (icon) {
+    button.prepend(icon);
+  }
+}
+
 function getDefaultTextColorForCanvas(canvasValue) {
   return sanitizeColor(canvasValue, DEFAULT_CANVAS_COLOR).toLowerCase() === COLOR_PRESETS.dark.canvasColor
     ? COLOR_PRESETS.dark.textColor
@@ -632,7 +676,7 @@ function syncSelectedInputs() {
   duplicateSelected.disabled = !hasSelection;
   selectedTextColor.disabled = !hasTextSelection;
   editSelectedText.disabled = !hasTextSelection;
-  editSelectedText.textContent = activeTextEditObject === selectedObject ? "Done" : "Edit Text";
+  setButtonLabel(editSelectedText, activeTextEditObject === selectedObject ? "Done" : "Edit Text");
   deleteSelected.disabled = !hasSelection;
 
   if (!selectedObject) {
@@ -2912,17 +2956,20 @@ function renderNativeProjectList() {
 
     const openButton = document.createElement("button");
     openButton.type = "button";
+    openButton.dataset.icon = "folder-open";
     openButton.textContent = "Open";
     openButton.addEventListener("click", () => openNativeProject(project.id));
 
     const copyButton = document.createElement("button");
     copyButton.type = "button";
+    copyButton.dataset.icon = "copy";
     copyButton.textContent = "Duplicate";
     copyButton.addEventListener("click", () => duplicateNativeProject(project.id));
 
     const deleteButton = document.createElement("button");
     deleteButton.type = "button";
     deleteButton.className = "danger";
+    deleteButton.dataset.icon = "trash-2";
     deleteButton.textContent = "Delete";
     deleteButton.addEventListener("click", () => deleteNativeProject(project.id));
 
@@ -2930,6 +2977,7 @@ function renderNativeProjectList() {
     item.append(thumb, details, actions);
     projectLibraryList.append(item);
   }
+  hydrateButtonIcons(projectLibraryList);
 }
 
 async function showProjectLibrary() {
@@ -3075,8 +3123,8 @@ async function initializeNativeMode() {
   }
 
   document.body.classList.add("is-native-app");
-  saveProject.textContent = "Export Project";
-  openProject.textContent = "Import Project";
+  setButtonLabel(saveProject, "Export Project");
+  setButtonLabel(openProject, "Import Project");
   await refreshNativeProjectList();
   if (nativeProjects.length === 0) {
     await createNewNativeProject({ silent: true });
@@ -4399,6 +4447,8 @@ async function initializeApp() {
   } catch (error) {
     setStatus(error?.message || "프로젝트 목록을 초기화하지 못했습니다.");
   }
+
+  hydrateButtonIcons();
 }
 
 initializeApp();

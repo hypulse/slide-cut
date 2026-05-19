@@ -12,5 +12,8 @@
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.11.2"
+  },
+  "dependencies": {
+    "lucide": "^1.16.0"
   }
 }
