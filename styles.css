@@ -659,7 +659,7 @@ button.danger {
   order: 5;
 }
 
-.toolbar section[aria-labelledby="dynamic-slide-title"] {
+.toolbar #dynamicSlidePanel {
   order: 6;
 }
 
