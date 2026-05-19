@@ -281,8 +281,17 @@ button.danger {
 }
 
 .app-settings-panel {
-  grid-template-rows: auto auto auto auto auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   width: min(560px, 100%);
+}
+
+.app-settings-fields {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 2px;
 }
 
 .project-library-header,
@@ -319,6 +328,11 @@ button.danger {
 .app-settings-actions {
   display: flex;
   justify-content: flex-end;
+}
+
+.app-settings-actions {
+  border-top: 1px solid #e4e8ef;
+  padding-top: 12px;
 }
 
 .settings-path-label {

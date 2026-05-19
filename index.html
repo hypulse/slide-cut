@@ -296,69 +296,71 @@
           </div>
           <button id="closeAppSettings" type="button" data-icon="x">Close</button>
         </header>
-        <label>
-          <span>OpenAI API Key</span>
-          <input id="settingsOpenAiApiKey" type="password" autocomplete="off" placeholder="sk-..." />
-        </label>
-        <label>
-          <span>MiniMax API Key</span>
-          <input id="settingsMiniMaxApiKey" type="password" autocomplete="off" placeholder="MiniMax API key" />
-        </label>
-        <label>
-          <span>Canvas Width</span>
-          <input id="settingsCanvasWidth" type="number" min="80" max="4096" step="10" value="1280" />
-        </label>
-        <label>
-          <span>Canvas Height</span>
-          <input id="settingsCanvasHeight" type="number" min="80" max="4096" step="10" value="720" />
-        </label>
-        <label>
-          <span>Canvas Color</span>
-          <input id="settingsCanvasColor" type="color" value="#ffffff" />
-        </label>
-        <label>
-          <span>Canvas Theme</span>
-          <div id="settingsColorPresets" class="color-preset-buttons" role="group" aria-label="캔버스 색상 조합">
-            <button type="button" data-color-preset="light" class="is-active">White</button>
-            <button type="button" data-color-preset="dark">Black</button>
-          </div>
-        </label>
-        <label>
-          <span>Speech Provider</span>
-          <select id="settingsTtsProvider">
-            <option value="openai">OpenAI</option>
-            <option value="minimax">MiniMax</option>
-          </select>
-        </label>
-        <label>
-          <span>Speech Model</span>
-          <select id="settingsTtsModel"></select>
-        </label>
-        <label>
-          <span>Voice</span>
-          <input id="settingsTtsVoice" type="text" list="ttsVoiceSuggestions" autocomplete="off" />
-          <datalist id="ttsVoiceSuggestions"></datalist>
-        </label>
-        <label>
-          <span>Speech Speed</span>
-          <input id="settingsTtsSpeed" type="number" min="0.25" max="4" step="0.05" value="1" />
-        </label>
-        <label>
-          <span>Voice Instructions</span>
-          <input id="settingsTtsInstructions" type="text" placeholder="Tone, pacing, and delivery style" />
-        </label>
-        <label>
-          <span>Subtitles</span>
-          <input id="settingsSubtitleEnabled" type="checkbox" checked />
-        </label>
-        <label class="settings-path-label">
-          <span>Export Folder</span>
-          <span class="settings-path-row">
-            <input id="settingsExportDir" type="text" readonly placeholder="Downloads" />
-            <button id="chooseExportDir" type="button" data-icon="folder-open">Choose</button>
-            <button id="resetExportDir" type="button" data-icon="rotate-ccw">Reset</button>
-          </span>
-        </label>
+        <div class="app-settings-fields">
+          <label>
+            <span>OpenAI API Key</span>
+            <input id="settingsOpenAiApiKey" type="password" autocomplete="off" placeholder="sk-..." />
+          </label>
+          <label>
+            <span>MiniMax API Key</span>
+            <input id="settingsMiniMaxApiKey" type="password" autocomplete="off" placeholder="MiniMax API key" />
+          </label>
+          <label>
+            <span>Canvas Width</span>
+            <input id="settingsCanvasWidth" type="number" min="80" max="4096" step="10" value="1280" />
+          </label>
+          <label>
+            <span>Canvas Height</span>
+            <input id="settingsCanvasHeight" type="number" min="80" max="4096" step="10" value="720" />
+          </label>
+          <label>
+            <span>Canvas Color</span>
+            <input id="settingsCanvasColor" type="color" value="#ffffff" />
+          </label>
+          <label>
+            <span>Canvas Theme</span>
+            <div id="settingsColorPresets" class="color-preset-buttons" role="group" aria-label="캔버스 색상 조합">
+              <button type="button" data-color-preset="light" class="is-active">White</button>
+              <button type="button" data-color-preset="dark">Black</button>
+            </div>
+          </label>
+          <label>
+            <span>Speech Provider</span>
+            <select id="settingsTtsProvider">
+              <option value="openai">OpenAI</option>
+              <option value="minimax">MiniMax</option>
+            </select>
+          </label>
+          <label>
+            <span>Speech Model</span>
+            <select id="settingsTtsModel"></select>
+          </label>
+          <label>
+            <span>Voice</span>
+            <input id="settingsTtsVoice" type="text" list="ttsVoiceSuggestions" autocomplete="off" />
+            <datalist id="ttsVoiceSuggestions"></datalist>
+          </label>
+          <label>
+            <span>Speech Speed</span>
+            <input id="settingsTtsSpeed" type="number" min="0.25" max="4" step="0.05" value="1" />
+          </label>
+          <label>
+            <span>Voice Instructions</span>
+            <input id="settingsTtsInstructions" type="text" placeholder="Tone, pacing, and delivery style" />
+          </label>
+          <label>
+            <span>Subtitles</span>
+            <input id="settingsSubtitleEnabled" type="checkbox" checked />
+          </label>
+          <label class="settings-path-label">
+            <span>Export Folder</span>
+            <span class="settings-path-row">
+              <input id="settingsExportDir" type="text" readonly placeholder="Downloads" />
+              <button id="chooseExportDir" type="button" data-icon="folder-open">Choose</button>
+              <button id="resetExportDir" type="button" data-icon="rotate-ccw">Reset</button>
+            </span>
+          </label>
+        </div>
         <div class="app-settings-actions">
           <button id="saveAppSettings" type="button" data-icon="save">Save</button>
         </div>
