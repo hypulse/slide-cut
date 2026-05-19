@@ -208,7 +208,7 @@ let historyStack = [];
 let historyIndex = -1;
 let isRestoringHistory = false;
 let statusTimer = null;
-let defaultTextColor = "#111827";
+let defaultTextColor = "#000000";
 let activeProjectId = null;
 let activeProjectName = "Untitled";
 let nativeProjects = [];
@@ -249,15 +249,15 @@ const TEXT_SIZE_PRESETS = {
   h1: { fontSize: 56, lineHeight: 70 },
 };
 const TEXT_ALIGNMENTS = new Set(["left", "center", "right"]);
-const DEFAULT_TEXT_COLOR = "#111827";
+const DEFAULT_TEXT_COLOR = "#000000";
 const DEFAULT_CANVAS_WIDTH = 1280;
 const DEFAULT_CANVAS_HEIGHT = 720;
 const DEFAULT_CANVAS_COLOR = "#ffffff";
 const COLOR_PRESETS = {
-  light: { canvasColor: "#ffffff", textColor: "#111827" },
+  light: { canvasColor: "#ffffff", textColor: "#000000" },
   dark: { canvasColor: "#000000", textColor: "#ffffff" },
 };
-const DEFAULT_STROKE_COLOR = "#111827";
+const DEFAULT_STROKE_COLOR = "#000000";
 const DEFAULT_STROKE_WIDTH = 4;
 const SHAPE_KINDS = new Set(["line", "arrow", "pen"]);
 const SHAPE_DRAW_PADDING = 14;
@@ -2313,7 +2313,7 @@ function renderSlidePreview(slide, previewCanvas) {
   context.fillStyle = slide.color;
   context.fillRect(0, 0, slide.width, slide.height);
   if (normalizeSlideVideo(slide.video)) {
-    context.fillStyle = "#111827";
+    context.fillStyle = "#000000";
     context.fillRect(0, 0, slide.width, slide.height);
     context.fillStyle = "rgba(255, 255, 255, 0.82)";
     context.font = "700 42px Pretendard, sans-serif";
