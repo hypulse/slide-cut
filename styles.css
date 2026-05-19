@@ -1141,7 +1141,7 @@ input[type="checkbox"] {
   position: absolute;
   left: 18px;
   display: flex;
-  gap: 10px;
+  gap: 16px;
 }
 
 .dynamic-preview-code-light {

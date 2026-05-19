@@ -2112,7 +2112,7 @@ function drawGitTypingSlide(context, slide, width, height, timeSeconds) {
   const lightY = windowY + Math.round(titleBarHeight / 2);
   const lightRadius = clamp(Math.round(titleBarHeight * 0.16), 7, 10);
   const lightStartX = windowX + Math.round(titleBarHeight * 0.58);
-  const lightGap = Math.round(lightRadius * 2.35);
+  const lightGap = Math.round(lightRadius * 3.2);
   [
     ["#ff5f57", lightStartX],
     ["#febc2e", lightStartX + lightGap],
