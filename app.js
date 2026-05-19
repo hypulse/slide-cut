@@ -1635,10 +1635,10 @@ function trimSubtitleLines(lines, maxLines) {
   return output;
 }
 
-function drawSubtitleBox(context, text, width, height) {
+function getSubtitleLayout(context, text, width, height) {
   const cleanText = String(text || "").trim();
   if (!cleanText) {
-    return;
+    return null;
   }
 
   const fontSize = clamp(Math.round(width * 0.032), 22, 34);
@@ -1652,11 +1652,30 @@ function drawSubtitleBox(context, text, width, height) {
   context.font = `700 ${fontSize}px Pretendard, sans-serif`;
   const lines = trimSubtitleLines(wrapTextLines(context, cleanText, maxTextWidth + TEXT_PADDING_X * 2), SUBTITLE_MAX_LINES);
   const measuredWidth = Math.min(maxTextWidth, Math.max(...lines.map((line) => context.measureText(line).width)));
+  context.restore();
   const boxWidth = Math.min(width - 48, Math.ceil(measuredWidth + paddingX * 2));
   const boxHeight = Math.ceil(lines.length * lineHeight + paddingY * 2);
   const boxX = (width - boxWidth) / 2;
   const boxY = height - bottomOffset - boxHeight;
+  return { fontSize, lineHeight, paddingY, lines, boxWidth, boxHeight, boxX, boxY, bottomOffset };
+}
 
+function getSubtitleReservedHeight(context, text, width, height) {
+  const layout = getSubtitleLayout(context, text, width, height);
+  if (!layout) {
+    return 0;
+  }
+  return Math.ceil(layout.boxHeight + layout.bottomOffset + Math.round(height * 0.03));
+}
+
+function drawSubtitleBox(context, text, width, height) {
+  const layout = getSubtitleLayout(context, text, width, height);
+  if (!layout) {
+    return;
+  }
+
+  const { fontSize, lineHeight, paddingY, lines, boxWidth, boxHeight, boxX, boxY } = layout;
+  context.save();
   context.fillStyle = "rgba(0, 0, 0, 0.8)";
   fillRoundedRect(context, boxX, boxY, boxWidth, boxHeight, 6);
   context.fillStyle = "#ffffff";
@@ -1714,10 +1733,7 @@ function getDynamicSlideDuration(slide) {
   if (kind === "chatTyping") {
     const data = getChatTypingData(slide);
     return clamp(
-      (data.question || "").length / data.typingSpeed +
-        CHAT_ANSWER_DELAY_SECONDS +
-        (data.answer || "").length / data.typingSpeed +
-        1.1,
+      CHAT_ANSWER_DELAY_SECONDS + (data.answer || "").length / data.typingSpeed + 1.1,
       4,
       DYNAMIC_MAX_DURATION
     );
@@ -1793,36 +1809,42 @@ function drawGitTypingSlide(context, slide, width, height, timeSeconds) {
 }
 
 function drawChatCopyIcon(context, x, y, size) {
-  const radius = Math.max(2, Math.round(size * 0.18));
-  const offset = Math.round(size * 0.22);
-  const box = Math.round(size * 0.58);
+  const radius = Math.max(2, Math.round(size * 0.16));
+  const offset = Math.round(size * 0.25);
+  const box = Math.round(size * 0.62);
+  const lineWidth = Math.max(2, Math.round(size * 0.12));
   context.save();
   context.strokeStyle = "#686868";
-  context.lineWidth = Math.max(1.8, size * 0.11);
-  strokeRoundedRect(context, x + offset, y, box, box, radius);
-  strokeRoundedRect(context, x, y + offset, box, box, radius);
+  context.lineWidth = lineWidth;
+  strokeRoundedRect(context, Math.round(x + offset), Math.round(y), box, box, radius);
+  strokeRoundedRect(context, Math.round(x), Math.round(y + offset), box, box, radius);
   context.restore();
 }
 
 function drawChatEditIcon(context, x, y, size) {
+  const lineWidth = Math.max(2, Math.round(size * 0.12));
   context.save();
+  context.translate(Math.round(x), Math.round(y));
   context.strokeStyle = "#686868";
   context.fillStyle = "#686868";
-  context.lineWidth = Math.max(1.8, size * 0.11);
+  context.lineWidth = lineWidth;
   context.lineCap = "round";
   context.lineJoin = "round";
+
   context.beginPath();
-  context.moveTo(x + size * 0.22, y + size * 0.78);
-  context.lineTo(x + size * 0.72, y + size * 0.28);
+  context.moveTo(size * 0.2, size * 0.78);
+  context.lineTo(size * 0.68, size * 0.3);
   context.stroke();
+
   context.beginPath();
-  context.moveTo(x + size * 0.62, y + size * 0.18);
-  context.lineTo(x + size * 0.82, y + size * 0.38);
+  context.moveTo(size * 0.6, size * 0.18);
+  context.lineTo(size * 0.82, size * 0.4);
   context.stroke();
+
   context.beginPath();
-  context.moveTo(x + size * 0.16, y + size * 0.84);
-  context.lineTo(x + size * 0.3, y + size * 0.78);
-  context.lineTo(x + size * 0.22, y + size * 0.7);
+  context.moveTo(size * 0.14, size * 0.86);
+  context.lineTo(size * 0.31, size * 0.8);
+  context.lineTo(size * 0.21, size * 0.69);
   context.closePath();
   context.fill();
   context.restore();
@@ -1835,20 +1857,20 @@ function drawChatQuestionActions(context, rightX, y, iconSize, gap) {
   drawChatEditIcon(context, editX, y, iconSize);
 }
 
-function drawChatTypingSlide(context, slide, width, height, timeSeconds) {
+function drawChatTypingSlide(context, slide, width, height, timeSeconds, options = {}) {
   const data = getChatTypingData(slide);
   const speed = data.typingSpeed;
   const questionSource = data.question || "";
   const answerSource = data.answer || "";
-  const qDuration = questionSource.length / speed;
-  const answerStart = qDuration + CHAT_ANSWER_DELAY_SECONDS;
-  const visibleQuestionCount = clamp(Math.floor(timeSeconds * speed), 0, questionSource.length);
+  const answerStart = CHAT_ANSWER_DELAY_SECONDS;
   const visibleAnswerCount = clamp(Math.floor((timeSeconds - answerStart) * speed), 0, answerSource.length);
-  const questionText = questionSource.slice(0, visibleQuestionCount);
+  const questionText = questionSource;
   const answerText = timeSeconds >= answerStart ? answerSource.slice(0, visibleAnswerCount) : "";
   const marginX = Math.round(width * 0.036);
   const topMargin = Math.round(height * 0.022);
   const bottomMargin = Math.round(height * 0.045);
+  const shouldReserveSubtitle = Boolean(options.subtitles || options.reserveSubtitles);
+  const subtitleReserve = shouldReserveSubtitle ? getSubtitleReservedHeight(context, getSubtitleTextForRender(slide, options), width, height) : 0;
   const questionSize = clamp(Math.round(width * 0.0175), 16, 23);
   const answerSize = clamp(Math.round(width * 0.017), 15, 22);
   const questionLineHeight = Math.round(questionSize * 1.36);
@@ -1871,7 +1893,7 @@ function drawChatTypingSlide(context, slide, width, height, timeSeconds) {
   const questionPaddingX = Math.round(questionSize * 1.08);
   const questionPaddingY = Math.round(questionSize * 0.62);
   const questionHeight = questionLines.length ? questionLines.length * questionLineHeight + questionPaddingY * 2 : 0;
-  const shouldShowQuestionActions = questionLines.length && visibleQuestionCount >= questionSource.length;
+  const shouldShowQuestionActions = questionLines.length > 0;
   const questionActionsHeight = shouldShowQuestionActions ? questionActionTopGap + questionActionIconSize : 0;
   const questionBlockHeight = questionHeight + questionActionsHeight;
 
@@ -1880,12 +1902,13 @@ function drawChatTypingSlide(context, slide, width, height, timeSeconds) {
   const answerHeight = answerLines.length * answerLineHeight;
   const totalContentHeight =
     questionBlockHeight + (questionLines.length && answerLines.length ? messageGap : 0) + answerHeight;
-  const scrollOffset = Math.max(0, totalContentHeight - viewportHeight);
+  const safeViewportHeight = Math.max(answerLineHeight * 2, viewportHeight - subtitleReserve);
+  const scrollOffset = Math.max(0, totalContentHeight - safeViewportHeight);
   let contentY = viewportY - scrollOffset;
 
   context.save();
   context.beginPath();
-  context.rect(0, viewportY, width, viewportHeight);
+  context.rect(0, viewportY, width, safeViewportHeight);
   context.clip();
 
   if (questionLines.length) {
@@ -1919,7 +1942,7 @@ function drawChatTypingSlide(context, slide, width, height, timeSeconds) {
     context.textAlign = "left";
     for (const [index, line] of answerLines.entries()) {
       const lineY = contentY + index * answerLineHeight;
-      if (lineY + answerLineHeight < viewportY || lineY > viewportY + viewportHeight) {
+      if (lineY + answerLineHeight < viewportY || lineY > viewportY + safeViewportHeight) {
         continue;
       }
       context.fillText(line, marginX, lineY);
@@ -1933,7 +1956,7 @@ function drawDynamicSlide(context, slide, width, height, timeSeconds, options = 
   if (sanitizeSlideKind(slide?.kind) === "gitTyping") {
     drawGitTypingSlide(context, slide, width, height, timeSeconds);
   } else {
-    drawChatTypingSlide(context, slide, width, height, timeSeconds);
+    drawChatTypingSlide(context, slide, width, height, timeSeconds, options);
   }
   if (options.subtitles) {
     drawSubtitleBox(context, getSubtitleTextForRender(slide, options), width, height);
@@ -1978,7 +2001,11 @@ async function renderDynamicSlideToDataUrl(slide, timeSeconds, options = {}) {
   exportCanvas.width = Math.max(1, roundedCanvasSize(slide.width));
   exportCanvas.height = Math.max(1, roundedCanvasSize(slide.height));
   const context = exportCanvas.getContext("2d");
-  drawDynamicSlide(context, slide, exportCanvas.width, exportCanvas.height, timeSeconds, { ...options, subtitles: false });
+  drawDynamicSlide(context, slide, exportCanvas.width, exportCanvas.height, timeSeconds, {
+    ...options,
+    subtitles: false,
+    reserveSubtitles: options.subtitles,
+  });
   await drawSlideObjectsForExport(context, slide.objects || [], options.imageCache);
   if (options.subtitles) {
     drawSubtitleBox(context, getSubtitleTextForRender(slide, options), exportCanvas.width, exportCanvas.height);
