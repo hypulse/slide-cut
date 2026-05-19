@@ -1592,6 +1592,52 @@ fn create_silence_audio(
     run_command(command, "무음 오디오 생성", export_id)
 }
 
+fn trim_tts_silence(
+    ffmpeg: &Path,
+    input_path: &Path,
+    output_path: &Path,
+    export_id: &str,
+) -> Result<PathBuf, String> {
+    let mut command = Command::new(ffmpeg);
+    command
+        .arg("-y")
+        .arg("-i")
+        .arg(input_path)
+        .arg("-af")
+        .arg("aresample=44100,aformat=channel_layouts=stereo,silenceremove=start_periods=1:start_duration=0.03:start_threshold=-50dB:stop_periods=1:stop_duration=0.08:stop_threshold=-50dB")
+        .args([
+            "-c:a",
+            "aac",
+            "-b:a",
+            "192k",
+            "-ar",
+            EXPORT_AUDIO_SAMPLE_RATE,
+            "-ac",
+            EXPORT_AUDIO_CHANNELS,
+        ])
+        .arg(output_path);
+
+    match run_command(command, "TTS 앞뒤 무음 제거", export_id) {
+        Ok(()) => {
+            let output_size = fs::metadata(output_path)
+                .map(|metadata| metadata.len())
+                .unwrap_or(0);
+            if output_size > 1024 {
+                Ok(output_path.to_path_buf())
+            } else {
+                Ok(input_path.to_path_buf())
+            }
+        }
+        Err(error) => {
+            if error.contains("취소") {
+                Err(error)
+            } else {
+                Ok(input_path.to_path_buf())
+            }
+        }
+    }
+}
+
 fn mix_start_sound(
     ffmpeg: &Path,
     base_audio_path: &Path,
@@ -1977,7 +2023,17 @@ fn export_video(app: AppHandle, payload: VideoExportPayload) -> Result<VideoExpo
                     &export_id,
                 )?)
             };
-            let base_audio_duration = if let Some(path) = tts_audio_path.as_ref() {
+            let trimmed_tts_audio_path = if let Some(path) = tts_audio_path.as_ref() {
+                Some(trim_tts_silence(
+                    &ffmpeg,
+                    path,
+                    &work_dir.join(format!("tts-trimmed-{index:04}.m4a")),
+                    &export_id,
+                )?)
+            } else {
+                None
+            };
+            let base_audio_duration = if let Some(path) = trimmed_tts_audio_path.as_ref() {
                 probe_audio_duration(&ffprobe, path, fallback_duration)?
             } else {
                 fallback_duration
@@ -1987,7 +2043,7 @@ fn export_video(app: AppHandle, payload: VideoExportPayload) -> Result<VideoExpo
             } else {
                 base_audio_duration.max(animation_duration.unwrap_or(0.0))
             };
-            let base_audio_path = if let Some(path) = tts_audio_path {
+            let base_audio_path = if let Some(path) = trimmed_tts_audio_path {
                 path
             } else {
                 let path = work_dir.join(format!("silence-{index:04}.m4a"));
