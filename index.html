@@ -42,30 +42,6 @@
       <main class="app-shell">
         <aside class="toolbar" aria-label="도구">
 
-        <section class="panel" aria-labelledby="canvas-settings-title">
-          <h2 id="canvas-settings-title">Canvas</h2>
-          <label>
-            <span>Width</span>
-            <input id="canvasWidth" type="number" min="80" max="4096" step="10" value="1280" />
-          </label>
-          <label>
-            <span>Height</span>
-            <input id="canvasHeight" type="number" min="80" max="4096" step="10" value="720" />
-          </label>
-          <label>
-            <span>Color</span>
-            <input id="canvasColor" type="color" value="#ffffff" />
-          </label>
-          <label>
-            <span>Theme</span>
-            <div id="colorPresets" class="color-preset-buttons" role="group" aria-label="색상 조합">
-              <button type="button" data-color-preset="light" class="is-active">White</button>
-              <button type="button" data-color-preset="dark">Black</button>
-            </div>
-          </label>
-          <button id="applyCanvas" type="button">Apply</button>
-        </section>
-
         <section class="panel" aria-labelledby="draw-title">
           <h2 id="draw-title">Draw</h2>
           <div id="drawTools" class="draw-tool-buttons" role="group" aria-label="그리기 도구">
@@ -316,13 +292,32 @@
         <header class="app-settings-header">
           <div>
             <h2 id="app-settings-title">Settings</h2>
-            <p>Simple Slide 앱 전역 설정</p>
+            <p>OpenAI Key는 앱 전역, 나머지는 현재 프로젝트 설정</p>
           </div>
           <button id="closeAppSettings" type="button">Close</button>
         </header>
         <label>
           <span>OpenAI Key</span>
           <input id="settingsOpenAiApiKey" type="password" autocomplete="off" placeholder="sk-..." />
+        </label>
+        <label>
+          <span>Canvas Width</span>
+          <input id="settingsCanvasWidth" type="number" min="80" max="4096" step="10" value="1280" />
+        </label>
+        <label>
+          <span>Canvas Height</span>
+          <input id="settingsCanvasHeight" type="number" min="80" max="4096" step="10" value="720" />
+        </label>
+        <label>
+          <span>Canvas Color</span>
+          <input id="settingsCanvasColor" type="color" value="#ffffff" />
+        </label>
+        <label>
+          <span>Canvas Theme</span>
+          <div id="settingsColorPresets" class="color-preset-buttons" role="group" aria-label="캔버스 색상 조합">
+            <button type="button" data-color-preset="light" class="is-active">White</button>
+            <button type="button" data-color-preset="dark">Black</button>
+          </div>
         </label>
         <label>
           <span>TTS Preset</span>
@@ -383,6 +378,6 @@
       </section>
     </div>
 
-    <script src="./app.js?v=20260519-settings-tts" defer></script>
+    <script src="./app.js?v=20260519-settings-canvas" defer></script>
   </body>
 </html>

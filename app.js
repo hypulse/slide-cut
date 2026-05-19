@@ -102,10 +102,6 @@ const projectNameInput = document.querySelector("#projectNameInput");
 const projectLibraryButton = document.querySelector("#projectLibraryButton");
 const appSettingsButton = document.querySelector("#appSettingsButton");
 const nativeDivider = document.querySelector(".native-divider");
-const canvasWidth = document.querySelector("#canvasWidth");
-const canvasHeight = document.querySelector("#canvasHeight");
-const canvasColor = document.querySelector("#canvasColor");
-const applyCanvas = document.querySelector("#applyCanvas");
 const colorPresetButtons = [...document.querySelectorAll("[data-color-preset]")];
 const pasteImage = document.querySelector("#pasteImage");
 const addTextBox = document.querySelector("#addTextBox");
@@ -153,6 +149,9 @@ const appSettings = document.querySelector("#appSettings");
 const closeAppSettings = document.querySelector("#closeAppSettings");
 const saveAppSettingsButton = document.querySelector("#saveAppSettings");
 const settingsOpenAiApiKey = document.querySelector("#settingsOpenAiApiKey");
+const settingsCanvasWidth = document.querySelector("#settingsCanvasWidth");
+const settingsCanvasHeight = document.querySelector("#settingsCanvasHeight");
+const settingsCanvasColor = document.querySelector("#settingsCanvasColor");
 const settingsTtsPreset = document.querySelector("#settingsTtsPreset");
 const settingsTtsModel = document.querySelector("#settingsTtsModel");
 const settingsTtsVoice = document.querySelector("#settingsTtsVoice");
@@ -225,6 +224,12 @@ const textMeasureContext = textMeasureCanvas.getContext("2d");
 let canvasViewScale = 1;
 let appSettingsState = {
   openAiApiKey: "",
+};
+let defaultProjectExportDir = "";
+let projectSettingsState = {
+  canvasWidth: 1280,
+  canvasHeight: 720,
+  canvasColor: "#ffffff",
   ttsPreset: "animeCute",
   ttsModel: "gpt-4o-mini-tts",
   ttsVoice: "sage",
@@ -245,6 +250,9 @@ const TEXT_SIZE_PRESETS = {
 };
 const TEXT_ALIGNMENTS = new Set(["left", "center", "right"]);
 const DEFAULT_TEXT_COLOR = "#111827";
+const DEFAULT_CANVAS_WIDTH = 1280;
+const DEFAULT_CANVAS_HEIGHT = 720;
+const DEFAULT_CANVAS_COLOR = "#ffffff";
 const COLOR_PRESETS = {
   light: { canvasColor: "#ffffff", textColor: "#111827" },
   dark: { canvasColor: "#000000", textColor: "#ffffff" },
@@ -317,6 +325,12 @@ function normalizeTtsPresetKey(value) {
 
 function getTtsPreset(presetKey) {
   return TTS_PRESETS[normalizeTtsPresetKey(presetKey)];
+}
+
+function getDefaultTextColorForCanvas(canvasValue) {
+  return sanitizeColor(canvasValue, DEFAULT_CANVAS_COLOR).toLowerCase() === COLOR_PRESETS.dark.canvasColor
+    ? COLOR_PRESETS.dark.textColor
+    : DEFAULT_TEXT_COLOR;
 }
 
 function normalizeTtsModel(value, presetKey = DEFAULT_TTS_SETTINGS.preset) {
@@ -692,7 +706,7 @@ function setActiveColorPresetButton(presetKey) {
   }
 }
 
-function detectColorPreset(canvasValue = canvasColor.value, textValue = defaultTextColor) {
+function detectColorPreset(canvasValue = settingsCanvasColor.value, textValue = getDefaultTextColorForCanvas(canvasValue)) {
   const normalizedCanvas = sanitizeColor(canvasValue, "#ffffff").toLowerCase();
   const normalizedText = sanitizeColor(textValue, DEFAULT_TEXT_COLOR).toLowerCase();
   for (const [key, preset] of Object.entries(COLOR_PRESETS)) {
@@ -1888,9 +1902,9 @@ function createDefaultSlide() {
   return {
     id: `slide-${++slideSeed}`,
     kind: "canvas",
-    width: 1280,
-    height: 720,
-    color: "#ffffff",
+    width: projectSettingsState.canvasWidth,
+    height: projectSettingsState.canvasHeight,
+    color: projectSettingsState.canvasColor,
     notes: "",
     video: null,
     objects: [],
@@ -2097,11 +2111,21 @@ function syncDynamicSlidePanel() {
   renderDynamicSlidePreview(slide);
 }
 
+function applyCanvasFrame(width, height, color) {
+  const safeWidth = roundedCanvasSize(width || DEFAULT_CANVAS_WIDTH);
+  const safeHeight = roundedCanvasSize(height || DEFAULT_CANVAS_HEIGHT);
+  const safeColor = sanitizeColor(color, DEFAULT_CANVAS_COLOR);
+  canvas.style.width = `${safeWidth}px`;
+  canvas.style.height = `${safeHeight}px`;
+  canvas.style.backgroundColor = safeColor;
+  canvas.dataset.canvasColor = safeColor;
+}
+
 function getCanvasState() {
   return {
     width: roundedCanvasSize(canvas.style.width || canvas.offsetWidth),
     height: roundedCanvasSize(canvas.style.height || canvas.offsetHeight),
-    color: canvasColor.value || "#ffffff",
+    color: canvas.dataset.canvasColor || DEFAULT_CANVAS_COLOR,
   };
 }
 
@@ -2234,18 +2258,12 @@ function loadSlide(index, shouldSaveCurrent = true) {
 
   activeSlideIndex = index;
   clearCanvasObjects();
-  canvasWidth.value = slide.width;
-  canvasHeight.value = slide.height;
-  canvasColor.value = slide.color;
-  canvas.style.width = `${slide.width}px`;
-  canvas.style.height = `${slide.height}px`;
-  canvas.style.backgroundColor = slide.color;
+  applyCanvasFrame(slide.width, slide.height, slide.color);
   slideNotes.value = typeof slide.notes === "string" ? slide.notes : "";
   slides[activeSlideIndex].video = normalizeSlideVideo(slide.video);
   updateSlideVideoView();
   syncDynamicSlidePanel();
-  defaultTextColor = slide.color?.toLowerCase?.() === COLOR_PRESETS.dark.canvasColor ? COLOR_PRESETS.dark.textColor : DEFAULT_TEXT_COLOR;
-  syncColorPresetButtons();
+  defaultTextColor = getDefaultTextColorForCanvas(slide.color);
 
   for (const object of slide.objects) {
     if (object.type === "image") {
@@ -2662,6 +2680,7 @@ function createProjectData() {
     format: PROJECT_FORMAT,
     version: PROJECT_VERSION,
     savedAt: new Date().toISOString(),
+    settings: cloneProjectValue(projectSettingsState),
     activeSlideIndex,
     slides,
   };
@@ -2912,6 +2931,7 @@ function hideProjectLibrary() {
 }
 
 function resetToBlankProject() {
+  projectSettingsState = normalizeProjectSettings();
   slideSeed = 0;
   objectSeed = 0;
   activePointer = null;
@@ -2926,6 +2946,7 @@ function resetToBlankProject() {
 }
 
 function applyProjectState(project) {
+  projectSettingsState = normalizeProjectSettings(project.settings);
   slides = project.slides;
   activeSlideIndex = project.activeSlideIndex;
   slideSeed = slides.length;
@@ -3291,6 +3312,7 @@ function normalizeProjectData(data) {
   }
 
   return {
+    settings: normalizeProjectSettings(data.settings),
     activeSlideIndex: clamp(numberOr(data.activeSlideIndex, 0), 0, normalizedSlides.length - 1),
     slides: normalizedSlides,
   };
@@ -3465,37 +3487,84 @@ function applyTtsPreset(presetKey, options = {}) {
 function getTtsSettings() {
   return {
     apiKey: appSettingsState.openAiApiKey,
-    preset: appSettingsState.ttsPreset,
-    model: appSettingsState.ttsModel,
-    voice: appSettingsState.ttsVoice,
-    speed: appSettingsState.ttsSpeed,
-    instructions: appSettingsState.ttsInstructions,
+    preset: projectSettingsState.ttsPreset,
+    model: projectSettingsState.ttsModel,
+    voice: projectSettingsState.ttsVoice,
+    speed: projectSettingsState.ttsSpeed,
+    instructions: projectSettingsState.ttsInstructions,
   };
 }
 
 function normalizeAppSettings(value = {}) {
-  const presetKey = normalizeTtsPresetKey(value.ttsPreset);
   return {
     openAiApiKey: typeof value.openAiApiKey === "string" ? value.openAiApiKey.trim() : "",
+  };
+}
+
+function normalizeProjectSettings(value = {}) {
+  const presetKey = normalizeTtsPresetKey(value.ttsPreset);
+  return {
+    canvasWidth: sanitizeNumber(value.canvasWidth, DEFAULT_CANVAS_WIDTH, 80, 4096),
+    canvasHeight: sanitizeNumber(value.canvasHeight, DEFAULT_CANVAS_HEIGHT, 80, 4096),
+    canvasColor: sanitizeColor(value.canvasColor, DEFAULT_CANVAS_COLOR),
     ttsPreset: presetKey,
     ttsModel: normalizeTtsModel(value.ttsModel, presetKey),
     ttsVoice: normalizeTtsVoice(value.ttsVoice, presetKey),
     ttsSpeed: normalizeTtsSpeed(value.ttsSpeed, presetKey),
     ttsInstructions: normalizeTtsInstructions(value.ttsInstructions, presetKey),
     subtitleEnabled: normalizeSubtitleEnabled(value.subtitleEnabled),
-    exportDir: typeof value.exportDir === "string" ? value.exportDir.trim() : "",
+    exportDir: typeof value.exportDir === "string" && value.exportDir.trim() ? value.exportDir.trim() : defaultProjectExportDir,
   };
 }
 
-function syncAppSettingsControls() {
+function syncSettingsControls() {
   settingsOpenAiApiKey.value = appSettingsState.openAiApiKey;
-  settingsTtsPreset.value = appSettingsState.ttsPreset;
-  settingsTtsModel.value = appSettingsState.ttsModel;
-  settingsTtsVoice.value = appSettingsState.ttsVoice;
-  settingsTtsSpeed.value = String(appSettingsState.ttsSpeed);
-  settingsTtsInstructions.value = appSettingsState.ttsInstructions;
-  settingsSubtitleEnabled.checked = appSettingsState.subtitleEnabled;
-  settingsExportDir.value = appSettingsState.exportDir;
+  settingsCanvasWidth.value = String(projectSettingsState.canvasWidth);
+  settingsCanvasHeight.value = String(projectSettingsState.canvasHeight);
+  settingsCanvasColor.value = projectSettingsState.canvasColor;
+  settingsTtsPreset.value = projectSettingsState.ttsPreset;
+  settingsTtsModel.value = projectSettingsState.ttsModel;
+  settingsTtsVoice.value = projectSettingsState.ttsVoice;
+  settingsTtsSpeed.value = String(projectSettingsState.ttsSpeed);
+  settingsTtsInstructions.value = projectSettingsState.ttsInstructions;
+  settingsSubtitleEnabled.checked = projectSettingsState.subtitleEnabled;
+  settingsExportDir.value = projectSettingsState.exportDir;
+  syncColorPresetButtons();
+}
+
+function getProjectSettingsFromControls() {
+  return normalizeProjectSettings({
+    canvasWidth: settingsCanvasWidth.value,
+    canvasHeight: settingsCanvasHeight.value,
+    canvasColor: settingsCanvasColor.value,
+    ttsPreset: settingsTtsPreset.value,
+    ttsModel: settingsTtsModel.value,
+    ttsVoice: settingsTtsVoice.value,
+    ttsSpeed: settingsTtsSpeed.value,
+    ttsInstructions: settingsTtsInstructions.value,
+    subtitleEnabled: settingsSubtitleEnabled.checked,
+    exportDir: settingsExportDir.value,
+  });
+}
+
+function applyProjectCanvasSettingsToSlides(options = {}) {
+  if (slides.length === 0) {
+    return;
+  }
+
+  serializeCurrentSlide();
+  for (const slide of slides) {
+    slide.width = projectSettingsState.canvasWidth;
+    slide.height = projectSettingsState.canvasHeight;
+    slide.color = projectSettingsState.canvasColor;
+  }
+  loadSlide(activeSlideIndex, false);
+  fitCanvasToWorkspace();
+  if (options.record) {
+    recordHistory();
+  } else {
+    scheduleNativeProjectSave();
+  }
 }
 
 async function loadAppSettings() {
@@ -3511,38 +3580,37 @@ async function loadAppSettings() {
   }
 
   appSettingsState = normalizeAppSettings(settings);
-  syncAppSettingsControls();
+  if (nativeApi?.getDefaultExportDir) {
+    defaultProjectExportDir = await nativeApi.getDefaultExportDir();
+  }
+  projectSettingsState = normalizeProjectSettings(projectSettingsState);
+  syncSettingsControls();
 }
 
-async function saveGlobalAppSettings() {
-  const nextSettings = normalizeAppSettings({
-    openAiApiKey: settingsOpenAiApiKey.value,
-    ttsPreset: settingsTtsPreset.value,
-    ttsModel: settingsTtsModel.value,
-    ttsVoice: settingsTtsVoice.value,
-    ttsSpeed: settingsTtsSpeed.value,
-    ttsInstructions: settingsTtsInstructions.value,
-    subtitleEnabled: settingsSubtitleEnabled.checked,
-    exportDir: settingsExportDir.value,
-  });
+async function saveSettings() {
+  const nextAppSettings = normalizeAppSettings({ openAiApiKey: settingsOpenAiApiKey.value });
+  const nextProjectSettings = getProjectSettingsFromControls();
 
   try {
     if (nativeApi?.saveAppSettings) {
-      appSettingsState = normalizeAppSettings(await nativeApi.saveAppSettings(nextSettings));
+      appSettingsState = normalizeAppSettings(await nativeApi.saveAppSettings(nextAppSettings));
     } else {
-      localStorage.setItem("simpleSlideAppSettings", JSON.stringify(nextSettings));
-      appSettingsState = nextSettings;
+      localStorage.setItem("simpleSlideAppSettings", JSON.stringify(nextAppSettings));
+      appSettingsState = nextAppSettings;
     }
-    syncAppSettingsControls();
-    setStatus("앱 전역 설정을 저장했습니다.");
+    projectSettingsState = nextProjectSettings;
+    applyProjectCanvasSettingsToSlides({ record: true });
+    scheduleNativeProjectSave();
+    syncSettingsControls();
+    setStatus("설정을 저장했습니다. OpenAI Key는 앱 전역, 나머지는 현재 프로젝트에 저장됩니다.");
     hideAppSettings();
   } catch (error) {
-    setStatus(error?.message || "앱 설정 저장에 실패했습니다.");
+    setStatus(error?.message || "설정 저장에 실패했습니다.");
   }
 }
 
 function showAppSettings() {
-  syncAppSettingsControls();
+  syncSettingsControls();
   appSettings.hidden = false;
 }
 
@@ -3550,7 +3618,7 @@ function hideAppSettings() {
   appSettings.hidden = true;
 }
 
-async function chooseGlobalExportDirectory() {
+async function chooseProjectExportDirectory() {
   if (!nativeApi?.selectDirectory) {
     setStatus("Export 폴더 지정은 Tauri 앱에서 사용할 수 있습니다.");
     return;
@@ -3566,13 +3634,9 @@ async function chooseGlobalExportDirectory() {
   }
 }
 
-async function resetGlobalExportDirectory() {
+async function resetProjectExportDirectory() {
   try {
-    if (nativeApi?.getDefaultExportDir) {
-      settingsExportDir.value = await nativeApi.getDefaultExportDir();
-    } else {
-      settingsExportDir.value = "";
-    }
+    settingsExportDir.value = defaultProjectExportDir;
     setStatus("MP4 export 폴더를 Downloads로 되돌렸습니다. Save Settings로 저장하세요.");
   } catch (error) {
     setStatus(error?.message || "기본 Downloads 폴더를 읽지 못했습니다.");
@@ -3878,7 +3942,7 @@ async function exportProjectAsMp4() {
   const baseName = getProjectName().replace(/[\\/:*?"<>|]/g, "-") || "simple-slide";
   let outputPath;
   try {
-    outputPath = await nativeApi.selectMp4Output(`${baseName}-${timestamp}.mp4`, appSettingsState.exportDir);
+    outputPath = await nativeApi.selectMp4Output(`${baseName}-${timestamp}.mp4`, projectSettingsState.exportDir);
   } catch (error) {
     setStatus(error?.message || "MP4 저장 경로를 선택하지 못했습니다.");
     return;
@@ -3910,7 +3974,7 @@ async function exportProjectAsMp4() {
       };
       if (isDynamicSlide(slide)) {
         setExportModalProgress("Rendering", `슬라이드 ${index + 1} / ${slides.length} 타이핑 프레임을 만들고 있습니다.`, index, slides.length);
-        const animation = await renderDynamicSlideFrames(slide, { subtitles: appSettingsState.subtitleEnabled });
+        const animation = await renderDynamicSlideFrames(slide, { subtitles: projectSettingsState.subtitleEnabled });
         renderedSlides.push({
           ...baseSlidePayload,
           framePng: animation.framePng,
@@ -3923,7 +3987,7 @@ async function exportProjectAsMp4() {
           ...baseSlidePayload,
           framePng: await renderSlideToDataUrl(slide, {
             transparentBackground: Boolean(video),
-            subtitles: appSettingsState.subtitleEnabled,
+            subtitles: projectSettingsState.subtitleEnabled,
           }),
         });
       }
@@ -4043,23 +4107,9 @@ function applyColorPreset(presetKey) {
     return;
   }
 
-  canvasColor.value = preset.canvasColor;
-  canvas.style.backgroundColor = preset.canvasColor;
-  defaultTextColor = preset.textColor;
-  selectedTextColor.value = preset.textColor;
-
-  for (const object of canvas.querySelectorAll(".text-object")) {
-    object.dataset.textColor = preset.textColor;
-    const editor = object.querySelector(".text-editor");
-    editor.style.color = preset.textColor;
-    renderTextObject(object);
-  }
-
+  settingsCanvasColor.value = preset.canvasColor;
   syncColorPresetButtons();
-  syncSelectedInputs();
-  renderSlideList();
-  recordHistory();
-  setStatus(`${preset.canvasColor === "#000000" ? "검정 배경 / 흰색 글씨" : "흰색 배경 / 검정 글씨"}로 변경했습니다.`);
+  setStatus(`${preset.canvasColor === "#000000" ? "검정 배경 / 흰색 글씨" : "흰색 배경 / 검정 글씨"} 기본값을 선택했습니다. Save Settings로 저장하세요.`);
 }
 
 function applySelectedShapeStyleChange(shouldRecord = false) {
@@ -4082,32 +4132,6 @@ function applySelectedShapeStyleChange(shouldRecord = false) {
     recordHistory();
   }
 }
-
-applyCanvas.addEventListener("click", () => {
-  const width = clamp(numberOr(canvasWidth.value, 1280), 80, 4096);
-  const height = clamp(numberOr(canvasHeight.value, 720), 80, 4096);
-  canvasWidth.value = width;
-  canvasHeight.value = height;
-  canvas.style.width = `${width}px`;
-  canvas.style.height = `${height}px`;
-  canvas.style.backgroundColor = canvasColor.value;
-  syncColorPresetButtons();
-  fitCanvasToWorkspace();
-  setStatus(`캔버스 크기를 ${width} x ${height}로 변경했습니다.`);
-  renderSlideList();
-  recordHistory();
-});
-
-canvasColor.addEventListener("input", () => {
-  canvas.style.backgroundColor = canvasColor.value;
-  syncColorPresetButtons();
-});
-canvasColor.addEventListener("change", () => {
-  canvas.style.backgroundColor = canvasColor.value;
-  syncColorPresetButtons();
-  renderSlideList();
-  recordHistory();
-});
 
 slideNotes.addEventListener("input", () => {
   if (slides[activeSlideIndex]) {
@@ -4151,9 +4175,9 @@ projectLibrary.addEventListener("click", (event) => {
 });
 appSettingsButton.addEventListener("click", showAppSettings);
 closeAppSettings.addEventListener("click", hideAppSettings);
-saveAppSettingsButton.addEventListener("click", saveGlobalAppSettings);
-chooseExportDir.addEventListener("click", chooseGlobalExportDirectory);
-resetExportDir.addEventListener("click", resetGlobalExportDirectory);
+saveAppSettingsButton.addEventListener("click", saveSettings);
+chooseExportDir.addEventListener("click", chooseProjectExportDirectory);
+resetExportDir.addEventListener("click", resetProjectExportDirectory);
 appSettings.addEventListener("click", (event) => {
   if (event.target === appSettings) {
     hideAppSettings();
@@ -4177,6 +4201,14 @@ videoFileInput.addEventListener("change", () => {
   }
 });
 settingsTtsPreset.addEventListener("change", () => applyTtsPreset(settingsTtsPreset.value));
+settingsCanvasWidth.addEventListener("blur", () => {
+  settingsCanvasWidth.value = String(sanitizeNumber(settingsCanvasWidth.value, DEFAULT_CANVAS_WIDTH, 80, 4096));
+});
+settingsCanvasHeight.addEventListener("blur", () => {
+  settingsCanvasHeight.value = String(sanitizeNumber(settingsCanvasHeight.value, DEFAULT_CANVAS_HEIGHT, 80, 4096));
+});
+settingsCanvasColor.addEventListener("input", syncColorPresetButtons);
+settingsCanvasColor.addEventListener("change", syncColorPresetButtons);
 settingsTtsSpeed.addEventListener("blur", () => {
   settingsTtsSpeed.value = String(normalizeTtsSpeed(settingsTtsSpeed.value, settingsTtsPreset.value));
 });
@@ -4345,15 +4377,27 @@ document.addEventListener("keydown", (event) => {
 });
 
 window.addEventListener("resize", fitCanvasToWorkspace);
-loadAppSettings().catch((error) => {
-  setStatus(error?.message || "앱 설정을 불러오지 못했습니다.");
-  appSettingsState = normalizeAppSettings();
-  syncAppSettingsControls();
-});
-setDrawTool("select", { silent: true });
-slides = [createDefaultSlide()];
-loadSlide(0, false);
-resetHistory();
-initializeNativeMode().catch((error) => {
-  setStatus(error?.message || "프로젝트 목록을 초기화하지 못했습니다.");
-});
+
+async function initializeApp() {
+  try {
+    await loadAppSettings();
+  } catch (error) {
+    setStatus(error?.message || "앱 설정을 불러오지 못했습니다.");
+    appSettingsState = normalizeAppSettings();
+    projectSettingsState = normalizeProjectSettings(projectSettingsState);
+    syncSettingsControls();
+  }
+
+  setDrawTool("select", { silent: true });
+  slides = [createDefaultSlide()];
+  loadSlide(0, false);
+  resetHistory();
+
+  try {
+    await initializeNativeMode();
+  } catch (error) {
+    setStatus(error?.message || "프로젝트 목록을 초기화하지 못했습니다.");
+  }
+}
+
+initializeApp();
