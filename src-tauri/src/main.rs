@@ -376,9 +376,8 @@ fn asset_hash_key(source_path: &Path, metadata: &fs::Metadata) -> String {
     hash.chars().take(16).collect()
 }
 
-fn copy_asset_into_project(
-    app: &AppHandle,
-    project_id: &str,
+fn copy_asset_into_assets_dir(
+    assets_dir: &Path,
     source: &str,
     require_existing: bool,
 ) -> Result<Option<PathBuf>, String> {
@@ -397,11 +396,10 @@ fn copy_asset_into_project(
         return Ok(None);
     }
 
-    let assets_dir = project_assets_dir(app, project_id)?;
     fs::create_dir_all(&assets_dir).map_err(|error| error.to_string())?;
     let assets_root = assets_dir
         .canonicalize()
-        .unwrap_or_else(|_| assets_dir.clone());
+        .unwrap_or_else(|_| assets_dir.to_path_buf());
     if let Ok(source_root) = source_path.canonicalize() {
         if source_root.starts_with(&assets_root) {
             return Ok(Some(source_path));
@@ -423,11 +421,27 @@ fn copy_asset_into_project(
     Ok(Some(destination))
 }
 
-fn materialize_project_assets(
+fn copy_asset_into_project(
     app: &AppHandle,
     project_id: &str,
-    mut data: Value,
-) -> Result<Value, String> {
+    source: &str,
+    require_existing: bool,
+) -> Result<Option<PathBuf>, String> {
+    let assets_dir = project_assets_dir(app, project_id)?;
+    copy_asset_into_assets_dir(&assets_dir, source, require_existing)
+}
+
+fn path_to_project_string(path: &Path) -> String {
+    path.components()
+        .map(|component| component.as_os_str().to_string_lossy())
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
+fn rewrite_asset_paths<F>(data: &mut Value, mut rewrite: F) -> Result<(), String>
+where
+    F: FnMut(&str) -> Result<Option<String>, String>,
+{
     if let Some(settings) = data.get_mut("settings").and_then(Value::as_object_mut) {
         if let Some(music) = settings
             .get_mut("backgroundMusic")
@@ -435,8 +449,8 @@ fn materialize_project_assets(
         {
             if let Some(path_value) = music.get_mut("path") {
                 if let Some(path) = path_value.as_str() {
-                    if let Some(copied) = copy_asset_into_project(app, project_id, path, false)? {
-                        *path_value = Value::String(copied.to_string_lossy().to_string());
+                    if let Some(next_path) = rewrite(path)? {
+                        *path_value = Value::String(next_path);
                     }
                 }
             }
@@ -444,15 +458,15 @@ fn materialize_project_assets(
     }
 
     let Some(slides) = data.get_mut("slides").and_then(Value::as_array_mut) else {
-        return Ok(data);
+        return Ok(());
     };
 
     for slide in slides {
         if let Some(video) = slide.get_mut("video").and_then(Value::as_object_mut) {
             if let Some(path_value) = video.get_mut("path") {
                 if let Some(path) = path_value.as_str() {
-                    if let Some(copied) = copy_asset_into_project(app, project_id, path, false)? {
-                        *path_value = Value::String(copied.to_string_lossy().to_string());
+                    if let Some(next_path) = rewrite(path)? {
+                        *path_value = Value::String(next_path);
                     }
                 }
             }
@@ -461,8 +475,8 @@ fn materialize_project_assets(
         if let Some(sound) = slide.get_mut("startSound").and_then(Value::as_object_mut) {
             if let Some(path_value) = sound.get_mut("path") {
                 if let Some(path) = path_value.as_str() {
-                    if let Some(copied) = copy_asset_into_project(app, project_id, path, false)? {
-                        *path_value = Value::String(copied.to_string_lossy().to_string());
+                    if let Some(next_path) = rewrite(path)? {
+                        *path_value = Value::String(next_path);
                     }
                 }
             }
@@ -479,15 +493,27 @@ fn materialize_project_assets(
                 }
                 if let Some(src_value) = object.get_mut("src") {
                     if let Some(src) = src_value.as_str() {
-                        if let Some(copied) = copy_asset_into_project(app, project_id, src, false)?
-                        {
-                            *src_value = Value::String(copied.to_string_lossy().to_string());
+                        if let Some(next_src) = rewrite(src)? {
+                            *src_value = Value::String(next_src);
                         }
                     }
                 }
             }
         }
     }
+
+    Ok(())
+}
+
+fn materialize_project_assets(
+    app: &AppHandle,
+    project_id: &str,
+    mut data: Value,
+) -> Result<Value, String> {
+    rewrite_asset_paths(&mut data, |path| {
+        Ok(copy_asset_into_project(app, project_id, path, false)?
+            .map(|copied| copied.to_string_lossy().to_string()))
+    })?;
 
     Ok(data)
 }
@@ -626,6 +652,107 @@ fn delete_project(app: AppHandle, id: String) -> Result<(), String> {
         fs::remove_dir_all(dir).map_err(|error| error.to_string())?;
     }
     Ok(())
+}
+
+fn normalize_project_package_path(path: String) -> Result<PathBuf, String> {
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return Err("저장 경로를 읽지 못했습니다.".to_string());
+    }
+    let mut path = PathBuf::from(trimmed);
+    if path.extension().and_then(|value| value.to_str()) != Some("simpleslide") {
+        path.set_extension("simpleslide");
+    }
+    Ok(path)
+}
+
+fn prepare_project_package_dir(path: &Path) -> Result<(), String> {
+    if path.exists() {
+        if path.is_dir() {
+            fs::remove_dir_all(path).map_err(|error| error.to_string())?;
+        } else {
+            fs::remove_file(path).map_err(|error| error.to_string())?;
+        }
+    }
+    fs::create_dir_all(path).map_err(|error| error.to_string())
+}
+
+fn package_asset_relative_path(package_dir: &Path, asset_path: &Path) -> Result<String, String> {
+    let relative = asset_path
+        .strip_prefix(package_dir)
+        .map_err(|error| format!("프로젝트 패키지 asset 경로를 만들지 못했습니다: {error}"))?;
+    Ok(path_to_project_string(relative))
+}
+
+#[tauri::command]
+fn export_project_package(path: String, mut data: Value) -> Result<(), String> {
+    let package_dir = normalize_project_package_path(path)?;
+    prepare_project_package_dir(&package_dir)?;
+    let assets_dir = package_dir.join(ASSETS_DIR);
+    fs::create_dir_all(&assets_dir).map_err(|error| error.to_string())?;
+
+    rewrite_asset_paths(&mut data, |path| {
+        let Some(copied) = copy_asset_into_assets_dir(&assets_dir, path, true)? else {
+            return Ok(None);
+        };
+        Ok(Some(package_asset_relative_path(&package_dir, &copied)?))
+    })?;
+    write_json(package_dir.join(PROJECT_FILE), &data)
+}
+
+#[tauri::command]
+fn import_project_package(path: String) -> Result<ProjectRecord, String> {
+    if path.trim().is_empty() {
+        return Err("파일 경로를 읽지 못했습니다.".to_string());
+    }
+    let package_dir = PathBuf::from(path.trim());
+    if !package_dir.is_dir() {
+        return Err("Simple Slide 프로젝트 패키지 폴더가 아닙니다.".to_string());
+    }
+    let mut data: Value = read_json(package_dir.join(PROJECT_FILE))?;
+    rewrite_asset_paths(&mut data, |path| {
+        if !is_copyable_asset_path(path) {
+            return Ok(None);
+        }
+        let asset_path = PathBuf::from(path.trim());
+        if asset_path.is_absolute() {
+            return Ok(None);
+        }
+        if asset_path
+            .components()
+            .next()
+            .map(|component| component.as_os_str())
+            != Some(std::ffi::OsStr::new(ASSETS_DIR))
+        {
+            return Ok(None);
+        }
+        let assets_root = package_dir
+            .join(ASSETS_DIR)
+            .canonicalize()
+            .map_err(|error| format!("프로젝트 패키지 assets 폴더를 읽지 못했습니다: {error}"))?;
+        let resolved = package_dir
+            .join(asset_path)
+            .canonicalize()
+            .map_err(|error| format!("프로젝트 패키지 asset을 읽지 못했습니다: {error}"))?;
+        if !resolved.starts_with(&assets_root) {
+            return Err("프로젝트 패키지 asset 경로가 올바르지 않습니다.".to_string());
+        }
+        Ok(Some(resolved.to_string_lossy().to_string()))
+    })?;
+    let name = package_dir
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("Imported Project")
+        .trim_end_matches(".simpleslide");
+    let timestamp = now_string()?;
+    let meta = ProjectMeta {
+        id: String::new(),
+        name: clean_project_name(Some(name)),
+        created_at: timestamp.clone(),
+        updated_at: timestamp,
+        thumbnail: String::new(),
+    };
+    Ok(ProjectRecord { meta, data })
 }
 
 #[tauri::command]
@@ -1994,6 +2121,8 @@ pub fn run() {
             duplicate_project,
             delete_project,
             import_project_asset,
+            export_project_package,
+            import_project_package,
             write_project_file,
             read_project_file,
             get_app_settings,

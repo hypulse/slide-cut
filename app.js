@@ -7,7 +7,7 @@ const shapeTemplate = document.querySelector("#shapeTemplate");
 const statusText = document.querySelector("#statusText");
 const tauriInvoke = window.__TAURI__?.core?.invoke || null;
 const tauriDialog = window.__TAURI__?.dialog || null;
-const PROJECT_FILE_FILTER = [{ name: "Simple Slide Project", extensions: ["json"] }];
+const PROJECT_FILE_FILTER = [{ name: "Simple Slide Project", extensions: ["simpleslide"] }];
 const VIDEO_FILE_FILTER = [{ name: "Video", extensions: ["mp4", "mov", "m4v", "webm"] }];
 const AUDIO_FILE_FILTER = [{ name: "Audio", extensions: ["mp3", "wav", "m4a", "aac", "ogg", "flac"] }];
 const MP4_FILE_FILTER = [{ name: "MP4 Video", extensions: ["mp4"] }];
@@ -36,7 +36,7 @@ const nativeApi = window.simpleSlideNative || (tauriInvoke ? {
     if (!path) {
       return null;
     }
-    await tauriInvoke("write_project_file", { path, data });
+    await tauriInvoke("export_project_package", { path, data });
     return path;
   },
   importProjectFile: async () => {
@@ -45,13 +45,12 @@ const nativeApi = window.simpleSlideNative || (tauriInvoke ? {
     }
     const path = await tauriDialog.open({
       multiple: false,
-      directory: false,
-      filters: PROJECT_FILE_FILTER,
+      directory: true,
     });
     if (!path || Array.isArray(path)) {
       return null;
     }
-    return tauriInvoke("read_project_file", { path });
+    return tauriInvoke("import_project_package", { path });
   },
   selectDirectory: async () => {
     if (!tauriDialog?.open) {
@@ -3963,10 +3962,10 @@ async function exportProjectFile() {
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
     const project = createProjectData();
     const baseName = getProjectName().replace(/[\\/:*?"<>|]/g, "-") || "simple-slide";
-    const savedPath = await nativeApi.exportProjectFile(`${baseName}-${timestamp}.simpleslide.json`, project);
+    const savedPath = await nativeApi.exportProjectFile(`${baseName}-${timestamp}.simpleslide`, project);
     if (savedPath) {
       setSaveState("Exported");
-      setStatus("선택한 경로에 프로젝트 파일을 저장했습니다.");
+      setStatus("선택한 경로에 asset 포함 프로젝트 패키지를 저장했습니다.");
     }
     return;
   }
