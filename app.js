@@ -149,6 +149,7 @@ const slideSoundInfo = document.querySelector("#slideSoundInfo");
 const dynamicSlidePreview = document.querySelector("#dynamicSlidePreview");
 const gitTypingControls = document.querySelector("#gitTypingControls");
 const chatTypingControls = document.querySelector("#chatTypingControls");
+const dynamicContinueAfterTts = document.querySelector("#dynamicContinueAfterTts");
 const canvasSlideHint = document.querySelector("#canvasSlideHint");
 const chooseGitRepo = document.querySelector("#chooseGitRepo");
 const gitRepoPath = document.querySelector("#gitRepoPath");
@@ -485,6 +486,10 @@ function normalizeTtsInstructions(value, provider = DEFAULT_TTS_PROVIDER) {
 
 function normalizeSubtitleEnabled(value) {
   return value === undefined ? DEFAULT_SUBTITLE_ENABLED : Boolean(value);
+}
+
+function normalizeContinueAfterTts(value) {
+  return Boolean(value);
 }
 
 function clamp(value, min, max) {
@@ -2536,6 +2541,7 @@ function createDefaultSlide() {
     notes: "",
     video: null,
     startSound: null,
+    continueAfterTts: false,
     objects: [],
   };
 }
@@ -2577,6 +2583,7 @@ function createDefaultChatTypingData() {
 function createDynamicSlide(kind) {
   const slide = createDefaultSlide();
   slide.kind = kind;
+  slide.continueAfterTts = false;
   slide.color = kind === "gitTyping" ? "#0b1020" : "#f4f7fb";
   slide.notes =
     kind === "gitTyping"
@@ -2832,6 +2839,9 @@ function syncDynamicSlidePanel() {
   gitTypingControls.hidden = kind !== "gitTyping";
   chatTypingControls.hidden = kind !== "chatTyping";
   canvasSlideHint.hidden = true;
+  if (dynamicContinueAfterTts) {
+    dynamicContinueAfterTts.checked = isDynamicSlide(slide) && normalizeContinueAfterTts(slide.continueAfterTts);
+  }
 
   if (kind === "gitTyping") {
     const data = getGitTypingData(slide);
@@ -4055,6 +4065,7 @@ function normalizeProjectData(data) {
     notes: typeof slide.notes === "string" ? slide.notes : "",
     video: normalizeSlideVideo(slide.video),
     startSound: normalizeSlideStartSound(slide.startSound),
+    continueAfterTts: isDynamicSlide(slide) ? normalizeContinueAfterTts(slide.continueAfterTts) : false,
     gitTyping:
       sanitizeSlideKind(slide.kind) === "gitTyping"
         ? {
@@ -4573,6 +4584,12 @@ function updateActiveDynamicSlide(mutator, options = {}) {
   }
 }
 
+function syncDynamicTimingToSlide(options = {}) {
+  updateActiveDynamicSlide((slide) => {
+    slide.continueAfterTts = normalizeContinueAfterTts(dynamicContinueAfterTts?.checked);
+  }, options);
+}
+
 function syncGitTypingInputsToSlide(options = {}) {
   updateActiveDynamicSlide((slide) => {
     slide.gitTyping = {
@@ -4921,7 +4938,8 @@ async function exportProjectAsMp4() {
       };
       if (isDynamicSlide(slide)) {
         setExportModalProgress("Rendering", `슬라이드 ${index + 1} / ${slides.length} 타이핑 프레임을 만들고 있습니다.`, index, slides.length);
-        const isGitTypingSlide = sanitizeSlideKind(slide.kind) === "gitTyping";
+        const continueAfterTts = normalizeContinueAfterTts(slide.continueAfterTts);
+        const hasTtsNotes = Boolean(exportNoteSegments[0]?.trim());
         const animation = await renderDynamicSlideFrames(slide, {
           subtitles: projectSettingsState.subtitleEnabled,
           subtitleText: exportNoteSegments[0],
@@ -4930,8 +4948,8 @@ async function exportProjectAsMp4() {
           ...baseSlidePayload,
           notes: exportNoteSegments[0],
           startSoundPath: startSound?.path || null,
-          endOnTtsEnd: !isGitTypingSlide,
-          fitAnimationToDuration: !isGitTypingSlide,
+          endOnTtsEnd: hasTtsNotes ? !continueAfterTts : false,
+          fitAnimationToDuration: false,
           framePng: animation.framePng,
           animationFrames: animation.frames,
           frameRate: animation.frameRate,
@@ -5221,6 +5239,10 @@ for (const input of [gitSlideTitle, gitRepoPath, gitTypingSpeed, gitTypingConten
   input.addEventListener("input", () => syncGitTypingInputsToSlide());
   input.addEventListener("change", () => syncGitTypingInputsToSlide({ record: true }));
 }
+dynamicContinueAfterTts.addEventListener("change", () => {
+  syncDynamicTimingToSlide({ record: true });
+  setStatus(dynamicContinueAfterTts.checked ? "TTS 이후에도 슬라이드가 이어집니다." : "TTS 종료 시 다음 슬라이드로 넘어갑니다.");
+});
 for (const input of [chatSlideTitle, chatTypingSpeed, chatQuestion, chatAnswer]) {
   input.addEventListener("input", () => syncChatTypingInputsToSlide());
   input.addEventListener("change", () => syncChatTypingInputsToSlide({ record: true }));
