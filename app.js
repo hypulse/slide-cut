@@ -99,7 +99,6 @@ const nativeApi = window.simpleSlideNative || (tauriInvoke ? {
 } : null);
 
 const projectNameInput = document.querySelector("#projectNameInput");
-const newProject = document.querySelector("#newProject");
 const projectLibraryButton = document.querySelector("#projectLibraryButton");
 const appSettingsButton = document.querySelector("#appSettingsButton");
 const nativeDivider = document.querySelector(".native-divider");
@@ -3006,7 +3005,6 @@ async function deleteNativeProject(projectId) {
 async function initializeNativeMode() {
   if (!nativeApi) {
     projectNameInput.hidden = true;
-    newProject.hidden = true;
     projectLibraryButton.hidden = true;
     nativeDivider.hidden = true;
     setSaveState("File mode");
@@ -4143,14 +4141,6 @@ projectNameInput.addEventListener("change", () => {
   } else {
     scheduleNativeProjectSave();
   }
-});
-newProject.addEventListener("click", () => {
-  if (nativeApi) {
-    createNewNativeProject();
-    return;
-  }
-  resetToBlankProject();
-  setStatus("새 프로젝트를 만들었습니다.");
 });
 projectLibraryButton.addEventListener("click", showProjectLibrary);
 closeProjectLibrary.addEventListener("click", hideProjectLibrary);
