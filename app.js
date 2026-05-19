@@ -1669,6 +1669,21 @@ function drawSubtitleBox(context, text, width, height) {
   context.restore();
 }
 
+function splitNotesForExport(notes) {
+  const cleanText = String(notes || "").replace(/\r\n/g, "\n").trim();
+  if (!cleanText) {
+    return [];
+  }
+  return cleanText
+    .split(/\n\s*\n+/)
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+}
+
+function getSubtitleTextForRender(slide, options = {}) {
+  return typeof options.subtitleText === "string" ? options.subtitleText : slide.notes;
+}
+
 function getGitTypingData(slide) {
   const data = {
     ...createDefaultGitTypingData(),
@@ -1921,7 +1936,7 @@ function drawDynamicSlide(context, slide, width, height, timeSeconds, options = 
     drawChatTypingSlide(context, slide, width, height, timeSeconds);
   }
   if (options.subtitles) {
-    drawSubtitleBox(context, slide.notes, width, height);
+    drawSubtitleBox(context, getSubtitleTextForRender(slide, options), width, height);
   }
 }
 
@@ -1966,7 +1981,7 @@ async function renderDynamicSlideToDataUrl(slide, timeSeconds, options = {}) {
   drawDynamicSlide(context, slide, exportCanvas.width, exportCanvas.height, timeSeconds, { ...options, subtitles: false });
   await drawSlideObjectsForExport(context, slide.objects || [], options.imageCache);
   if (options.subtitles) {
-    drawSubtitleBox(context, slide.notes, exportCanvas.width, exportCanvas.height);
+    drawSubtitleBox(context, getSubtitleTextForRender(slide, options), exportCanvas.width, exportCanvas.height);
   }
   return exportCanvas.toDataURL("image/png");
 }
@@ -2087,7 +2102,7 @@ async function renderSlideToDataUrl(slide, options = {}) {
   await drawSlideObjectsForExport(context, slide.objects || []);
 
   if (options.subtitles) {
-    drawSubtitleBox(context, slide.notes, exportCanvas.width, exportCanvas.height);
+    drawSubtitleBox(context, getSubtitleTextForRender(slide, options), exportCanvas.width, exportCanvas.height);
   }
 
   return exportCanvas.toDataURL("image/png");
@@ -4232,32 +4247,51 @@ async function exportProjectAsMp4() {
       const slide = slides[index];
       const video = normalizeSlideVideo(slide.video);
       setExportModalProgress("Rendering", `슬라이드 ${index + 1} / ${slides.length} 렌더링 중입니다.`, index, slides.length);
+      const noteSegments = splitNotesForExport(slide.notes);
+      const exportNoteSegments = noteSegments.length ? noteSegments : [""];
       const baseSlidePayload = {
         index,
         width: roundedCanvasSize(slide.width),
         height: roundedCanvasSize(slide.height),
         color: sanitizeColor(slide.color, "#ffffff"),
-        notes: typeof slide.notes === "string" ? slide.notes : "",
         videoPath: video?.path || null,
       };
       if (isDynamicSlide(slide)) {
         setExportModalProgress("Rendering", `슬라이드 ${index + 1} / ${slides.length} 타이핑 프레임을 만들고 있습니다.`, index, slides.length);
-        const animation = await renderDynamicSlideFrames(slide, { subtitles: projectSettingsState.subtitleEnabled });
+        const animation = await renderDynamicSlideFrames(slide, {
+          subtitles: projectSettingsState.subtitleEnabled,
+          subtitleText: exportNoteSegments[0],
+        });
         renderedSlides.push({
           ...baseSlidePayload,
+          notes: exportNoteSegments[0],
           framePng: animation.framePng,
           animationFrames: animation.frames,
           frameRate: animation.frameRate,
           animationDurationSeconds: animation.duration,
         });
+        for (const segmentNotes of exportNoteSegments.slice(1)) {
+          renderedSlides.push({
+            ...baseSlidePayload,
+            notes: segmentNotes,
+            framePng: await renderDynamicSlideToDataUrl(slide, animation.duration, {
+              subtitles: projectSettingsState.subtitleEnabled,
+              subtitleText: segmentNotes,
+            }),
+          });
+        }
       } else {
-        renderedSlides.push({
-          ...baseSlidePayload,
-          framePng: await renderSlideToDataUrl(slide, {
-            transparentBackground: Boolean(video),
-            subtitles: projectSettingsState.subtitleEnabled,
-          }),
-        });
+        for (const segmentNotes of exportNoteSegments) {
+          renderedSlides.push({
+            ...baseSlidePayload,
+            notes: segmentNotes,
+            framePng: await renderSlideToDataUrl(slide, {
+              transparentBackground: Boolean(video),
+              subtitles: projectSettingsState.subtitleEnabled,
+              subtitleText: segmentNotes,
+            }),
+          });
+        }
       }
     }
 
