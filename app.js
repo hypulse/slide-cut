@@ -113,6 +113,9 @@ const saveProject = document.querySelector("#saveProject");
 const openProject = document.querySelector("#openProject");
 const projectFileInput = document.querySelector("#projectFileInput");
 const videoFileInput = document.querySelector("#videoFileInput");
+const drawPanel = document.querySelector('[aria-labelledby="draw-title"]');
+const slideVideoPanel = document.querySelector('[aria-labelledby="slide-video-title"]');
+const dynamicSlidePanel = document.querySelector('[aria-labelledby="dynamic-slide-title"]');
 const addSlide = document.querySelector("#addSlide");
 const duplicateSlide = document.querySelector("#duplicateSlide");
 const slideList = document.querySelector("#slideList");
@@ -1959,7 +1962,11 @@ function normalizeSlideVideo(value) {
 }
 
 function getActiveSlideVideo() {
-  return normalizeSlideVideo(slides[activeSlideIndex]?.video);
+  const slide = slides[activeSlideIndex];
+  if (isDynamicSlide(slide)) {
+    return null;
+  }
+  return normalizeSlideVideo(slide?.video);
 }
 
 function updateSlideVideoView() {
@@ -2082,13 +2089,29 @@ function renderDynamicSlidePreview(slide) {
   }
 }
 
+function syncSlideOptionPanels(kind) {
+  const isCanvasSlide = kind === "canvas";
+  drawPanel.hidden = !isCanvasSlide;
+  slideVideoPanel.hidden = !isCanvasSlide;
+  dynamicSlidePanel.hidden = isCanvasSlide;
+  selectedPanel.hidden = !isCanvasSlide;
+
+  if (!isCanvasSlide && currentDrawTool !== "select") {
+    setDrawTool("select", { silent: true });
+  }
+  if (!isCanvasSlide) {
+    selectObject(null);
+  }
+}
+
 function syncDynamicSlidePanel() {
   const slide = slides[activeSlideIndex];
   const kind = sanitizeSlideKind(slide?.kind);
+  syncSlideOptionPanels(kind);
   dynamicSlideType.textContent = kind === "gitTyping" ? "Git" : kind === "chatTyping" ? "GPT" : "Canvas";
   gitTypingControls.hidden = kind !== "gitTyping";
   chatTypingControls.hidden = kind !== "chatTyping";
-  canvasSlideHint.hidden = isDynamicSlide(slide);
+  canvasSlideHint.hidden = true;
 
   if (kind === "gitTyping") {
     const data = getGitTypingData(slide);
@@ -3361,6 +3384,11 @@ async function importNativeProjectFile() {
 }
 
 async function chooseVideoForCurrentSlide() {
+  if (isDynamicSlide(slides[activeSlideIndex])) {
+    setStatus("영상 소스는 일반 슬라이드에서만 사용할 수 있습니다.");
+    return;
+  }
+
   if (nativeApi?.selectVideoFile) {
     try {
       const path = await nativeApi.selectVideoFile();

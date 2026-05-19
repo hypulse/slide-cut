@@ -610,6 +610,11 @@ button.danger {
   padding-top: 14px;
 }
 
+.panel[hidden],
+.dynamic-controls[hidden] {
+  display: none !important;
+}
+
 .toolbar .selected-panel {
   border-top: 0;
   padding-top: 0;
