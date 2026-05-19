@@ -769,10 +769,19 @@ select {
   gap: 6px;
 }
 
+.media-source-actions {
+  grid-template-columns: minmax(0, 1fr) 78px;
+}
+
 .video-source-actions button {
   height: 32px;
   font-size: 12px;
   font-weight: 700;
+}
+
+.media-status {
+  max-width: 112px;
+  color: var(--muted);
 }
 
 .inline-info {

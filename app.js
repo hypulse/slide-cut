@@ -2264,7 +2264,9 @@ function updateSlideVideoView() {
     delete slideVideo.dataset.path;
     slideVideo.load();
     slideVideo.hidden = true;
-    slideVideoInfo.textContent = "No video selected";
+    slideVideoInfo.textContent = "";
+    slideVideoInfo.title = "";
+    slideVideoInfo.hidden = true;
     clearSlideVideo.disabled = true;
     return;
   }
@@ -2279,7 +2281,9 @@ function updateSlideVideoView() {
   slideVideo.muted = true;
   slideVideo.loop = true;
   slideVideo.play().catch(() => {});
-  slideVideoInfo.textContent = `${video.name} · fill`;
+  slideVideoInfo.textContent = video.name;
+  slideVideoInfo.title = video.name;
+  slideVideoInfo.hidden = false;
   clearSlideVideo.disabled = false;
 }
 
