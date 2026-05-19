@@ -1599,7 +1599,7 @@ fn mix_start_sound(
 ) -> Result<(), String> {
     let duration = format_seconds(duration_seconds);
     let filter = format!(
-        "[0:a]aresample=44100,aformat=channel_layouts=stereo,apad[a0];[1:a]aresample=44100,aformat=channel_layouts=stereo,volume=1.0,apad[a1];[a0][a1]amix=inputs=2:duration=longest:dropout_transition=0:normalize=0,atrim=0:{duration},asetpts=N/SR/TB[a]"
+        "[0:a]aresample=44100,aformat=channel_layouts=stereo,apad[a0];[1:a]aresample=44100,aformat=channel_layouts=stereo,volume=0.35,apad[a1];[a0][a1]amix=inputs=2:duration=longest:dropout_transition=0:normalize=0,atrim=0:{duration},asetpts=N/SR/TB[a]"
     );
     let mut command = Command::new(ffmpeg);
     command
@@ -1910,17 +1910,14 @@ fn export_video(app: AppHandle, payload: VideoExportPayload) -> Result<VideoExpo
                 .as_deref()
                 .filter(|path| !path.trim().is_empty())
                 .map(PathBuf::from);
-            let start_sound_duration = if let Some(path) = start_sound_path.as_ref() {
+            if let Some(path) = start_sound_path.as_ref() {
                 if !path.exists() {
                     return Err(format!(
                         "효과음 파일을 찾지 못했습니다: {}",
                         path.to_string_lossy()
                     ));
                 }
-                Some(probe_audio_duration(&ffprobe, path, 0.5)?)
-            } else {
-                None
-            };
+            }
             let frame_rate = slide.frame_rate.unwrap_or(8.0).clamp(1.0, 30.0);
             let animation_duration = slide
                 .animation_duration_seconds
@@ -1952,9 +1949,7 @@ fn export_video(app: AppHandle, payload: VideoExportPayload) -> Result<VideoExpo
             let duration = if slide.end_on_tts_end.unwrap_or(false) {
                 base_audio_duration
             } else {
-                base_audio_duration
-                    .max(animation_duration.unwrap_or(0.0))
-                    .max(start_sound_duration.unwrap_or(0.0))
+                base_audio_duration.max(animation_duration.unwrap_or(0.0))
             };
             let base_audio_path = if let Some(path) = tts_audio_path {
                 path
