@@ -1881,9 +1881,13 @@ function computeAfterLineEdits(beforeLines, afterLines) {
 function getGitTypingCharacterCount(data) {
   const model = getGitEditorModel(data);
   if (model.changedLineIndexes.length === 0) {
-    return model.afterText.length;
+    return 0;
   }
   return model.changedLineIndexes.reduce((sum, lineIndex) => sum + (model.afterLines[lineIndex]?.length || 0) + 1, 0);
+}
+
+function gitTypingDataHasChanges(data) {
+  return getGitEditorModel(data).changedLineIndexes.length > 0;
 }
 
 function getChatTypingData(slide) {
@@ -2391,6 +2395,37 @@ async function renderDynamicSlideFrames(slide, options = {}) {
     duration,
     framePng: frames[frames.length - 1],
   };
+}
+
+async function refreshGitTypingSlideForExport(slide) {
+  if (sanitizeSlideKind(slide?.kind) !== "gitTyping" || !nativeApi?.readGitCommitFileChange) {
+    return slide;
+  }
+  const data = getGitTypingData(slide);
+  if (gitTypingDataHasChanges(data) || !data.repoPath || !data.commitHash || !data.filePath) {
+    return slide;
+  }
+
+  try {
+    const result = await nativeApi.readGitCommitFileChange(data.repoPath, data.commitHash, data.filePath);
+    return {
+      ...slide,
+      gitTyping: {
+        ...data,
+        repoPath: result.repoPath || data.repoPath,
+        commitHash: result.commitHash || data.commitHash,
+        commitLabel: data.commitLabel || result.commitHash || data.commitHash,
+        filePath: result.filePath || data.filePath,
+        title: result.title || data.title,
+        content: result.afterContent || result.beforeContent || result.content || data.content,
+        beforeContent: result.beforeContent || "",
+        afterContent: result.afterContent || result.content || "",
+        beforePath: result.beforePath || data.beforePath || "",
+      },
+    };
+  } catch {
+    return slide;
+  }
 }
 
 function drawShapeData(context, data, width, height) {
@@ -4869,7 +4904,10 @@ async function exportProjectAsMp4() {
     const renderedSlides = [];
     for (let index = 0; index < slides.length; index += 1) {
       throwIfExportCancelled();
-      const slide = slides[index];
+      let slide = slides[index];
+      if (sanitizeSlideKind(slide?.kind) === "gitTyping") {
+        slide = await refreshGitTypingSlideForExport(slide);
+      }
       const video = normalizeSlideVideo(slide.video);
       const startSound = normalizeSlideStartSound(slide.startSound);
       setExportModalProgress("Rendering", `슬라이드 ${index + 1} / ${slides.length} 렌더링 중입니다.`, index, slides.length);

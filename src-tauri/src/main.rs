@@ -21,6 +21,8 @@ const ASSETS_DIR: &str = "assets";
 const APP_SETTINGS_FILE: &str = "settings.json";
 const DEFAULT_PROJECT_NAME: &str = "Untitled";
 const VIDEO_EXPORT_PROGRESS_EVENT: &str = "video-export-progress";
+const GIT_CONTENT_MAX_CHARS: usize = 12_000;
+const GIT_ANIMATION_CONTEXT_LINES: usize = 90;
 static CANCELLED_EXPORTS: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -846,14 +848,115 @@ fn git_output(repo_path: &Path, args: &[&str]) -> Result<String, String> {
 }
 
 fn truncate_git_content(content: String) -> String {
-    if content.chars().count() > 12000 {
+    if content.chars().count() > GIT_CONTENT_MAX_CHARS {
         format!(
             "{}\n\n... truncated ...",
-            content.chars().take(12000).collect::<String>()
+            content
+                .chars()
+                .take(GIT_CONTENT_MAX_CHARS)
+                .collect::<String>()
         )
     } else {
         content
     }
+}
+
+fn joined_line_char_count(lines: &[&str]) -> usize {
+    if lines.is_empty() {
+        return 0;
+    }
+    lines.iter().map(|line| line.chars().count()).sum::<usize>() + lines.len() - 1
+}
+
+fn join_line_window(lines: &[&str], start: usize, end: usize) -> String {
+    lines
+        .get(start..end)
+        .unwrap_or_default()
+        .join("\n")
+        .to_string()
+}
+
+fn shrink_line_window_to_limit(
+    before_lines: &[&str],
+    after_lines: &[&str],
+    mut start: usize,
+    mut before_end: usize,
+    mut after_end: usize,
+    first_changed_line: usize,
+) -> (usize, usize, usize) {
+    while (joined_line_char_count(&before_lines[start..before_end]) > GIT_CONTENT_MAX_CHARS
+        || joined_line_char_count(&after_lines[start..after_end]) > GIT_CONTENT_MAX_CHARS)
+        && (start < first_changed_line
+            || before_end > first_changed_line + 1
+            || after_end > first_changed_line + 1)
+    {
+        if start < first_changed_line {
+            start += 1;
+            continue;
+        }
+        if before_end > first_changed_line + 1 {
+            before_end -= 1;
+        }
+        if after_end > first_changed_line + 1 {
+            after_end -= 1;
+        }
+    }
+    (start, before_end, after_end)
+}
+
+fn truncate_git_animation_content(
+    before_content: String,
+    after_content: String,
+) -> (String, String) {
+    if before_content.chars().count() <= GIT_CONTENT_MAX_CHARS
+        && after_content.chars().count() <= GIT_CONTENT_MAX_CHARS
+    {
+        return (before_content, after_content);
+    }
+
+    let before_lines: Vec<&str> = before_content.lines().collect();
+    let after_lines: Vec<&str> = after_content.lines().collect();
+    let shared_len = before_lines.len().min(after_lines.len());
+    let mut first_changed_line = 0;
+    while first_changed_line < shared_len
+        && before_lines[first_changed_line] == after_lines[first_changed_line]
+    {
+        first_changed_line += 1;
+    }
+
+    if first_changed_line == shared_len && before_lines.len() == after_lines.len() {
+        return (
+            truncate_git_content(before_content),
+            truncate_git_content(after_content),
+        );
+    }
+
+    let mut before_tail = before_lines.len();
+    let mut after_tail = after_lines.len();
+    while before_tail > first_changed_line
+        && after_tail > first_changed_line
+        && before_lines[before_tail - 1] == after_lines[after_tail - 1]
+    {
+        before_tail -= 1;
+        after_tail -= 1;
+    }
+
+    let start = first_changed_line.saturating_sub(GIT_ANIMATION_CONTEXT_LINES);
+    let before_end = (before_tail + GIT_ANIMATION_CONTEXT_LINES).min(before_lines.len());
+    let after_end = (after_tail + GIT_ANIMATION_CONTEXT_LINES).min(after_lines.len());
+    let (start, before_end, after_end) = shrink_line_window_to_limit(
+        &before_lines,
+        &after_lines,
+        start,
+        before_end,
+        after_end,
+        first_changed_line,
+    );
+
+    (
+        truncate_git_content(join_line_window(&before_lines, start, before_end)),
+        truncate_git_content(join_line_window(&after_lines, start, after_end)),
+    )
 }
 
 fn resolve_git_root(repo_path: &str) -> Result<PathBuf, String> {
@@ -1047,14 +1150,17 @@ fn read_git_commit_file_change(
         patch.trim_end()
     });
 
+    let (before_content, after_content) =
+        truncate_git_animation_content(before_content, after_content);
+
     Ok(GitChanges {
         repo_path: root.to_string_lossy().to_string(),
         commit_hash: commit,
         file_path: file_path.clone(),
         title: format!("{short_hash} · {file_path}"),
         content: truncate_git_content(content),
-        before_content: truncate_git_content(before_content),
-        after_content: truncate_git_content(after_content),
+        before_content,
+        after_content,
         before_path,
     })
 }
