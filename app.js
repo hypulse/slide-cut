@@ -1733,11 +1733,49 @@ function drawDynamicSlide(context, slide, width, height, timeSeconds, options = 
   }
 }
 
-function renderDynamicSlideToDataUrl(slide, timeSeconds, options = {}) {
+async function drawSlideObjectsForExport(context, objects = [], imageCache = new Map()) {
+  for (const object of objects) {
+    const center = {
+      x: object.x + object.width / 2,
+      y: object.y + object.height / 2,
+    };
+    context.save();
+    try {
+      context.translate(center.x, center.y);
+      context.rotate((object.rotation * Math.PI) / 180);
+      context.translate(-object.width / 2, -object.height / 2);
+
+      if (object.type === "image") {
+        let imagePromise = imageCache.get(object.src);
+        if (!imagePromise) {
+          imagePromise = loadImageForRender(object.src);
+          imageCache.set(object.src, imagePromise);
+        }
+        drawFittedImage(context, await imagePromise, object.width, object.height);
+      } else if (object.type === "text") {
+        context.__textColor = object.textColor || DEFAULT_TEXT_COLOR;
+        drawTextLines(context, object.text || "", object.width, object.height, false, object.textSize || "h3", object.textAlign || "left");
+        delete context.__textColor;
+      } else if (object.type === "shape") {
+        drawShapeData(context, object, object.width, object.height);
+      }
+    } finally {
+      delete context.__textColor;
+      context.restore();
+    }
+  }
+}
+
+async function renderDynamicSlideToDataUrl(slide, timeSeconds, options = {}) {
   const exportCanvas = document.createElement("canvas");
   exportCanvas.width = Math.max(1, roundedCanvasSize(slide.width));
   exportCanvas.height = Math.max(1, roundedCanvasSize(slide.height));
-  drawDynamicSlide(exportCanvas.getContext("2d"), slide, exportCanvas.width, exportCanvas.height, timeSeconds, options);
+  const context = exportCanvas.getContext("2d");
+  drawDynamicSlide(context, slide, exportCanvas.width, exportCanvas.height, timeSeconds, { ...options, subtitles: false });
+  await drawSlideObjectsForExport(context, slide.objects || [], options.imageCache);
+  if (options.subtitles) {
+    drawSubtitleBox(context, slide.notes, exportCanvas.width, exportCanvas.height);
+  }
   return exportCanvas.toDataURL("image/png");
 }
 
@@ -1746,15 +1784,16 @@ async function renderDynamicSlideFrames(slide, options = {}) {
   const frameRate = DYNAMIC_FRAME_RATE;
   const frameCount = Math.max(2, Math.ceil(duration * frameRate));
   const frames = [];
+  const imageCache = new Map();
   for (let index = 0; index < frameCount; index += 1) {
     throwIfExportCancelled();
     if (index % frameRate === 0) {
       await new Promise((resolve) => window.requestAnimationFrame(resolve));
     }
     const timeSeconds = Math.min(duration, index / frameRate);
-    frames.push(renderDynamicSlideToDataUrl(slide, timeSeconds, options));
+    frames.push(await renderDynamicSlideToDataUrl(slide, timeSeconds, { ...options, imageCache }));
   }
-  frames.push(renderDynamicSlideToDataUrl(slide, duration, options));
+  frames.push(await renderDynamicSlideToDataUrl(slide, duration, { ...options, imageCache }));
   return {
     frames,
     frameRate,
@@ -1853,29 +1892,7 @@ async function renderSlideToDataUrl(slide, options = {}) {
     context.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
   }
 
-  for (const object of slide.objects || []) {
-    const center = {
-      x: object.x + object.width / 2,
-      y: object.y + object.height / 2,
-    };
-    context.save();
-    context.translate(center.x, center.y);
-    context.rotate((object.rotation * Math.PI) / 180);
-    context.translate(-object.width / 2, -object.height / 2);
-
-    if (object.type === "image") {
-      const image = await loadImageForRender(object.src);
-      drawFittedImage(context, image, object.width, object.height);
-    } else if (object.type === "text") {
-      context.__textColor = object.textColor || DEFAULT_TEXT_COLOR;
-      drawTextLines(context, object.text || "", object.width, object.height, false, object.textSize || "h3", object.textAlign || "left");
-      delete context.__textColor;
-    } else if (object.type === "shape") {
-      drawShapeData(context, object, object.width, object.height);
-    }
-
-    context.restore();
-  }
+  await drawSlideObjectsForExport(context, slide.objects || []);
 
   if (options.subtitles) {
     drawSubtitleBox(context, slide.notes, exportCanvas.width, exportCanvas.height);
@@ -2073,17 +2090,10 @@ function renderDynamicSlidePreview(slide) {
 
 function syncSlideOptionPanels(kind) {
   const isCanvasSlide = kind === "canvas";
-  drawPanel.hidden = !isCanvasSlide;
+  drawPanel.hidden = false;
   slideVideoPanel.hidden = !isCanvasSlide;
   dynamicSlidePanel.hidden = isCanvasSlide;
-  selectedPanel.hidden = !isCanvasSlide;
-
-  if (!isCanvasSlide && currentDrawTool !== "select") {
-    setDrawTool("select", { silent: true });
-  }
-  if (!isCanvasSlide) {
-    selectObject(null);
-  }
+  selectedPanel.hidden = false;
 }
 
 function syncDynamicSlidePanel() {
@@ -2436,6 +2446,9 @@ function finishSlidePointerDrag(event) {
   }
   clearSlideDropTargets();
   if (!state.didDrag) {
+    if (event.type === "pointerup") {
+      loadSlide(state.fromIndex);
+    }
     return;
   }
 
