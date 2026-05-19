@@ -203,7 +203,8 @@ let objectSeed = 0;
 let slides = [];
 let activeSlideIndex = 0;
 let slideSeed = 0;
-let draggedSlideIndex = null;
+let slideDragState = null;
+let slideClickSuppressUntil = 0;
 let currentDrawTool = "select";
 let activeShapeDraft = null;
 let historyStack = [];
@@ -254,6 +255,7 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 const PROJECT_FORMAT = "simple-slide-project";
 const PROJECT_VERSION = 2;
 const HISTORY_LIMIT = 80;
+const SLIDE_DRAG_THRESHOLD = 6;
 const IS_MAC_PLATFORM = /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent || "");
 const TTS_PRESETS = {
   animeCute: {
@@ -2303,6 +2305,104 @@ function renderSlidePreview(slide, previewCanvas) {
   context.restore();
 }
 
+function clearSlideDropTargets() {
+  slideList.classList.remove("is-reordering");
+  for (const card of slideList.querySelectorAll(".slide-card")) {
+    card.classList.remove("is-dragging", "is-drop-target", "is-drop-before", "is-drop-after");
+  }
+}
+
+function getSlideInsertionIndex(clientY) {
+  const cards = [...slideList.querySelectorAll(".slide-card")];
+  for (const card of cards) {
+    const index = Number(card.dataset.slideIndex);
+    const rect = card.getBoundingClientRect();
+    if (clientY < rect.top + rect.height / 2) {
+      return index;
+    }
+  }
+  return slides.length;
+}
+
+function updateSlideDropTarget(insertionIndex) {
+  for (const card of slideList.querySelectorAll(".slide-card")) {
+    card.classList.remove("is-drop-target", "is-drop-before", "is-drop-after");
+  }
+  if (!slideDragState || insertionIndex === slideDragState.fromIndex || insertionIndex === slideDragState.fromIndex + 1) {
+    return;
+  }
+
+  const targetIndex = insertionIndex >= slides.length ? slides.length - 1 : insertionIndex;
+  const targetCard = slideList.querySelector(`[data-slide-index="${targetIndex}"]`);
+  if (!targetCard) {
+    return;
+  }
+  targetCard.classList.add("is-drop-target", insertionIndex >= slides.length ? "is-drop-after" : "is-drop-before");
+}
+
+function beginSlidePointerDrag(event, index, card) {
+  if (event.button !== 0 || slides.length <= 1) {
+    return;
+  }
+  slideDragState = {
+    fromIndex: index,
+    insertionIndex: index,
+    startX: event.clientX,
+    startY: event.clientY,
+    card,
+    didDrag: false,
+  };
+  try {
+    card.setPointerCapture(event.pointerId);
+  } catch {
+    // Pointer capture can be unavailable in some WebView paths.
+  }
+}
+
+function handleSlidePointerMove(event) {
+  if (!slideDragState) {
+    return;
+  }
+  const deltaX = event.clientX - slideDragState.startX;
+  const deltaY = event.clientY - slideDragState.startY;
+  if (!slideDragState.didDrag && Math.hypot(deltaX, deltaY) < SLIDE_DRAG_THRESHOLD) {
+    return;
+  }
+
+  event.preventDefault();
+  slideDragState.didDrag = true;
+  slideList.classList.add("is-reordering");
+  slideDragState.card.classList.add("is-dragging");
+  slideDragState.insertionIndex = getSlideInsertionIndex(event.clientY);
+  updateSlideDropTarget(slideDragState.insertionIndex);
+}
+
+function finishSlidePointerDrag(event) {
+  if (!slideDragState) {
+    return;
+  }
+  const state = slideDragState;
+  slideDragState = null;
+  try {
+    state.card.releasePointerCapture(event.pointerId);
+  } catch {
+    // Pointer capture can be unavailable in some WebView paths.
+  }
+  clearSlideDropTargets();
+  if (!state.didDrag) {
+    return;
+  }
+
+  event.preventDefault();
+  slideClickSuppressUntil = performance.now() + 350;
+  let toIndex = state.insertionIndex;
+  if (state.fromIndex < toIndex) {
+    toIndex -= 1;
+  }
+  toIndex = clamp(toIndex, 0, slides.length - 1);
+  reorderSlide(state.fromIndex, toIndex);
+}
+
 function renderSlideList() {
   serializeCurrentSlide();
   slideList.replaceChildren();
@@ -2310,41 +2410,24 @@ function renderSlideList() {
   slides.forEach((slide, index) => {
     const card = document.createElement("div");
     card.className = `slide-card${index === activeSlideIndex ? " is-active" : ""}`;
-    card.draggable = true;
+    card.draggable = false;
     card.dataset.slideIndex = String(index);
-    card.addEventListener("dragstart", (event) => {
-      draggedSlideIndex = index;
-      card.classList.add("is-dragging");
-      event.dataTransfer.effectAllowed = "move";
-      event.dataTransfer.setData("text/plain", String(index));
-    });
-    card.addEventListener("dragover", (event) => {
-      event.preventDefault();
-      if (draggedSlideIndex !== null && draggedSlideIndex !== index) {
-        card.classList.add("is-drop-target");
-      }
-      event.dataTransfer.dropEffect = "move";
-    });
-    card.addEventListener("dragleave", () => {
-      card.classList.remove("is-drop-target");
-    });
-    card.addEventListener("drop", (event) => {
-      event.preventDefault();
-      const fromIndex = draggedSlideIndex ?? Number(event.dataTransfer.getData("text/plain"));
-      card.classList.remove("is-drop-target");
-      reorderSlide(fromIndex, index);
-    });
-    card.addEventListener("dragend", () => {
-      draggedSlideIndex = null;
-      for (const candidate of slideList.querySelectorAll(".slide-card")) {
-        candidate.classList.remove("is-dragging", "is-drop-target");
-      }
-    });
+    card.addEventListener("pointerdown", (event) => beginSlidePointerDrag(event, index, card));
+    card.addEventListener("pointermove", handleSlidePointerMove);
+    card.addEventListener("pointerup", finishSlidePointerDrag);
+    card.addEventListener("pointercancel", finishSlidePointerDrag);
 
     const thumbButton = document.createElement("button");
     thumbButton.className = "slide-thumb-button";
     thumbButton.type = "button";
-    thumbButton.addEventListener("click", () => loadSlide(index));
+    thumbButton.addEventListener("click", (event) => {
+      if (performance.now() < slideClickSuppressUntil) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+      loadSlide(index);
+    });
 
     const preview = document.createElement("canvas");
     preview.className = "slide-preview";
