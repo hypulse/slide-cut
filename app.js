@@ -1541,10 +1541,7 @@ function drawSubtitleBox(context, text, width, height) {
   context.save();
   context.font = `700 ${fontSize}px Pretendard, sans-serif`;
   const lines = trimSubtitleLines(wrapTextLines(context, cleanText, maxTextWidth + TEXT_PADDING_X * 2), SUBTITLE_MAX_LINES);
-  const measuredWidth = Math.min(
-    maxTextWidth,
-    Math.max(...lines.map((line) => context.measureText(line).width), fontSize * 4)
-  );
+  const measuredWidth = Math.min(maxTextWidth, Math.max(...lines.map((line) => context.measureText(line).width)));
   const boxWidth = Math.min(width - 48, Math.ceil(measuredWidth + paddingX * 2));
   const boxHeight = Math.ceil(lines.length * lineHeight + paddingY * 2);
   const boxX = (width - boxWidth) / 2;
