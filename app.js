@@ -1546,6 +1546,28 @@ function drawWrappedText(context, text, x, y, maxWidth, lineHeight, maxHeight) {
   }
 }
 
+function getMeasuredTextWidth(context, lines, fallbackWidth) {
+  return Math.max(...lines.map((line) => context.measureText(line).width), fallbackWidth);
+}
+
+function drawClippedLines(context, lines, x, y, maxHeight, lineHeight, scrollOffset = 0) {
+  context.save();
+  context.beginPath();
+  context.rect(x, y, context.canvas.width - x * 2, maxHeight);
+  context.clip();
+  for (const [index, line] of lines.entries()) {
+    const lineY = y + index * lineHeight - scrollOffset;
+    if (lineY + lineHeight < y) {
+      continue;
+    }
+    if (lineY > y + maxHeight) {
+      break;
+    }
+    context.fillText(line, x, lineY);
+  }
+  context.restore();
+}
+
 function drawGitTypingSlide(context, slide, width, height, timeSeconds) {
   const data = getGitTypingData(slide);
   const content = truncateText(data.content, 9000);
@@ -1592,49 +1614,55 @@ function drawChatTypingSlide(context, slide, width, height, timeSeconds) {
     timeSeconds >= answerStart
       ? `${(data.answer || "").slice(0, visibleAnswerCount)}${answerDone ? "" : "▌"}`
       : "";
-  const marginX = Math.round(width * 0.07);
-  const titleY = Math.round(height * 0.07);
-  const titleSize = clamp(Math.round(width * 0.031), 28, 42);
-  const bodySize = clamp(Math.round(width * 0.024), 22, 32);
-  const lineHeight = Math.round(bodySize * 1.42);
-  const bubbleMaxWidth = Math.round(width * 0.72);
-  const title = data.title || "GPT conversation";
+  const marginX = Math.round(width * 0.036);
+  const topMargin = Math.round(height * 0.022);
+  const bottomMargin = Math.round(height * 0.045);
+  const questionSize = clamp(Math.round(width * 0.0175), 16, 23);
+  const thoughtSize = clamp(Math.round(width * 0.015), 14, 19);
+  const answerSize = clamp(Math.round(width * 0.017), 15, 22);
+  const questionLineHeight = Math.round(questionSize * 1.36);
+  const answerLineHeight = Math.round(answerSize * 1.52);
+  const questionMaxWidth = Math.round(width * 0.58);
+  const answerMaxWidth = width - marginX * 2;
 
-  context.fillStyle = "#f4f7fb";
-  context.fillRect(0, 0, width, height);
-  context.fillStyle = "#111827";
-  context.font = `850 ${titleSize}px Pretendard, sans-serif`;
-  context.textBaseline = "top";
-  context.textAlign = "left";
-  context.fillText(title, marginX, titleY);
-
-  context.font = `700 ${bodySize}px Pretendard, sans-serif`;
-  const questionLines = wrapTextLines(context, questionText, bubbleMaxWidth);
-  const questionHeight = Math.min(questionLines.length, 4) * lineHeight + 34;
-  const questionWidth = Math.min(
-    bubbleMaxWidth,
-    Math.max(...questionLines.map((line) => context.measureText(line).width), bodySize * 4) + 42
-  );
-  const questionX = width - marginX - questionWidth;
-  const questionY = titleY + titleSize + 40;
-  context.fillStyle = "#2563eb";
-  fillRoundedRect(context, questionX, questionY, questionWidth, questionHeight, 18);
   context.fillStyle = "#ffffff";
-  drawWrappedText(context, questionText, questionX + 21, questionY + 18, questionWidth - 42, lineHeight, questionHeight - 34);
+  context.fillRect(0, 0, width, height);
+  context.textBaseline = "top";
+
+  context.font = `750 ${questionSize}px Pretendard, sans-serif`;
+  const questionLines = wrapTextLines(context, questionText, questionMaxWidth + TEXT_PADDING_X * 2);
+  const questionPaddingX = Math.round(questionSize * 1.08);
+  const questionPaddingY = Math.round(questionSize * 0.62);
+  const questionHeight = questionLines.length * questionLineHeight + questionPaddingY * 2;
+  const questionTextWidth = Math.min(questionMaxWidth, getMeasuredTextWidth(context, questionLines, questionSize * 4));
+  const questionWidth = Math.min(width - marginX * 2, Math.ceil(questionTextWidth + questionPaddingX * 2));
+  const questionX = width - marginX - questionWidth;
+  const questionY = topMargin;
+  context.fillStyle = "#050505";
+  fillRoundedRect(context, questionX, questionY, questionWidth, questionHeight, Math.round(questionHeight / 2));
+  context.fillStyle = "#ffffff";
+  context.textAlign = "left";
+  for (const [index, line] of questionLines.entries()) {
+    context.fillText(line, questionX + questionPaddingX, questionY + questionPaddingY + index * questionLineHeight);
+  }
+
+  const answerAreaY = Math.max(questionY + questionHeight + Math.round(height * 0.105), Math.round(height * 0.18));
+  if (timeSeconds >= answerStart - CHAT_ANSWER_DELAY_SECONDS * 0.35) {
+    context.textAlign = "left";
+    context.font = `650 ${thoughtSize}px Pretendard, sans-serif`;
+    context.fillStyle = "#8f8f8f";
+    context.fillText("Thought for a few seconds", marginX, answerAreaY);
+  }
 
   if (answerText) {
-    const answerLines = wrapTextLines(context, answerText, bubbleMaxWidth);
-    const answerHeight = Math.min(answerLines.length, 9) * lineHeight + 36;
-    const answerWidth = Math.min(
-      bubbleMaxWidth,
-      Math.max(...answerLines.map((line) => context.measureText(line).width), bodySize * 5) + 44
-    );
-    const answerX = marginX;
-    const answerY = questionY + questionHeight + 28;
-    context.fillStyle = "#ffffff";
-    fillRoundedRect(context, answerX, answerY, answerWidth, answerHeight, 18);
-    context.fillStyle = "#172033";
-    drawWrappedText(context, answerText, answerX + 22, answerY + 18, answerWidth - 44, lineHeight, answerHeight - 36);
+    const answerY = answerAreaY + Math.round(thoughtSize * 2.45);
+    const answerMaxHeight = Math.max(answerLineHeight, height - answerY - bottomMargin);
+    context.font = `700 ${answerSize}px Pretendard, sans-serif`;
+    const answerLines = wrapTextLines(context, answerText, answerMaxWidth + TEXT_PADDING_X * 2);
+    const totalAnswerHeight = answerLines.length * answerLineHeight;
+    const scrollOffset = Math.max(0, totalAnswerHeight - answerMaxHeight);
+    context.fillStyle = "#111111";
+    drawClippedLines(context, answerLines, marginX, answerY, answerMaxHeight, answerLineHeight, scrollOffset);
   }
 }
 
@@ -1972,14 +2000,18 @@ function renderDynamicSlidePreview(slide) {
   if (kind === "chatTyping") {
     const data = getChatTypingData(slide);
     const surface = createPreviewElement("div", "dynamic-preview-surface chat");
-    const title = createPreviewElement("div", "dynamic-preview-title", data.title);
     const chat = createPreviewElement("div", "dynamic-preview-chat");
+    const answer = createPreviewElement("div", "dynamic-preview-answer", data.answer);
     chat.append(
       createPreviewElement("div", "dynamic-preview-bubble question", data.question),
-      createPreviewElement("div", "dynamic-preview-bubble answer", data.answer)
+      createPreviewElement("div", "dynamic-preview-thought", "Thought for a few seconds"),
+      answer
     );
-    surface.append(title, chat);
+    surface.append(chat);
     dynamicSlidePreview.append(surface);
+    window.requestAnimationFrame(() => {
+      answer.scrollTop = answer.scrollHeight;
+    });
   }
 }
 
