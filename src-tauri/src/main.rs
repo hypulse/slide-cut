@@ -183,6 +183,9 @@ struct PreparedSlide {
     fit_animation_to_duration: bool,
 }
 
+const EXPORT_AUDIO_SAMPLE_RATE: &str = "44100";
+const EXPORT_AUDIO_CHANNELS: &str = "2";
+
 fn now_millis() -> Result<u128, String> {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -1690,7 +1693,18 @@ fn create_static_segment(
         ])
         .arg("-r")
         .arg(fps.to_string())
-        .args(["-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k"])
+        .args([
+            "-pix_fmt",
+            "yuv420p",
+            "-c:a",
+            "aac",
+            "-b:a",
+            "192k",
+            "-ar",
+            EXPORT_AUDIO_SAMPLE_RATE,
+            "-ac",
+            EXPORT_AUDIO_CHANNELS,
+        ])
         .args(["-shortest", "-movflags", "+faststart"])
         .arg(output_path);
     run_command(command, "정적 슬라이드 세그먼트 생성", export_id)
@@ -1731,7 +1745,18 @@ fn create_video_segment(
         ])
         .arg("-r")
         .arg(fps.to_string())
-        .args(["-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k"])
+        .args([
+            "-pix_fmt",
+            "yuv420p",
+            "-c:a",
+            "aac",
+            "-b:a",
+            "192k",
+            "-ar",
+            EXPORT_AUDIO_SAMPLE_RATE,
+            "-ac",
+            EXPORT_AUDIO_CHANNELS,
+        ])
         .args(["-shortest", "-movflags", "+faststart"])
         .arg(output_path);
     run_command(command, "영상 배경 슬라이드 세그먼트 생성", export_id)
@@ -1788,7 +1813,18 @@ fn create_animation_segment(
         ])
         .arg("-r")
         .arg(fps.to_string())
-        .args(["-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k"])
+        .args([
+            "-pix_fmt",
+            "yuv420p",
+            "-c:a",
+            "aac",
+            "-b:a",
+            "192k",
+            "-ar",
+            EXPORT_AUDIO_SAMPLE_RATE,
+            "-ac",
+            EXPORT_AUDIO_CHANNELS,
+        ])
         .args(["-movflags", "+faststart"])
         .arg(output_path);
     run_command(command, "타이핑 슬라이드 세그먼트 생성", export_id)
