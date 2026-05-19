@@ -5,6 +5,7 @@ use sha2::{Digest, Sha256};
 use std::{
     collections::HashSet,
     env, fs,
+    io::Read,
     path::{Path, PathBuf},
     process::{Command, Stdio},
     sync::{Mutex, OnceLock},
@@ -770,6 +771,22 @@ fn run_command(mut command: Command, label: &str, export_id: &str) -> Result<(),
         .stderr(Stdio::piped())
         .spawn()
         .map_err(|error| format!("{label} 실행에 실패했습니다: {error}"))?;
+    let stdout = child.stdout.take();
+    let stderr = child.stderr.take();
+    let stdout_thread = stdout.map(|mut output| {
+        thread::spawn(move || {
+            let mut buffer = Vec::new();
+            let _ = output.read_to_end(&mut buffer);
+            buffer
+        })
+    });
+    let stderr_thread = stderr.map(|mut output| {
+        thread::spawn(move || {
+            let mut buffer = Vec::new();
+            let _ = output.read_to_end(&mut buffer);
+            buffer
+        })
+    });
     loop {
         if is_export_cancelled(export_id) {
             let _ = child.kill();
@@ -782,21 +799,27 @@ fn run_command(mut command: Command, label: &str, export_id: &str) -> Result<(),
             Err(error) => return Err(format!("{label} 상태를 확인하지 못했습니다: {error}")),
         }
     }
-    let output = child
-        .wait_with_output()
+    let status = child
+        .wait()
         .map_err(|error| format!("{label} 결과를 읽지 못했습니다: {error}"))?;
-    if output.status.success() {
+    let stdout = stdout_thread
+        .and_then(|handle| handle.join().ok())
+        .unwrap_or_default();
+    let stderr = stderr_thread
+        .and_then(|handle| handle.join().ok())
+        .unwrap_or_default();
+    if status.success() {
         return Ok(());
     }
 
-    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let stderr = String::from_utf8_lossy(&stderr).trim().to_string();
+    let stdout = String::from_utf8_lossy(&stdout).trim().to_string();
     let detail = if !stderr.is_empty() {
         stderr
     } else if !stdout.is_empty() {
         stdout
     } else {
-        format!("종료 코드 {:?}", output.status.code())
+        format!("종료 코드 {:?}", status.code())
     };
     Err(format!("{label} 실패: {detail}"))
 }
@@ -1343,7 +1366,7 @@ fn mix_start_sound(
 ) -> Result<(), String> {
     let duration = format_seconds(duration_seconds);
     let filter = format!(
-        "[0:a]aresample=44100,aformat=channel_layouts=stereo,apad[a0];[1:a]aresample=44100,aformat=channel_layouts=stereo,apad[a1];[a0][a1]amix=inputs=2:duration=first:dropout_transition=0,atrim=0:{duration},asetpts=N/SR/TB[a]"
+        "[0:a]aresample=44100,aformat=channel_layouts=stereo,apad[a0];[1:a]aresample=44100,aformat=channel_layouts=stereo,volume=1.0,apad[a1];[a0][a1]amix=inputs=2:duration=longest:dropout_transition=0:normalize=0,atrim=0:{duration},asetpts=N/SR/TB[a]"
     );
     let mut command = Command::new(ffmpeg);
     command
@@ -1649,26 +1672,6 @@ fn export_video(app: AppHandle, payload: VideoExportPayload) -> Result<VideoExpo
                 None
             };
 
-            let trimmed_notes = slide.notes.trim();
-            let audio_path = if trimmed_notes.is_empty() {
-                let path = work_dir.join(format!("silence-{index:04}.m4a"));
-                create_silence_audio(&ffmpeg, &path, fallback_duration, &export_id)?;
-                path
-            } else {
-                generate_tts_audio(
-                    &app,
-                    curl.as_ref().unwrap(),
-                    &work_dir,
-                    &payload.tts,
-                    trimmed_notes,
-                    &export_id,
-                )?
-            };
-            let base_audio_duration = if trimmed_notes.is_empty() {
-                fallback_duration
-            } else {
-                probe_audio_duration(&ffprobe, &audio_path, fallback_duration)?
-            };
             let start_sound_path = slide
                 .start_sound_path
                 .as_deref()
@@ -1695,6 +1698,24 @@ fn export_video(app: AppHandle, payload: VideoExportPayload) -> Result<VideoExpo
                         .as_ref()
                         .map(|frames| frames.len() as f64 / frame_rate)
                 });
+            let trimmed_notes = slide.notes.trim();
+            let tts_audio_path = if trimmed_notes.is_empty() {
+                None
+            } else {
+                Some(generate_tts_audio(
+                    &app,
+                    curl.as_ref().unwrap(),
+                    &work_dir,
+                    &payload.tts,
+                    trimmed_notes,
+                    &export_id,
+                )?)
+            };
+            let base_audio_duration = if let Some(path) = tts_audio_path.as_ref() {
+                probe_audio_duration(&ffprobe, path, fallback_duration)?
+            } else {
+                fallback_duration
+            };
             let duration = if slide.end_on_tts_end.unwrap_or(false) {
                 base_audio_duration
             } else {
@@ -1702,11 +1723,18 @@ fn export_video(app: AppHandle, payload: VideoExportPayload) -> Result<VideoExpo
                     .max(animation_duration.unwrap_or(0.0))
                     .max(start_sound_duration.unwrap_or(0.0))
             };
+            let base_audio_path = if let Some(path) = tts_audio_path {
+                path
+            } else {
+                let path = work_dir.join(format!("silence-{index:04}.m4a"));
+                create_silence_audio(&ffmpeg, &path, duration, &export_id)?;
+                path
+            };
             let audio_path = if let Some(sound_path) = start_sound_path.as_ref() {
                 let mixed_path = work_dir.join(format!("mixed-audio-{index:04}.m4a"));
                 mix_start_sound(
                     &ffmpeg,
-                    &audio_path,
+                    &base_audio_path,
                     sound_path,
                     &mixed_path,
                     duration,
@@ -1714,7 +1742,7 @@ fn export_video(app: AppHandle, payload: VideoExportPayload) -> Result<VideoExpo
                 )?;
                 mixed_path
             } else {
-                audio_path
+                base_audio_path
             };
             let video_path = slide
                 .video_path
