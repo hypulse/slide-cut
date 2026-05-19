@@ -312,9 +312,21 @@ function toLucideIconKey(name) {
     .join("");
 }
 
-function hydrateButtonIcons(root = document) {
+function createLucideSvg(iconName, className = "button-icon") {
   const lucideApi = window.lucide;
-  if (!lucideApi?.icons || !lucideApi?.createElement) {
+  const icon = lucideApi?.icons?.[toLucideIconKey(iconName)];
+  if (!icon || !lucideApi?.createElement) {
+    return null;
+  }
+  return lucideApi.createElement(icon, {
+    class: className,
+    "aria-hidden": "true",
+    focusable: "false",
+  });
+}
+
+function hydrateButtonIcons(root = document) {
+  if (!window.lucide?.icons || !window.lucide?.createElement) {
     return;
   }
 
@@ -323,15 +335,10 @@ function hydrateButtonIcons(root = document) {
       button.classList.add("has-icon");
       continue;
     }
-    const icon = lucideApi.icons[toLucideIconKey(button.dataset.icon)];
-    if (!icon) {
+    const svg = createLucideSvg(button.dataset.icon);
+    if (!svg) {
       continue;
     }
-    const svg = lucideApi.createElement(icon, {
-      class: "button-icon",
-      "aria-hidden": "true",
-      focusable: "false",
-    });
     button.prepend(svg);
     button.classList.add("has-icon");
   }
@@ -1520,7 +1527,7 @@ function drawTextObject(context, object, width, height) {
   delete context.__textColor;
 }
 
-function fillRoundedRect(context, x, y, width, height, radius) {
+function traceRoundedRect(context, x, y, width, height, radius) {
   const safeRadius = Math.min(radius, width / 2, height / 2);
   context.beginPath();
   context.moveTo(x + safeRadius, y);
@@ -1533,7 +1540,16 @@ function fillRoundedRect(context, x, y, width, height, radius) {
   context.lineTo(x, y + safeRadius);
   context.quadraticCurveTo(x, y, x + safeRadius, y);
   context.closePath();
+}
+
+function fillRoundedRect(context, x, y, width, height, radius) {
+  traceRoundedRect(context, x, y, width, height, radius);
   context.fill();
+}
+
+function strokeRoundedRect(context, x, y, width, height, radius) {
+  traceRoundedRect(context, x, y, width, height, radius);
+  context.stroke();
 }
 
 function trimSubtitleLines(lines, maxLines) {
@@ -1688,6 +1704,49 @@ function drawGitTypingSlide(context, slide, width, height, timeSeconds) {
   drawWrappedText(context, visibleText, marginX + 24, boxY + 22, width - marginX * 2 - 48, Math.round(codeSize * 1.45), boxHeight - 44);
 }
 
+function drawChatCopyIcon(context, x, y, size) {
+  const radius = Math.max(2, Math.round(size * 0.18));
+  const offset = Math.round(size * 0.22);
+  const box = Math.round(size * 0.58);
+  context.save();
+  context.strokeStyle = "#686868";
+  context.lineWidth = Math.max(1.8, size * 0.11);
+  strokeRoundedRect(context, x + offset, y, box, box, radius);
+  strokeRoundedRect(context, x, y + offset, box, box, radius);
+  context.restore();
+}
+
+function drawChatEditIcon(context, x, y, size) {
+  context.save();
+  context.strokeStyle = "#686868";
+  context.fillStyle = "#686868";
+  context.lineWidth = Math.max(1.8, size * 0.11);
+  context.lineCap = "round";
+  context.lineJoin = "round";
+  context.beginPath();
+  context.moveTo(x + size * 0.22, y + size * 0.78);
+  context.lineTo(x + size * 0.72, y + size * 0.28);
+  context.stroke();
+  context.beginPath();
+  context.moveTo(x + size * 0.62, y + size * 0.18);
+  context.lineTo(x + size * 0.82, y + size * 0.38);
+  context.stroke();
+  context.beginPath();
+  context.moveTo(x + size * 0.16, y + size * 0.84);
+  context.lineTo(x + size * 0.3, y + size * 0.78);
+  context.lineTo(x + size * 0.22, y + size * 0.7);
+  context.closePath();
+  context.fill();
+  context.restore();
+}
+
+function drawChatQuestionActions(context, rightX, y, iconSize, gap) {
+  const editX = rightX - iconSize;
+  const copyX = editX - gap - iconSize;
+  drawChatCopyIcon(context, copyX, y, iconSize);
+  drawChatEditIcon(context, editX, y, iconSize);
+}
+
 function drawChatTypingSlide(context, slide, width, height, timeSeconds) {
   const data = getChatTypingData(slide);
   const speed = data.typingSpeed;
@@ -1706,11 +1765,14 @@ function drawChatTypingSlide(context, slide, width, height, timeSeconds) {
   const answerSize = clamp(Math.round(width * 0.017), 15, 22);
   const questionLineHeight = Math.round(questionSize * 1.36);
   const answerLineHeight = Math.round(answerSize * 1.52);
-  const questionMaxWidth = Math.round(width * 0.58);
+  const questionMaxWidth = Math.round(width * 0.68);
   const answerMaxWidth = width - marginX * 2;
   const viewportY = topMargin;
   const viewportHeight = height - topMargin - bottomMargin;
   const messageGap = Math.round(height * 0.075);
+  const questionActionIconSize = clamp(Math.round(questionSize * 0.92), 15, 21);
+  const questionActionTopGap = Math.round(questionSize * 0.58);
+  const questionActionGap = Math.round(questionSize * 0.86);
 
   context.fillStyle = "#ffffff";
   context.fillRect(0, 0, width, height);
@@ -1721,12 +1783,15 @@ function drawChatTypingSlide(context, slide, width, height, timeSeconds) {
   const questionPaddingX = Math.round(questionSize * 1.08);
   const questionPaddingY = Math.round(questionSize * 0.62);
   const questionHeight = questionLines.length ? questionLines.length * questionLineHeight + questionPaddingY * 2 : 0;
+  const shouldShowQuestionActions = questionLines.length && visibleQuestionCount >= questionSource.length;
+  const questionActionsHeight = shouldShowQuestionActions ? questionActionTopGap + questionActionIconSize : 0;
+  const questionBlockHeight = questionHeight + questionActionsHeight;
 
   context.font = `700 ${answerSize}px Pretendard, sans-serif`;
   const answerLines = answerText ? wrapTextLines(context, answerText, answerMaxWidth + TEXT_PADDING_X * 2) : [];
   const answerHeight = answerLines.length * answerLineHeight;
   const totalContentHeight =
-    questionHeight + (questionLines.length && answerLines.length ? messageGap : 0) + answerHeight;
+    questionBlockHeight + (questionLines.length && answerLines.length ? messageGap : 0) + answerHeight;
   const scrollOffset = Math.max(0, totalContentHeight - viewportHeight);
   let contentY = viewportY - scrollOffset;
 
@@ -1740,14 +1805,24 @@ function drawChatTypingSlide(context, slide, width, height, timeSeconds) {
     const questionTextWidth = Math.min(questionMaxWidth, getMeasuredTextWidth(context, questionLines, questionSize * 4));
     const questionWidth = Math.min(width - marginX * 2, Math.ceil(questionTextWidth + questionPaddingX * 2));
     const questionX = width - marginX - questionWidth;
+    const questionRadius = questionLines.length > 1 ? Math.round(questionSize * 0.92) : Math.round(questionHeight / 2);
     context.fillStyle = "#050505";
-    fillRoundedRect(context, questionX, contentY, questionWidth, questionHeight, Math.round(questionHeight / 2));
+    fillRoundedRect(context, questionX, contentY, questionWidth, questionHeight, questionRadius);
     context.fillStyle = "#ffffff";
     context.textAlign = "left";
     for (const [index, line] of questionLines.entries()) {
       context.fillText(line, questionX + questionPaddingX, contentY + questionPaddingY + index * questionLineHeight);
     }
-    contentY += questionHeight + (answerLines.length ? messageGap : 0);
+    if (shouldShowQuestionActions) {
+      drawChatQuestionActions(
+        context,
+        questionX + questionWidth - Math.round(questionSize * 0.2),
+        contentY + questionHeight + questionActionTopGap,
+        questionActionIconSize,
+        questionActionGap
+      );
+    }
+    contentY += questionBlockHeight + (answerLines.length ? messageGap : 0);
   }
 
   if (answerLines.length) {
@@ -2054,6 +2129,17 @@ function createPreviewElement(tagName, className, text = "") {
   return element;
 }
 
+function createPreviewIcon(iconName) {
+  const element = document.createElement("span");
+  element.className = "dynamic-preview-action-icon";
+  element.setAttribute("aria-hidden", "true");
+  const svg = createLucideSvg(iconName, "dynamic-preview-action-svg");
+  if (svg) {
+    element.append(svg);
+  }
+  return element;
+}
+
 function replaceSelectOptions(select, placeholder, items, selectedValue, getValue, getLabel) {
   select.replaceChildren();
   const emptyOption = document.createElement("option");
@@ -2122,8 +2208,16 @@ function renderDynamicSlidePreview(slide) {
     const data = getChatTypingData(slide);
     const surface = createPreviewElement("div", "dynamic-preview-surface chat");
     const chat = createPreviewElement("div", "dynamic-preview-chat");
+    const questionBlock = createPreviewElement("div", "dynamic-preview-question-block");
+    const question = createPreviewElement("div", "dynamic-preview-bubble question", data.question);
+    const questionActions = createPreviewElement("div", "dynamic-preview-question-actions");
     const answer = createPreviewElement("div", "dynamic-preview-answer", data.answer);
-    chat.append(createPreviewElement("div", "dynamic-preview-bubble question", data.question), answer);
+    if (data.question.length < 42 && !data.question.includes("\n")) {
+      question.classList.add("is-compact");
+    }
+    questionActions.append(createPreviewIcon("copy"), createPreviewIcon("pencil"));
+    questionBlock.append(question, questionActions);
+    chat.append(questionBlock, answer);
     surface.append(chat);
     dynamicSlidePreview.append(surface);
     window.requestAnimationFrame(() => {
