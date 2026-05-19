@@ -262,7 +262,7 @@ button.danger {
 }
 
 .app-settings-panel {
-  grid-template-rows: auto auto auto auto;
+  grid-template-rows: auto auto auto auto auto;
   width: min(560px, 100%);
 }
 
@@ -300,6 +300,21 @@ button.danger {
 .app-settings-actions {
   display: flex;
   justify-content: flex-end;
+}
+
+.settings-path-label {
+  align-items: start;
+}
+
+.settings-path-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 82px 104px;
+  gap: 6px;
+}
+
+.settings-path-row button {
+  height: 34px;
+  padding: 0 8px;
 }
 
 .project-library-list {

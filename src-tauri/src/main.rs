@@ -57,6 +57,8 @@ struct ProjectRecord {
 struct AppSettings {
     open_ai_api_key: String,
     tts_preset: String,
+    #[serde(default)]
+    export_dir: String,
 }
 
 impl Default for AppSettings {
@@ -64,6 +66,7 @@ impl Default for AppSettings {
         Self {
             open_ai_api_key: String::new(),
             tts_preset: "animeCute".to_string(),
+            export_dir: String::new(),
         }
     }
 }
@@ -206,14 +209,39 @@ fn ensure_projects_root(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(root)
 }
 
-fn clean_app_settings(settings: AppSettings) -> AppSettings {
+fn default_export_dir(app: &AppHandle) -> String {
+    if let Ok(path) = app.path().download_dir() {
+        return path.to_string_lossy().to_string();
+    }
+    if let Ok(path) = app.path().home_dir() {
+        return path.join("Downloads").to_string_lossy().to_string();
+    }
+    app_data_dir(app)
+        .unwrap_or_else(|_| PathBuf::from("."))
+        .to_string_lossy()
+        .to_string()
+}
+
+fn clean_app_settings(app: &AppHandle, settings: AppSettings) -> AppSettings {
     let preset = match settings.tts_preset.as_str() {
         "animeTsundere" => "animeTsundere",
         _ => "animeCute",
     };
+    let export_dir = settings.export_dir.trim();
+    let export_dir = if export_dir.is_empty() {
+        default_export_dir(app)
+    } else {
+        let path = PathBuf::from(export_dir);
+        if path.is_dir() {
+            path.to_string_lossy().to_string()
+        } else {
+            default_export_dir(app)
+        }
+    };
     AppSettings {
         open_ai_api_key: settings.open_ai_api_key.trim().to_string(),
         tts_preset: preset.to_string(),
+        export_dir,
     }
 }
 
@@ -443,15 +471,20 @@ fn read_project_file(path: String) -> Result<ProjectRecord, String> {
 fn get_app_settings(app: AppHandle) -> Result<AppSettings, String> {
     let path = app_settings_path(&app)?;
     if !path.exists() {
-        return Ok(AppSettings::default());
+        return Ok(clean_app_settings(&app, AppSettings::default()));
     }
     let settings: AppSettings = read_json(path)?;
-    Ok(clean_app_settings(settings))
+    Ok(clean_app_settings(&app, settings))
+}
+
+#[tauri::command]
+fn get_default_export_dir(app: AppHandle) -> Result<String, String> {
+    Ok(default_export_dir(&app))
 }
 
 #[tauri::command]
 fn save_app_settings(app: AppHandle, settings: AppSettings) -> Result<AppSettings, String> {
-    let settings = clean_app_settings(settings);
+    let settings = clean_app_settings(&app, settings);
     write_json(app_settings_path(&app)?, &settings)?;
     Ok(settings)
 }
@@ -1289,6 +1322,7 @@ pub fn run() {
             write_project_file,
             read_project_file,
             get_app_settings,
+            get_default_export_dir,
             save_app_settings,
             cancel_video_export,
             list_git_commits,

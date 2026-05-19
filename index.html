@@ -381,12 +381,20 @@
             <option value="animeTsundere">여성 츤데레 애니메이션 여캐</option>
           </select>
         </label>
+        <label class="settings-path-label">
+          <span>MP4 Export</span>
+          <span class="settings-path-row">
+            <input id="settingsExportDir" type="text" readonly placeholder="Downloads" />
+            <button id="chooseExportDir" type="button">Choose</button>
+            <button id="resetExportDir" type="button">Downloads</button>
+          </span>
+        </label>
         <div class="app-settings-actions">
           <button id="saveAppSettings" type="button">Save Settings</button>
         </div>
       </section>
     </div>
 
-    <script src="./app.js?v=20260519-export-modal" defer></script>
+    <script src="./app.js?v=20260519-export-dir" defer></script>
   </body>
 </html>

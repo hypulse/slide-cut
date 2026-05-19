@@ -21,6 +21,7 @@ const nativeApi = window.simpleSlideNative || (tauriInvoke ? {
   duplicateProject: (id) => tauriInvoke("duplicate_project", { id }),
   deleteProject: (id) => tauriInvoke("delete_project", { id }),
   getAppSettings: () => tauriInvoke("get_app_settings"),
+  getDefaultExportDir: () => tauriInvoke("get_default_export_dir"),
   saveAppSettings: (settings) => tauriInvoke("save_app_settings", { settings }),
   exportProjectFile: async (suggestedName, data) => {
     if (!tauriDialog?.save) {
@@ -77,12 +78,13 @@ const nativeApi = window.simpleSlideNative || (tauriInvoke ? {
     }
     return path;
   },
-  selectMp4Output: async (suggestedName) => {
+  selectMp4Output: async (suggestedName, exportDir = "") => {
     if (!tauriDialog?.save) {
       throw new Error("Tauri 파일 저장 대화상자를 사용할 수 없습니다.");
     }
+    const defaultPath = exportDir ? joinNativePath(exportDir, suggestedName) : suggestedName;
     return tauriDialog.save({
-      defaultPath: suggestedName,
+      defaultPath,
       filters: MP4_FILE_FILTER,
     });
   },
@@ -158,6 +160,9 @@ const closeAppSettings = document.querySelector("#closeAppSettings");
 const saveAppSettingsButton = document.querySelector("#saveAppSettings");
 const settingsOpenAiApiKey = document.querySelector("#settingsOpenAiApiKey");
 const settingsTtsPreset = document.querySelector("#settingsTtsPreset");
+const settingsExportDir = document.querySelector("#settingsExportDir");
+const chooseExportDir = document.querySelector("#chooseExportDir");
+const resetExportDir = document.querySelector("#resetExportDir");
 
 const selectedPanel = document.querySelector(".selected-panel");
 const selectedX = document.querySelector("#selectedX");
@@ -221,6 +226,7 @@ let canvasViewScale = 1;
 let appSettingsState = {
   openAiApiKey: "",
   ttsPreset: "animeCute",
+  exportDir: "",
 };
 let activeExportJob = null;
 
@@ -321,6 +327,15 @@ function sanitizeTextAlign(value) {
 
 function getFileNameFromPath(path) {
   return String(path || "").split(/[\\/]/).pop() || "Video";
+}
+
+function joinNativePath(directory, filename) {
+  const safeDirectory = String(directory || "").trim().replace(/[\\/]+$/g, "");
+  if (!safeDirectory) {
+    return filename;
+  }
+  const separator = safeDirectory.includes("\\") && !safeDirectory.includes("/") ? "\\" : "/";
+  return `${safeDirectory}${separator}${filename}`;
 }
 
 function sanitizeSlideKind(value) {
@@ -3310,6 +3325,7 @@ function normalizeAppSettings(value = {}) {
   return {
     openAiApiKey: typeof value.openAiApiKey === "string" ? value.openAiApiKey.trim() : "",
     ttsPreset: normalizeTtsPresetKey(value.ttsPreset),
+    exportDir: typeof value.exportDir === "string" ? value.exportDir.trim() : "",
   };
 }
 
@@ -3328,6 +3344,7 @@ async function loadAppSettings() {
   appSettingsState = normalizeAppSettings(settings);
   settingsOpenAiApiKey.value = appSettingsState.openAiApiKey;
   settingsTtsPreset.value = appSettingsState.ttsPreset;
+  settingsExportDir.value = appSettingsState.exportDir;
   applyTtsPreset(appSettingsState.ttsPreset, { silent: true, persist: false });
   loadTtsSettings();
 }
@@ -3336,6 +3353,7 @@ async function saveGlobalAppSettings() {
   const nextSettings = normalizeAppSettings({
     openAiApiKey: settingsOpenAiApiKey.value,
     ttsPreset: settingsTtsPreset.value,
+    exportDir: settingsExportDir.value,
   });
 
   try {
@@ -3347,8 +3365,9 @@ async function saveGlobalAppSettings() {
     }
     settingsOpenAiApiKey.value = appSettingsState.openAiApiKey;
     settingsTtsPreset.value = appSettingsState.ttsPreset;
+    settingsExportDir.value = appSettingsState.exportDir;
     applyTtsPreset(appSettingsState.ttsPreset, { silent: true });
-    setStatus("앱 전역 TTS 설정을 저장했습니다.");
+    setStatus("앱 전역 설정을 저장했습니다.");
     hideAppSettings();
   } catch (error) {
     setStatus(error?.message || "앱 설정 저장에 실패했습니다.");
@@ -3358,11 +3377,41 @@ async function saveGlobalAppSettings() {
 function showAppSettings() {
   settingsOpenAiApiKey.value = appSettingsState.openAiApiKey;
   settingsTtsPreset.value = appSettingsState.ttsPreset;
+  settingsExportDir.value = appSettingsState.exportDir;
   appSettings.hidden = false;
 }
 
 function hideAppSettings() {
   appSettings.hidden = true;
+}
+
+async function chooseGlobalExportDirectory() {
+  if (!nativeApi?.selectDirectory) {
+    setStatus("Export 폴더 지정은 Tauri 앱에서 사용할 수 있습니다.");
+    return;
+  }
+  try {
+    const path = await nativeApi.selectDirectory();
+    if (path) {
+      settingsExportDir.value = path;
+      setStatus("MP4 export 폴더를 선택했습니다. Save Settings로 저장하세요.");
+    }
+  } catch (error) {
+    setStatus(error?.message || "MP4 export 폴더를 선택하지 못했습니다.");
+  }
+}
+
+async function resetGlobalExportDirectory() {
+  try {
+    if (nativeApi?.getDefaultExportDir) {
+      settingsExportDir.value = await nativeApi.getDefaultExportDir();
+    } else {
+      settingsExportDir.value = "";
+    }
+    setStatus("MP4 export 폴더를 Downloads로 되돌렸습니다. Save Settings로 저장하세요.");
+  } catch (error) {
+    setStatus(error?.message || "기본 Downloads 폴더를 읽지 못했습니다.");
+  }
 }
 
 function updateActiveDynamicSlide(mutator, options = {}) {
@@ -3664,7 +3713,7 @@ async function exportProjectAsMp4() {
   const baseName = getProjectName().replace(/[\\/:*?"<>|]/g, "-") || "simple-slide";
   let outputPath;
   try {
-    outputPath = await nativeApi.selectMp4Output(`${baseName}-${timestamp}.mp4`);
+    outputPath = await nativeApi.selectMp4Output(`${baseName}-${timestamp}.mp4`, appSettingsState.exportDir);
   } catch (error) {
     setStatus(error?.message || "MP4 저장 경로를 선택하지 못했습니다.");
     return;
@@ -3946,6 +3995,8 @@ projectLibrary.addEventListener("click", (event) => {
 appSettingsButton.addEventListener("click", showAppSettings);
 closeAppSettings.addEventListener("click", hideAppSettings);
 saveAppSettingsButton.addEventListener("click", saveGlobalAppSettings);
+chooseExportDir.addEventListener("click", chooseGlobalExportDirectory);
+resetExportDir.addEventListener("click", resetGlobalExportDirectory);
 appSettings.addEventListener("click", (event) => {
   if (event.target === appSettings) {
     hideAppSettings();
