@@ -1,3 +1,75 @@
+@font-face {
+  font-family: "Pretendard";
+  src: url("./fonts/Pretendard-Thin.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 100;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Pretendard";
+  src: url("./fonts/Pretendard-ExtraLight.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 200;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Pretendard";
+  src: url("./fonts/Pretendard-Light.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 300;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Pretendard";
+  src: url("./fonts/Pretendard-Regular.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Pretendard";
+  src: url("./fonts/Pretendard-Medium.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 500;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Pretendard";
+  src: url("./fonts/Pretendard-SemiBold.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 600;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Pretendard";
+  src: url("./fonts/Pretendard-Bold.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 700;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Pretendard";
+  src: url("./fonts/Pretendard-ExtraBold.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 800;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Pretendard";
+  src: url("./fonts/Pretendard-Black.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 900;
+  font-display: block;
+}
+
 :root {
   color-scheme: light;
   --bg: #e7e9ed;
@@ -27,7 +99,7 @@ body {
   overflow: hidden;
   background: var(--bg);
   color: var(--text);
-  font-family: Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: "Pretendard";
 }
 
 button,
@@ -829,7 +901,7 @@ select {
   padding: 9px 10px;
   background: #ffffff;
   color: var(--text);
-  font-family: Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: "Pretendard";
   font-size: 12px;
   line-height: 1.45;
   outline: none;
@@ -1177,7 +1249,7 @@ input[type="checkbox"] {
   padding: 52px 64px;
   background: #0b1020;
   color: #f8fafc;
-  font-family: Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: "Pretendard";
 }
 
 .dynamic-preview-surface.git {
@@ -1199,7 +1271,7 @@ input[type="checkbox"] {
   background: #1e1e1e;
   padding: 18px 22px;
   color: #d4d4d4;
-  font-family: Menlo, Monaco, Consolas, monospace;
+  font-family: "Pretendard";
   font-size: 16px;
   font-weight: 600;
   line-height: 1.45;
@@ -1393,7 +1465,7 @@ input[type="checkbox"] {
   background: transparent;
   color: #000000;
   caret-color: #2563eb;
-  font-family: Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: "Pretendard";
   font-size: 28px;
   font-weight: 600;
   line-height: 1.25;

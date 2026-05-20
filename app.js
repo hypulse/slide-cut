@@ -1634,7 +1634,7 @@ function renderTextObject(element) {
 function growTextBoxToContent(element) {
   const state = getState(element);
   const preset = getTextPreset(element);
-  textMeasureContext.font = `600 ${preset.fontSize}px Pretendard, sans-serif`;
+  textMeasureContext.font = `600 ${preset.fontSize}px "Pretendard"`;
   const lines = wrapTextLines(textMeasureContext, element.dataset.text || "", state.width);
   const nextWidth = state.width;
   const nextHeight = Math.max(state.height, Math.ceil(lines.length * preset.lineHeight + TEXT_PADDING_Y * 2));
@@ -1953,7 +1953,7 @@ function drawTextLines(context, text, width, height, shouldClear = false, textSi
   context.fillStyle = context.__textColor || DEFAULT_TEXT_COLOR;
   context.textBaseline = "top";
   context.textAlign = safeAlign;
-  context.font = `600 ${preset.fontSize}px Pretendard, sans-serif`;
+  context.font = `600 ${preset.fontSize}px "Pretendard"`;
 
   for (const [index, line] of wrapTextLines(context, text, width).entries()) {
     const y = TEXT_PADDING_Y + index * preset.lineHeight;
@@ -2035,7 +2035,7 @@ function getSubtitleLayout(context, text, width, height) {
   const bottomOffset = Math.round(height * 0.055);
 
   context.save();
-  context.font = `700 ${fontSize}px Pretendard, sans-serif`;
+  context.font = `700 ${fontSize}px "Pretendard"`;
   const lines = trimSubtitleLines(wrapTextLines(context, cleanText, maxTextWidth + TEXT_PADDING_X * 2), SUBTITLE_MAX_LINES);
   const measuredWidth = Math.min(maxTextWidth, Math.max(...lines.map((line) => context.measureText(line).width)));
   context.restore();
@@ -2067,7 +2067,7 @@ function drawSubtitleBox(context, text, width, height) {
   context.fillStyle = "#ffffff";
   context.textAlign = "center";
   context.textBaseline = "top";
-  context.font = `700 ${fontSize}px Pretendard, sans-serif`;
+  context.font = `700 ${fontSize}px "Pretendard"`;
   for (const [index, line] of lines.entries()) {
     context.fillText(line, width / 2, boxY + paddingY + index * lineHeight);
   }
@@ -2463,7 +2463,7 @@ function drawGitTypingSlide(context, slide, width, height, timeSeconds) {
   });
 
   context.fillStyle = "#d7dce5";
-  context.font = `700 ${clamp(Math.round(codeSize * 0.82), 12, 16)}px Pretendard, sans-serif`;
+  context.font = `700 ${clamp(Math.round(codeSize * 0.82), 12, 16)}px "Pretendard"`;
   context.textBaseline = "top";
   context.textAlign = "center";
   context.fillText(fileName, windowX + windowWidth / 2, windowY + Math.round((titleBarHeight - codeSize) / 2));
@@ -2472,7 +2472,7 @@ function drawGitTypingSlide(context, slide, width, height, timeSeconds) {
   context.beginPath();
   context.rect(editorX, editorY, editorWidth, editorHeight);
   context.clip();
-  context.font = `600 ${codeSize}px Menlo, Monaco, Consolas, monospace`;
+  context.font = `600 ${codeSize}px "Pretendard"`;
   context.textAlign = "right";
   context.textBaseline = "top";
   for (const [index, line] of frame.lines.entries()) {
@@ -2583,7 +2583,7 @@ function drawChatTypingSlide(context, slide, width, height, timeSeconds, options
   context.fillRect(0, 0, width, height);
   context.textBaseline = "top";
 
-  context.font = `750 ${questionSize}px Pretendard, sans-serif`;
+  context.font = `750 ${questionSize}px "Pretendard"`;
   const questionLines = questionText ? wrapTextLines(context, questionText, questionMaxWidth + TEXT_PADDING_X * 2) : [];
   const questionPaddingX = Math.round(questionSize * 1.08);
   const questionPaddingY = Math.round(questionSize * 0.62);
@@ -2592,7 +2592,7 @@ function drawChatTypingSlide(context, slide, width, height, timeSeconds, options
   const questionActionsHeight = shouldShowQuestionActions ? questionActionTopGap + questionActionIconSize : 0;
   const questionBlockHeight = questionHeight + questionActionsHeight;
 
-  context.font = `700 ${answerSize}px Pretendard, sans-serif`;
+  context.font = `700 ${answerSize}px "Pretendard"`;
   const answerLines = answerText ? wrapTextLines(context, answerText, answerMaxWidth + TEXT_PADDING_X * 2) : [];
   const answerHeight = answerLines.length * answerLineHeight;
   const totalContentHeight =
@@ -2607,7 +2607,7 @@ function drawChatTypingSlide(context, slide, width, height, timeSeconds, options
   context.clip();
 
   if (questionLines.length) {
-    context.font = `750 ${questionSize}px Pretendard, sans-serif`;
+    context.font = `750 ${questionSize}px "Pretendard"`;
     const questionTextWidth = Math.min(questionMaxWidth, getMeasuredTextWidth(context, questionLines, questionSize * 4));
     const questionWidth = Math.min(width - marginX * 2, Math.ceil(questionTextWidth + questionPaddingX * 2));
     const questionX = width - marginX - questionWidth;
@@ -2632,7 +2632,7 @@ function drawChatTypingSlide(context, slide, width, height, timeSeconds, options
   }
 
   if (answerLines.length) {
-    context.font = `700 ${answerSize}px Pretendard, sans-serif`;
+    context.font = `700 ${answerSize}px "Pretendard"`;
     context.fillStyle = "#111111";
     context.textAlign = "left";
     for (const [index, line] of answerLines.entries()) {
@@ -3400,7 +3400,7 @@ function renderSlidePreview(slide, previewCanvas) {
     context.fillStyle = "#000000";
     context.fillRect(0, 0, slide.width, slide.height);
     context.fillStyle = "rgba(255, 255, 255, 0.82)";
-    context.font = "700 42px Pretendard, sans-serif";
+    context.font = '700 42px "Pretendard"';
     context.fillText("VIDEO", 28, slide.height - 72);
   }
 
