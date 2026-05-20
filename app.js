@@ -1871,7 +1871,7 @@ function handlePointerEnd(event) {
 
 async function pasteImageFromClipboard() {
   if (!navigator.clipboard?.read) {
-    setStatus("브라우저가 이미지 Clipboard API를 지원하지 않습니다. Cmd+V로 붙여넣어 주세요.");
+    setStatus("현재 데스크톱 환경에서 이미지 클립보드 읽기를 사용할 수 없습니다. Cmd+V로 붙여넣어 주세요.");
     return;
   }
 

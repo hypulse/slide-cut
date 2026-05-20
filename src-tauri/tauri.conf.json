@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "identifier": "com.seungjae.simpleslide",
   "build": {
-    "frontendDist": "../web-dist",
-    "beforeDevCommand": "rm -rf web-dist && mkdir -p web-dist/vendor && cp index.html styles.css app.js web-dist/ && cp node_modules/lucide/dist/umd/lucide.min.js web-dist/vendor/",
-    "beforeBuildCommand": "rm -rf web-dist && mkdir -p web-dist/vendor && cp index.html styles.css app.js web-dist/ && cp node_modules/lucide/dist/umd/lucide.min.js web-dist/vendor/"
+    "frontendDist": "../tauri-dist",
+    "beforeDevCommand": "rm -rf tauri-dist && mkdir -p tauri-dist/vendor && cp index.html styles.css app.js tauri-dist/ && cp node_modules/lucide/dist/umd/lucide.min.js tauri-dist/vendor/",
+    "beforeBuildCommand": "rm -rf tauri-dist && mkdir -p tauri-dist/vendor && cp index.html styles.css app.js tauri-dist/ && cp node_modules/lucide/dist/umd/lucide.min.js tauri-dist/vendor/"
   },
   "app": {
     "withGlobalTauri": true,
@@ -25,7 +25,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["app"],
     "icon": []
   }
 }

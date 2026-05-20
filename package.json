@@ -6,8 +6,11 @@
   "scripts": {
     "start": "tauri dev",
     "tauri": "tauri",
-    "build": "tauri build",
-    "build:mac": "tauri build",
+    "build": "tauri build --bundles app && npm run package:release",
+    "build:app": "tauri build --bundles app",
+    "build:mac": "npm run build",
+    "build:dmg": "tauri build --bundles dmg",
+    "package:release": "./scripts/package-release.sh",
     "build:win": "tauri build"
   },
   "devDependencies": {
