@@ -5,8 +5,8 @@
   "identifier": "com.seungjae.slidecut",
   "build": {
     "frontendDist": "../tauri-dist",
-    "beforeDevCommand": "rm -rf tauri-dist && mkdir -p tauri-dist/vendor tauri-dist/fonts && cp index.html styles.css app.js tauri-dist/ && cp node_modules/lucide/dist/umd/lucide.min.js tauri-dist/vendor/ && cp node_modules/pretendard/dist/web/static/woff2/Pretendard-*.woff2 tauri-dist/fonts/",
-    "beforeBuildCommand": "rm -rf tauri-dist && mkdir -p tauri-dist/vendor tauri-dist/fonts && cp index.html styles.css app.js tauri-dist/ && cp node_modules/lucide/dist/umd/lucide.min.js tauri-dist/vendor/ && cp node_modules/pretendard/dist/web/static/woff2/Pretendard-*.woff2 tauri-dist/fonts/"
+    "beforeDevCommand": "rm -rf tauri-dist && mkdir -p tauri-dist/vendor tauri-dist/fonts && cp index.html styles.css app.js rendering.js tauri-dist/ && cp node_modules/lucide/dist/umd/lucide.min.js tauri-dist/vendor/ && cp node_modules/pretendard/dist/web/static/woff2/Pretendard-*.woff2 tauri-dist/fonts/",
+    "beforeBuildCommand": "rm -rf tauri-dist && mkdir -p tauri-dist/vendor tauri-dist/fonts && cp index.html styles.css app.js rendering.js tauri-dist/ && cp node_modules/lucide/dist/umd/lucide.min.js tauri-dist/vendor/ && cp node_modules/pretendard/dist/web/static/woff2/Pretendard-*.woff2 tauri-dist/fonts/"
   },
   "app": {
     "withGlobalTauri": true,
