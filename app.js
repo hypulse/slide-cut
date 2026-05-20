@@ -11,8 +11,10 @@ const PROJECT_FILE_FILTER = [{ name: "Slide Cut Project", extensions: ["slidecut
 const VIDEO_FILE_FILTER = [{ name: "Video", extensions: ["mp4", "mov", "m4v", "webm"] }];
 const AUDIO_FILE_FILTER = [{ name: "Audio", extensions: ["mp3", "wav", "m4a", "aac", "ogg", "flac"] }];
 const MP4_FILE_FILTER = [{ name: "MP4 Video", extensions: ["mp4"] }];
-const nativeApi = window.slideCutNative || (tauriInvoke ? {
-  isNative: true,
+if (!tauriInvoke || !tauriDialog) {
+  throw new Error("Slide Cut must run inside the Tauri desktop app.");
+}
+const nativeApi = {
   platform: window.__TAURI__?.os?.platform?.() || navigator.platform || "",
   toAssetUrl: (path) => window.__TAURI__?.core?.convertFileSrc?.(path) || path,
   listProjects: () => tauriInvoke("list_projects"),
@@ -26,9 +28,6 @@ const nativeApi = window.slideCutNative || (tauriInvoke ? {
   getDefaultExportDir: () => tauriInvoke("get_default_export_dir"),
   saveAppSettings: (settings) => tauriInvoke("save_app_settings", { settings }),
   exportProjectFile: async (suggestedName, data) => {
-    if (!tauriDialog?.save) {
-      throw new Error("Tauri 파일 저장 대화상자를 사용할 수 없습니다.");
-    }
     const path = await tauriDialog.save({
       defaultPath: suggestedName,
       filters: PROJECT_FILE_FILTER,
@@ -40,9 +39,6 @@ const nativeApi = window.slideCutNative || (tauriInvoke ? {
     return path;
   },
   importProjectFile: async () => {
-    if (!tauriDialog?.open) {
-      throw new Error("Tauri 파일 선택 대화상자를 사용할 수 없습니다.");
-    }
     const path = await tauriDialog.open({
       multiple: false,
       directory: true,
@@ -53,9 +49,6 @@ const nativeApi = window.slideCutNative || (tauriInvoke ? {
     return tauriInvoke("import_project_package", { path });
   },
   selectDirectory: async () => {
-    if (!tauriDialog?.open) {
-      throw new Error("Tauri 폴더 선택 대화상자를 사용할 수 없습니다.");
-    }
     const path = await tauriDialog.open({
       multiple: false,
       directory: true,
@@ -66,9 +59,6 @@ const nativeApi = window.slideCutNative || (tauriInvoke ? {
     return path;
   },
   selectVideoFile: async () => {
-    if (!tauriDialog?.open) {
-      throw new Error("Tauri 파일 선택 대화상자를 사용할 수 없습니다.");
-    }
     const path = await tauriDialog.open({
       multiple: false,
       directory: false,
@@ -80,9 +70,6 @@ const nativeApi = window.slideCutNative || (tauriInvoke ? {
     return path;
   },
   selectAudioFile: async () => {
-    if (!tauriDialog?.open) {
-      throw new Error("Tauri 파일 선택 대화상자를 사용할 수 없습니다.");
-    }
     const path = await tauriDialog.open({
       multiple: false,
       directory: false,
@@ -94,9 +81,6 @@ const nativeApi = window.slideCutNative || (tauriInvoke ? {
     return path;
   },
   selectMp4Output: async (suggestedName, exportDir = "") => {
-    if (!tauriDialog?.save) {
-      throw new Error("Tauri 파일 저장 대화상자를 사용할 수 없습니다.");
-    }
     const defaultPath = exportDir ? joinNativePath(exportDir, suggestedName) : suggestedName;
     return tauriDialog.save({
       defaultPath,
@@ -110,12 +94,11 @@ const nativeApi = window.slideCutNative || (tauriInvoke ? {
   listGitCommitFiles: (repoPath, commitHash) => tauriInvoke("list_git_commit_files", { repoPath, commitHash }),
   readGitCommitFileChange: (repoPath, commitHash, filePath) =>
     tauriInvoke("read_git_commit_file_change", { repoPath, commitHash, filePath }),
-} : null);
+};
 
 const projectNameInput = document.querySelector("#projectNameInput");
 const projectLibraryButton = document.querySelector("#projectLibraryButton");
 const appSettingsButton = document.querySelector("#appSettingsButton");
-const nativeDivider = document.querySelector(".native-divider");
 const colorPresetButtons = [...document.querySelectorAll("[data-color-preset]")];
 const pasteImage = document.querySelector("#pasteImage");
 const addTextBox = document.querySelector("#addTextBox");
@@ -128,8 +111,6 @@ const savePng = document.querySelector("#savePng");
 const exportMp4 = document.querySelector("#exportMp4");
 const saveProject = document.querySelector("#saveProject");
 const openProject = document.querySelector("#openProject");
-const projectFileInput = document.querySelector("#projectFileInput");
-const videoFileInput = document.querySelector("#videoFileInput");
 const drawPanel = document.querySelector('[aria-labelledby="draw-title"]');
 const slideVideoPanel = document.querySelector('[aria-labelledby="slide-video-title"]');
 const slideSoundPanel = document.querySelector('[aria-labelledby="slide-sound-title"]');
@@ -865,7 +846,7 @@ function joinNativePath(directory, filename) {
 }
 
 function isExternalUrl(value) {
-  return /^(data:|blob:|https?:|asset:)/i.test(String(value || ""));
+  return /^(data:|blob:|asset:)/i.test(String(value || ""));
 }
 
 function getDisplayAssetUrl(value) {
@@ -873,7 +854,7 @@ function getDisplayAssetUrl(value) {
   if (!path || isExternalUrl(path)) {
     return path;
   }
-  return nativeApi?.toAssetUrl ? nativeApi.toAssetUrl(path) : path;
+  return nativeApi.toAssetUrl(path);
 }
 
 function sanitizeSlideKind(value) {
@@ -1592,7 +1573,7 @@ function startShapeDraw(event) {
   try {
     canvas.setPointerCapture(event.pointerId);
   } catch (error) {
-    // Pointer capture can fail in older browser paths; document-level handlers still finish the draw.
+    // Pointer capture can fail during edge-case drags; document-level handlers still finish the draw.
   }
 }
 
@@ -2751,7 +2732,7 @@ async function renderDynamicSlideFrames(slide, options = {}) {
 }
 
 async function refreshGitTypingSlideForExport(slide) {
-  if (sanitizeSlideKind(slide?.kind) !== "gitTyping" || !nativeApi?.readGitCommitFileChange) {
+  if (sanitizeSlideKind(slide?.kind) !== "gitTyping") {
     return slide;
   }
   const data = getGitTypingData(slide);
@@ -3005,7 +2986,7 @@ function updateSlideVideoView() {
     return;
   }
 
-  const assetUrl = nativeApi?.toAssetUrl ? nativeApi.toAssetUrl(video.path) : video.path;
+  const assetUrl = nativeApi.toAssetUrl(video.path);
   if (slideVideo.dataset.path !== video.path) {
     slideVideo.src = assetUrl;
     slideVideo.dataset.path = video.path;
@@ -3130,7 +3111,7 @@ function renderDynamicSlidePreview(slide) {
   if (kind === "gitTyping") {
     const data = getGitTypingData(slide);
     const surface = createPreviewElement("div", "dynamic-preview-surface git");
-    const window = createPreviewElement("div", "dynamic-preview-code-window");
+    const codeWindow = createPreviewElement("div", "dynamic-preview-code-window");
     const titleBar = createPreviewElement("div", "dynamic-preview-code-titlebar");
     const lights = createPreviewElement("div", "dynamic-preview-code-lights");
     lights.append(
@@ -3145,8 +3126,8 @@ function renderDynamicSlidePreview(slide) {
       truncateText(typeof data.afterContent === "string" ? data.afterContent : data.content, 2400)
     );
     titleBar.append(lights, title);
-    window.append(titleBar, code);
-    surface.append(window);
+    codeWindow.append(titleBar, code);
+    surface.append(codeWindow);
     dynamicSlidePreview.append(surface);
     return;
   }
@@ -3858,16 +3839,6 @@ function deleteCurrentSlide() {
   recordHistory();
 }
 
-function downloadTextFile(filename, content, mimeType) {
-  const blob = new Blob([content], { type: mimeType });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.download = filename;
-  link.href = url;
-  link.click();
-  setTimeout(() => URL.revokeObjectURL(url), 0);
-}
-
 function createProjectData() {
   serializeCurrentSlide();
   return {
@@ -3906,9 +3877,6 @@ function createProjectThumbnailDataUrl() {
 }
 
 async function refreshNativeProjectList() {
-  if (!nativeApi) {
-    return [];
-  }
   nativeProjects = await nativeApi.listProjects();
   renderNativeProjectList();
   return nativeProjects;
@@ -3997,7 +3965,7 @@ function applyMaterializedAssetPaths(savedData) {
 }
 
 async function saveActiveNativeProject(options = {}) {
-  if (!nativeApi || isLoadingNativeProject) {
+  if (isLoadingNativeProject) {
     return null;
   }
 
@@ -4044,7 +4012,7 @@ async function saveActiveNativeProject(options = {}) {
 }
 
 function scheduleNativeProjectSave() {
-  if (!nativeApi || isLoadingNativeProject) {
+  if (isLoadingNativeProject) {
     return;
   }
   setSaveState("Saving...");
@@ -4140,10 +4108,6 @@ function renderNativeProjectList() {
 }
 
 async function showProjectLibrary() {
-  if (!nativeApi) {
-    setStatus("프로젝트 목록은 데스크톱 앱에서 사용할 수 있습니다.");
-    return;
-  }
   await refreshNativeProjectList();
   projectLibrary.hidden = false;
 }
@@ -4185,7 +4149,7 @@ function applyProjectState(project) {
 }
 
 async function createNewNativeProject(options = {}) {
-  if (nativeApi && activeProjectId) {
+  if (activeProjectId) {
     await saveActiveNativeProject();
   }
   isLoadingNativeProject = true;
@@ -4201,9 +4165,6 @@ async function createNewNativeProject(options = {}) {
 }
 
 async function openNativeProject(projectId, options = {}) {
-  if (!nativeApi) {
-    return;
-  }
   if (!options.skipSave) {
     await saveActiveNativeProject();
   }
@@ -4223,9 +4184,6 @@ async function openNativeProject(projectId, options = {}) {
 }
 
 async function renameNativeProject(projectId, name) {
-  if (!nativeApi) {
-    return;
-  }
   try {
     const meta = await nativeApi.renameProject({ id: projectId, name });
     if (projectId === activeProjectId) {
@@ -4239,9 +4197,6 @@ async function renameNativeProject(projectId, name) {
 }
 
 async function duplicateNativeProject(projectId) {
-  if (!nativeApi) {
-    return;
-  }
   try {
     await saveActiveNativeProject();
     await nativeApi.duplicateProject(projectId);
@@ -4253,7 +4208,7 @@ async function duplicateNativeProject(projectId) {
 }
 
 async function deleteNativeProject(projectId) {
-  if (!nativeApi || !window.confirm("이 프로젝트를 삭제할까요?")) {
+  if (!window.confirm("이 프로젝트를 삭제할까요?")) {
     return;
   }
   try {
@@ -4275,15 +4230,6 @@ async function deleteNativeProject(projectId) {
 }
 
 async function initializeNativeMode() {
-  if (!nativeApi) {
-    projectNameInput.hidden = true;
-    projectLibraryButton.hidden = true;
-    nativeDivider.hidden = true;
-    setSaveState("File mode");
-    return;
-  }
-
-  document.body.classList.add("is-native-app");
   setButtonLabel(saveProject, "Export Project");
   setButtonLabel(openProject, "Import Project");
   await refreshNativeProjectList();
@@ -4396,36 +4342,18 @@ function isRedoShortcut(event) {
 }
 
 async function saveProjectInternally() {
-  if (nativeApi) {
-    await saveActiveNativeProject({ showStatus: true });
-    return;
-  }
-
-  setStatus("내부 저장은 데스크톱 앱에서 사용할 수 있습니다.");
+  await saveActiveNativeProject({ showStatus: true });
 }
 
 async function exportProjectFile() {
-  if (nativeApi?.exportProjectFile) {
-    const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-    const project = createProjectData();
-    const baseName = getProjectName().replace(/[\\/:*?"<>|]/g, "-") || "slide-cut";
-    const savedPath = await nativeApi.exportProjectFile(`${baseName}-${timestamp}.slidecut`, project);
-    if (savedPath) {
-      setSaveState("Exported");
-      setStatus("선택한 경로에 asset 포함 프로젝트 패키지를 저장했습니다.");
-    }
-    return;
-  }
-
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
   const project = createProjectData();
-  downloadTextFile(
-    `slide-cut-${timestamp}.slidecut.json`,
-    JSON.stringify(project, null, 2),
-    "application/json"
-  );
-  setSaveState("Exported");
-  setStatus("프로젝트 파일로 저장했습니다.");
+  const baseName = getProjectName().replace(/[\\/:*?"<>|]/g, "-") || "slide-cut";
+  const savedPath = await nativeApi.exportProjectFile(`${baseName}-${timestamp}.slidecut`, project);
+  if (savedPath) {
+    setSaveState("Exported");
+    setStatus("선택한 경로에 asset 포함 프로젝트 패키지를 저장했습니다.");
+  }
 }
 
 function sanitizeColor(value, fallback = "#ffffff") {
@@ -4556,35 +4484,7 @@ function normalizeProjectData(data) {
   };
 }
 
-async function openProjectFile(file) {
-  try {
-    const text = await file.text();
-    const parsed = JSON.parse(text);
-    const project = normalizeProjectData(parsed);
-    if (nativeApi) {
-      activeProjectId = null;
-      activeProjectName = file.name.replace(/\.slidecut\.json$|\.json$/i, "") || "Imported Project";
-      projectNameInput.value = activeProjectName;
-    }
-    applyProjectState(project);
-    if (nativeApi) {
-      await saveActiveNativeProject({ showStatus: true });
-    } else {
-      setStatus(`${file.name} 프로젝트를 열었습니다.`);
-    }
-  } catch (error) {
-    setStatus(error.message || "프로젝트 파일을 열지 못했습니다.");
-  } finally {
-    projectFileInput.value = "";
-  }
-}
-
 async function importNativeProjectFile() {
-  if (!nativeApi?.importProjectFile) {
-    projectFileInput.click();
-    return;
-  }
-
   try {
     const record = await nativeApi.importProjectFile();
     if (!record) {
@@ -4607,35 +4507,29 @@ async function chooseVideoForCurrentSlide() {
     return;
   }
 
-  if (nativeApi?.selectVideoFile) {
-    try {
-      const path = await nativeApi.selectVideoFile();
-      if (!path || !slides[activeSlideIndex]) {
-        return;
-      }
-      if (!activeProjectId) {
-        await saveActiveNativeProject();
-      }
-      const importedAsset =
-        activeProjectId && nativeApi.importProjectAsset
-          ? await nativeApi.importProjectAsset(activeProjectId, path)
-          : { path, name: getFileNameFromPath(path) };
-      slides[activeSlideIndex].video = {
-        path: importedAsset.path,
-        name: importedAsset.name || getFileNameFromPath(path),
-        fit: "fill",
-      };
-      updateSlideVideoView();
-      renderSlideList();
-      setStatus("배경 영상을 프로젝트에 복사해 연결했습니다.");
-      recordHistory();
-    } catch (error) {
-      setStatus(error?.message || "영상 파일을 프로젝트에 복사하지 못했습니다.");
+  try {
+    const path = await nativeApi.selectVideoFile();
+    if (!path || !slides[activeSlideIndex]) {
+      return;
     }
-    return;
+    if (!activeProjectId) {
+      await saveActiveNativeProject();
+    }
+    const importedAsset = activeProjectId
+      ? await nativeApi.importProjectAsset(activeProjectId, path)
+      : { path, name: getFileNameFromPath(path) };
+    slides[activeSlideIndex].video = {
+      path: importedAsset.path,
+      name: importedAsset.name || getFileNameFromPath(path),
+      fit: "fill",
+    };
+    updateSlideVideoView();
+    renderSlideList();
+    setStatus("배경 영상을 프로젝트에 복사해 연결했습니다.");
+    recordHistory();
+  } catch (error) {
+    setStatus(error?.message || "영상 파일을 프로젝트에 복사하지 못했습니다.");
   }
-
-  videoFileInput.click();
 }
 
 function clearVideoForCurrentSlide() {
@@ -4650,11 +4544,6 @@ function clearVideoForCurrentSlide() {
 }
 
 async function chooseSoundForCurrentSlide() {
-  if (!nativeApi?.selectAudioFile) {
-    setStatus("효과음 선택은 Tauri 앱에서 사용할 수 있습니다.");
-    return;
-  }
-
   try {
     const path = await nativeApi.selectAudioFile();
     if (!path || !slides[activeSlideIndex]) {
@@ -4663,10 +4552,9 @@ async function chooseSoundForCurrentSlide() {
     if (!activeProjectId) {
       await saveActiveNativeProject();
     }
-    const importedAsset =
-      activeProjectId && nativeApi.importProjectAsset
-        ? await nativeApi.importProjectAsset(activeProjectId, path)
-        : { path, name: getFileNameFromPath(path) };
+    const importedAsset = activeProjectId
+      ? await nativeApi.importProjectAsset(activeProjectId, path)
+      : { path, name: getFileNameFromPath(path) };
     slides[activeSlideIndex].startSound = {
       path: importedAsset.path,
       name: importedAsset.name || getFileNameFromPath(path),
@@ -4692,11 +4580,6 @@ function clearSoundForCurrentSlide() {
 }
 
 async function chooseBackgroundMusicForProject() {
-  if (!nativeApi?.selectAudioFile) {
-    setStatus("배경음 선택은 Tauri 앱에서 사용할 수 있습니다.");
-    return;
-  }
-
   try {
     const path = await nativeApi.selectAudioFile();
     if (!path) {
@@ -4705,10 +4588,9 @@ async function chooseBackgroundMusicForProject() {
     if (!activeProjectId) {
       await saveActiveNativeProject();
     }
-    const importedAsset =
-      activeProjectId && nativeApi.importProjectAsset
-        ? await nativeApi.importProjectAsset(activeProjectId, path)
-        : { path, name: getFileNameFromPath(path) };
+    const importedAsset = activeProjectId
+      ? await nativeApi.importProjectAsset(activeProjectId, path)
+      : { path, name: getFileNameFromPath(path) };
     projectSettingsState = normalizeProjectSettings({
       ...projectSettingsState,
       backgroundMusic: {
@@ -4732,23 +4614,6 @@ function clearBackgroundMusicForProject() {
   updateBackgroundMusicView();
   setStatus("프로젝트 배경음을 제거했습니다.");
   scheduleNativeProjectSave();
-}
-
-function openBrowserVideoFile(file) {
-  if (!file || !slides[activeSlideIndex]) {
-    return;
-  }
-  const url = URL.createObjectURL(file);
-  slides[activeSlideIndex].video = {
-    path: url,
-    name: file.name || "Browser video",
-    fit: "fill",
-  };
-  updateSlideVideoView();
-  renderSlideList();
-  setStatus("임시 배경 영상을 연결했습니다.");
-  recordHistory();
-  videoFileInput.value = "";
 }
 
 async function saveCanvasAsPng() {
@@ -4929,21 +4794,9 @@ function applyProjectCanvasSettingsToSlides(options = {}) {
 }
 
 async function loadAppSettings() {
-  let settings = null;
-  if (nativeApi?.getAppSettings) {
-    settings = await nativeApi.getAppSettings();
-  } else {
-    try {
-      settings = JSON.parse(localStorage.getItem("slideCutAppSettings") || "{}");
-    } catch {
-      settings = {};
-    }
-  }
-
+  const settings = await nativeApi.getAppSettings();
   appSettingsState = normalizeAppSettings(settings);
-  if (nativeApi?.getDefaultExportDir) {
-    defaultProjectExportDir = await nativeApi.getDefaultExportDir();
-  }
+  defaultProjectExportDir = await nativeApi.getDefaultExportDir();
   projectSettingsState = normalizeProjectSettings(projectSettingsState);
   syncSettingsControls();
 }
@@ -4956,12 +4809,7 @@ async function saveSettings() {
   const nextProjectSettings = getProjectSettingsFromControls();
 
   try {
-    if (nativeApi?.saveAppSettings) {
-      appSettingsState = normalizeAppSettings(await nativeApi.saveAppSettings(nextAppSettings));
-    } else {
-      localStorage.setItem("slideCutAppSettings", JSON.stringify(nextAppSettings));
-      appSettingsState = nextAppSettings;
-    }
+    appSettingsState = normalizeAppSettings(await nativeApi.saveAppSettings(nextAppSettings));
     projectSettingsState = nextProjectSettings;
     applyProjectCanvasSettingsToSlides({ record: true });
     scheduleNativeProjectSave();
@@ -4983,10 +4831,6 @@ function hideAppSettings() {
 }
 
 async function chooseProjectExportDirectory() {
-  if (!nativeApi?.selectDirectory) {
-    setStatus("내보내기 폴더 지정은 Tauri 앱에서 사용할 수 있습니다.");
-    return;
-  }
   try {
     const path = await nativeApi.selectDirectory();
     if (path) {
@@ -5070,10 +4914,6 @@ function syncChatTypingInputsToSlide(options = {}) {
 }
 
 async function chooseGitRepositoryForSlide() {
-  if (!nativeApi?.selectDirectory) {
-    setStatus("Git 저장소 선택은 Tauri 앱에서 사용할 수 있습니다.");
-    return;
-  }
   const path = await nativeApi.selectDirectory();
   if (!path) {
     return;
@@ -5119,10 +4959,6 @@ async function loadGitCommitsForSlide() {
   if (!slide) {
     return;
   }
-  if (!nativeApi?.listGitCommits) {
-    setStatus("Git 커밋 읽기는 Tauri 앱에서 사용할 수 있습니다.");
-    return;
-  }
   const repoPath = requireGitRepoPath();
   if (!repoPath) {
     return;
@@ -5162,10 +4998,6 @@ async function loadGitCommitsForSlide() {
 async function loadGitFilesForSlide(options = {}) {
   const slide = getActiveGitTypingSlide();
   if (!slide) {
-    return;
-  }
-  if (!nativeApi?.listGitCommitFiles) {
-    setStatus("Git 파일 목록 읽기는 Tauri 앱에서 사용할 수 있습니다.");
     return;
   }
   const repoPath = requireGitRepoPath();
@@ -5210,10 +5042,6 @@ async function loadGitFilesForSlide(options = {}) {
 async function loadGitFileChangeForSlide(options = {}) {
   const slide = getActiveGitTypingSlide();
   if (!slide) {
-    return;
-  }
-  if (!nativeApi?.readGitCommitFileChange) {
-    setStatus("Git 파일 변경 내용 읽기는 Tauri 앱에서 사용할 수 있습니다.");
     return;
   }
   const repoPath = requireGitRepoPath();
@@ -5277,22 +5105,20 @@ async function beginExportJob(exportId) {
   exportModal.hidden = false;
   setExportModalProgress("Preparing", "Preparing export...", 0, 1);
 
-  if (nativeApi?.listenVideoExportProgress) {
-    try {
-      activeExportJob.unlisten = await nativeApi.listenVideoExportProgress((progress) => {
-        if (!activeExportJob || progress?.exportId !== activeExportJob.id) {
-          return;
-        }
-        setExportModalProgress(
-          progress.phase || "Exporting",
-          progress.message || "영상 파일을 생성하고 있습니다.",
-          progress.current,
-          progress.total
-        );
-      });
-    } catch {
-      activeExportJob.unlisten = null;
-    }
+  try {
+    activeExportJob.unlisten = await nativeApi.listenVideoExportProgress((progress) => {
+      if (!activeExportJob || progress?.exportId !== activeExportJob.id) {
+        return;
+      }
+      setExportModalProgress(
+        progress.phase || "Exporting",
+        progress.message || "영상 파일을 생성하고 있습니다.",
+        progress.current,
+        progress.total
+      );
+    });
+  } catch {
+    activeExportJob.unlisten = null;
   }
 }
 
@@ -5317,21 +5143,14 @@ async function cancelActiveExportJob() {
   activeExportJob.cancelled = true;
   cancelExport.disabled = true;
   setExportModalProgress("Cancelling", "영상 내보내기를 취소하는 중입니다.", 1, 1);
-  if (nativeApi?.cancelVideoExport) {
-    try {
-      await nativeApi.cancelVideoExport(activeExportJob.id);
-    } catch {
-      // The frontend render phase can still cancel even if the native command has not started.
-    }
+  try {
+    await nativeApi.cancelVideoExport(activeExportJob.id);
+  } catch {
+    // The frontend render phase can still cancel even if the native command has not started.
   }
 }
 
 async function exportProjectAsMp4() {
-  if (!nativeApi?.exportVideo || !nativeApi?.selectMp4Output) {
-    setStatus("영상 내보내기는 Tauri 데스크톱 앱에서 사용할 수 있습니다.");
-    return;
-  }
-
   serializeCurrentSlide();
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
   const baseName = getProjectName().replace(/[\\/:*?"<>|]/g, "-") || "slide-cut";
@@ -5590,7 +5409,7 @@ for (const button of canvasAlignButtons) {
 projectNameInput.addEventListener("change", () => {
   activeProjectName = getProjectName();
   projectNameInput.value = activeProjectName;
-  if (nativeApi && activeProjectId) {
+  if (activeProjectId) {
     renameNativeProject(activeProjectId, activeProjectName);
   } else {
     scheduleNativeProjectSave();
@@ -5628,12 +5447,6 @@ chooseSlideVideo.addEventListener("click", chooseVideoForCurrentSlide);
 clearSlideVideo.addEventListener("click", clearVideoForCurrentSlide);
 chooseSlideSound.addEventListener("click", chooseSoundForCurrentSlide);
 clearSlideSound.addEventListener("click", clearSoundForCurrentSlide);
-videoFileInput.addEventListener("change", () => {
-  const [file] = videoFileInput.files;
-  if (file) {
-    openBrowserVideoFile(file);
-  }
-});
 settingsCanvasWidth.addEventListener("blur", () => {
   settingsCanvasWidth.value = String(sanitizeNumber(settingsCanvasWidth.value, DEFAULT_CANVAS_WIDTH, 80, 4096));
 });
@@ -5714,12 +5527,6 @@ exportMp4.addEventListener("click", exportProjectAsMp4);
 cancelExport.addEventListener("click", cancelActiveExportJob);
 saveProject.addEventListener("click", exportProjectFile);
 openProject.addEventListener("click", importNativeProjectFile);
-projectFileInput.addEventListener("change", () => {
-  const [file] = projectFileInput.files;
-  if (file) {
-    openProjectFile(file);
-  }
-});
 addSlide.addEventListener("click", addNewSlide);
 duplicateSlide.addEventListener("click", duplicateCurrentSlide);
 deleteSlide.addEventListener("click", deleteCurrentSlide);

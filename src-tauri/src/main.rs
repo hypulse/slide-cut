@@ -63,22 +63,13 @@ struct ProjectAsset {
     name: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct AppSettings {
     #[serde(default)]
     open_ai_api_key: String,
     #[serde(default)]
     mini_max_api_key: String,
-}
-
-impl Default for AppSettings {
-    fn default() -> Self {
-        Self {
-            open_ai_api_key: String::new(),
-            mini_max_api_key: String::new(),
-        }
-    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -399,7 +390,7 @@ fn copy_asset_into_assets_dir(
         return Ok(None);
     }
 
-    fs::create_dir_all(&assets_dir).map_err(|error| error.to_string())?;
+    fs::create_dir_all(assets_dir).map_err(|error| error.to_string())?;
     let assets_root = assets_dir
         .canonicalize()
         .unwrap_or_else(|_| assets_dir.to_path_buf());
@@ -759,38 +750,6 @@ fn import_project_package(path: String) -> Result<ProjectRecord, String> {
 }
 
 #[tauri::command]
-fn write_project_file(path: String, data: Value) -> Result<(), String> {
-    if path.trim().is_empty() {
-        return Err("저장 경로를 읽지 못했습니다.".to_string());
-    }
-    write_json(PathBuf::from(path), &data)
-}
-
-#[tauri::command]
-fn read_project_file(path: String) -> Result<ProjectRecord, String> {
-    if path.trim().is_empty() {
-        return Err("파일 경로를 읽지 못했습니다.".to_string());
-    }
-    let path = PathBuf::from(path);
-    let data: Value = read_json(path.clone())?;
-    let name = path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or("Imported Project")
-        .replace(".slidecut.json", "")
-        .replace(".json", "");
-    let timestamp = now_string()?;
-    let meta = ProjectMeta {
-        id: String::new(),
-        name: clean_project_name(Some(&name)),
-        created_at: timestamp.clone(),
-        updated_at: timestamp,
-        thumbnail: String::new(),
-    };
-    Ok(ProjectRecord { meta, data })
-}
-
-#[tauri::command]
 fn get_app_settings(app: AppHandle) -> Result<AppSettings, String> {
     let path = app_settings_path(&app)?;
     if !path.exists() {
@@ -845,7 +804,7 @@ fn format_seconds(value: f64) -> String {
 
 fn even_dimension(value: u32) -> u32 {
     let value = value.clamp(2, 8192);
-    if value % 2 == 0 {
+    if value.is_multiple_of(2) {
         value
     } else {
         value - 1
@@ -1223,10 +1182,7 @@ fn read_git_commit_file_change(
         .lines()
         .filter_map(|line| {
             let parts: Vec<&str> = line.split('\t').collect();
-            let status = parts.first().copied().unwrap_or_default();
-            if status.starts_with('R') && parts.len() >= 3 {
-                Some(parts[1].to_string())
-            } else if parts.len() >= 2 {
+            if parts.len() >= 2 {
                 Some(parts[1].to_string())
             } else {
                 None
@@ -1924,15 +1880,15 @@ fn export_video(app: AppHandle, payload: VideoExportPayload) -> Result<VideoExpo
             0,
             1,
         );
-        let ffmpeg = find_tool("ffmpeg", "SIMPLE_SLIDE_FFMPEG", "-version")?;
-        let ffprobe = find_tool("ffprobe", "SIMPLE_SLIDE_FFPROBE", "-version")?;
+        let ffmpeg = find_tool("ffmpeg", "SLIDE_CUT_FFMPEG", "-version")?;
+        let ffprobe = find_tool("ffprobe", "SLIDE_CUT_FFPROBE", "-version")?;
         let needs_tts = payload
             .slides
             .iter()
             .any(|slide| !slide.notes.trim().is_empty());
         check_export_cancelled(&export_id)?;
         let curl = if needs_tts {
-            Some(find_tool("curl", "SIMPLE_SLIDE_CURL", "--version")?)
+            Some(find_tool("curl", "SLIDE_CUT_CURL", "--version")?)
         } else {
             None
         };
@@ -2210,8 +2166,6 @@ pub fn run() {
             import_project_asset,
             export_project_package,
             import_project_package,
-            write_project_file,
-            read_project_file,
             get_app_settings,
             get_default_export_dir,
             save_app_settings,
