@@ -36,6 +36,18 @@ The app is intentionally small. It focuses on arranging visual blocks, writing n
 - Create animated GPT conversation slides
 - Save and import `.slidecut` project packages with assets included
 
+## Roadmap
+
+Planned development areas:
+
+- Refine the editor UI and make common workflows easier to follow
+- Add presets and export options for vertical short-form videos
+- Add font controls for choosing typefaces, weights, and text styles
+- Let Git slides and GPT conversation slides use custom visual styles
+- Expand Slide Cut so it can also be used for live presentations
+- Add per-object animations for text, images, shapes, and callouts
+- Show clear setup guidance when an export feature needs an external tool or optional package
+
 ## Install
 
 Download the latest macOS ZIP from the GitHub Releases page when a release is available.
@@ -197,4 +209,6 @@ npm run build
 
 ## License
 
-License information has not been added yet. Add a `LICENSE` file before publishing a public release.
+Slide Cut is licensed under the MIT License. See [LICENSE](LICENSE).
+
+Third-party software and asset notices are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
