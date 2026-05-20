@@ -1,39 +1,200 @@
 # Slide Cut
 
-Slide Cut은 데스크톱에서 이미지와 텍스트를 빠르게 조합해 직관적인 PPT, 소개 자료, 발표용 장면을 만들기 위한 가벼운 슬라이드 제작 도구입니다.
+![Slide Cut placeholder app icon](src-tauri/icons/icon.png)
 
-## Why Slide Cut
+Slide Cut is a lightweight desktop app for turning images, text, notes, and code changes into simple slides and narrated videos.
 
-많은 발표 자료 제작 도구는 기능이 풍부한 대신, 단순한 시각 자료 하나를 만들 때도 편집 흐름이 무겁습니다. Slide Cut은 “이미지 붙여넣기, 텍스트 배치, 크기 조절, 회전, 정렬, 저장”처럼 자료 제작에서 자주 반복되는 핵심 행위에 집중합니다.
+[Korean README](README.ko.md)
 
-이 소프트웨어의 목적은 전문 디자인 도구를 대체하는 것이 아니라, 생각을 빠르게 화면 위에 올리고 바로 발표 가능한 형태로 정리할 수 있는 작은 작업 공간을 제공하는 것입니다.
+## What It Is
 
-## Core Value
+Slide Cut is for people who need to explain something quickly without opening a heavy presentation suite or a full video editor.
 
-- 데스크톱 앱에서 바로 다룰 수 있는 간단한 슬라이드 제작 환경
-- 이미지와 텍스트를 조합해 소개 자료, 썸네일, 설명 이미지, 발표 장면을 빠르게 구성
-- PPT처럼 여러 장의 캔버스를 만들고 순서를 조정할 수 있는 흐름
-- 붙여넣은 이미지, 텍스트, 선, 화살표를 오브젝트 단위로 직접 이동, 회전, 크기 조절
-- PNG 내보내기뿐 아니라 전용 프로젝트 파일로 다시 편집 가능한 작업 보존
+Use it to make:
 
-## Design Direction
+- product explainers and quick pitch slides
+- YouTube or short-form video scenes
+- code-change walkthroughs from a Git commit
+- GPT-style conversation slides
+- PNG images for docs, thumbnails, and social posts
+- narrated MP4 videos from slide notes
 
-Slide Cut은 복잡한 그래픽 편집보다 “자료 구성”에 초점을 둡니다. 브러시 중심의 그림판이 아니라, 사용자가 가진 이미지와 문장을 슬라이드 위에 놓고 바로 다듬는 도구입니다.
+The app is intentionally small. It focuses on arranging visual blocks, writing notes, and exporting a useful result.
 
-그래서 화면은 도구 설명보다 실제 작업 영역을 우선하고, 모든 요소는 가능한 한 선택한 즉시 움직이고 조정할 수 있도록 설계되었습니다. 결과물은 단일 이미지로 끝나지 않고, 나중에 다시 열어 수정할 수 있는 프로젝트 형태로 남길 수 있습니다.
+## Highlights
 
-## Project Meaning
+- Multi-slide projects with thumbnails, ordering, duplication, and autosave
+- Paste images directly onto the canvas
+- Add text boxes, lines, arrows, and pen marks
+- Move, resize, rotate, align, duplicate, and layer objects
+- Export a single slide as PNG
+- Export a slide deck as MP4
+- Generate speech from slide notes with OpenAI or MiniMax TTS
+- Burn optional subtitles into exported video
+- Add per-slide start sounds and project background music
+- Create animated Git slides from a selected repository, commit, and file
+- Create animated GPT conversation slides
+- Save and import `.slidecut` project packages with assets included
 
-Slide Cut은 무거운 프레젠테이션 앱과 전문 디자인 툴 사이의 빈틈을 메우는 작은 제작 도구입니다. 아이디어를 정리하거나, 서비스 소개 이미지를 만들거나, 영상에 넣을 설명 장면을 구성하거나, 빠른 발표 자료를 만들 때 불필요한 설정 없이 바로 시각화할 수 있는 환경을 지향합니다.
+## Install
 
-핵심은 “잘 그리는 도구”가 아니라 “쉽게 배치하고 설명하는 도구”입니다. 데스크톱 앱 기반의 단순한 편집 경험을 통해 누구나 이미지와 텍스트만으로도 명확한 슬라이드형 자료를 만들 수 있게 하는 것이 Slide Cut의 의의입니다.
+Download the latest macOS ZIP from the GitHub Releases page when a release is available.
 
-## Release Build
+Unzip it, open `Slide Cut.app`, and start a new project from the Projects window.
 
-GitHub Release에 올릴 macOS 배포 파일은 아래 명령으로 생성합니다.
+If macOS blocks the app because it is unsigned, open it from Finder with right click -> Open. This is expected for local or early open-source builds.
+
+## Basic Workflow
+
+1. Paste an image or add text.
+2. Arrange objects on the canvas.
+3. Add more slides from the slide list.
+4. Write slide notes if you want narration.
+5. Choose sounds, background music, or dynamic Git/GPT slides when needed.
+6. Export as PNG or MP4.
+7. Export a `.slidecut` project package when you want to move the editable project with its assets.
+
+## Video Export Notes
+
+MP4 export uses FFmpeg and ffprobe. They must be available on your machine.
+
+For narrated exports, add an API key in Settings:
+
+- OpenAI for `gpt-4o-mini-tts`, `tts-1`, or `tts-1-hd`
+- MiniMax for supported MiniMax speech models and voices
+
+Canvas size, narration defaults, subtitle settings, export folder, and background music are saved with the current project.
+
+## Local-First Projects
+
+Slide Cut stores projects on your computer through the desktop app. Imported image, video, and audio assets are copied into the project storage so a saved project can keep working even after the original file moves.
+
+Use `Export Project` to create a `.slidecut` package that can be imported later.
+
+## For Contributors
+
+### Build From Source
+
+Requirements:
+
+- Node.js and npm
+- Rust toolchain
+- FFmpeg and ffprobe for video export
 
 ```bash
+npm install
 npm run build
 ```
 
-빌드가 끝나면 `release/` 폴더에 `.app`을 압축한 ZIP 파일과 SHA256 체크섬 파일이 생성됩니다. macOS `.app` 번들은 `src-tauri/target/release/bundle/macos/` 아래에 남습니다.
+Build output:
+
+- Release ZIP: `release/Slide-Cut-v0.1.0-macos-arm64.zip`
+- SHA256 checksum: `release/Slide-Cut-v0.1.0-macos-arm64.zip.sha256`
+- macOS app bundle: `src-tauri/target/release/bundle/macos/Slide Cut.app`
+
+### Architecture
+
+```mermaid
+flowchart TB
+  User["User"]
+
+  subgraph Desktop["Tauri Desktop App"]
+    WebView["Tauri WebView"]
+
+    subgraph Frontend["Frontend layer"]
+      HTML["index.html\nstatic UI"]
+      CSS["styles.css\nlayout + styling"]
+      AppJS["app.js\nstate + interactions"]
+      Rendering["rendering.js\ncanvas renderers"]
+      Model["project-model.js\nserialize + normalize"]
+    end
+
+    subgraph Rust["Rust command layer"]
+      MainRS["main.rs\ncommand registration"]
+      ProjectStore["project_store.rs\nprojects + assets"]
+      GitModule["git.rs\ncommit/file inspection"]
+      VideoExport["video_export.rs\nTTS + FFmpeg export"]
+    end
+  end
+
+  subgraph Local["Local machine"]
+    ProjectFiles["Project data\n.slidecut packages\ncopied assets"]
+    GitCLI["git CLI"]
+    FFmpeg["FFmpeg / ffprobe"]
+    TTS["OpenAI or MiniMax\nvia curl"]
+  end
+
+  User --> WebView
+  WebView --> HTML
+  HTML --> CSS
+  HTML --> AppJS
+  AppJS --> Rendering
+  AppJS --> Model
+  AppJS -->|"Tauri invoke"| MainRS
+  MainRS --> ProjectStore
+  MainRS --> GitModule
+  MainRS --> VideoExport
+  ProjectStore --> ProjectFiles
+  GitModule --> GitCLI
+  VideoExport --> FFmpeg
+  VideoExport --> TTS
+```
+
+The app is desktop-only. The frontend renders the editor, previews, PNG frames, and dynamic slide animations. Rust handles local project storage, asset copying, Git inspection, TTS requests, FFmpeg video assembly, and export progress events.
+
+### MP4 Export Flow
+
+```mermaid
+sequenceDiagram
+  participant User
+  participant Frontend as app.js + rendering.js
+  participant Tauri as Tauri invoke
+  participant Rust as video_export.rs
+  participant TTS as OpenAI/MiniMax
+  participant FFmpeg as FFmpeg/ffprobe
+  participant Output as MP4 file
+
+  User->>Frontend: Click Export Video
+  Frontend->>Frontend: Serialize slides and render PNG frames
+  Frontend->>Frontend: Render dynamic Git/GPT animation frames
+  Frontend->>Tauri: export_video(payload)
+  Tauri->>Rust: Pass frames, notes, sounds, settings
+  Rust->>TTS: Request speech for slide notes
+  TTS-->>Rust: Return cached/generated audio
+  Rust->>FFmpeg: Build slide video segments
+  Rust->>FFmpeg: Mix start sounds and background music
+  Rust->>FFmpeg: Concatenate segments
+  Rust-->>Frontend: Emit export progress events
+  FFmpeg-->>Output: Write final MP4
+  Rust-->>Frontend: Return output path
+```
+
+### File Guide
+
+- `index.html`: static desktop UI structure
+- `styles.css`: app layout and editor styling
+- `app.js`: main frontend state, DOM wiring, editor interactions, export orchestration
+- `rendering.js`: canvas rendering helpers for text, dynamic Git slides, and export frames
+- `project-model.js`: project serialization, cloning, and normalization
+- `src-tauri/src/main.rs`: Tauri startup and command registration
+- `src-tauri/src/project_store.rs`: local projects, settings, asset copying, `.slidecut` import/export
+- `src-tauri/src/git.rs`: commit list, changed file list, and commit file-change extraction
+- `src-tauri/src/video_export.rs`: TTS generation, FFmpeg segment creation, MP4 export, cancellation, progress events
+- `src-tauri/tauri.conf.json`: app metadata, build copy command, CSP, bundle settings
+- `src-tauri/icons/`: placeholder app icon source and generated bundle icons
+- `scripts/package-release.sh`: zips the macOS app and writes the SHA256 checksum
+
+### Development Checks
+
+```bash
+node --check app.js
+node --check rendering.js
+node --check project-model.js
+cargo check --manifest-path src-tauri/Cargo.toml
+cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+npm run build
+```
+
+## License
+
+License information has not been added yet. Add a `LICENSE` file before publishing a public release.
