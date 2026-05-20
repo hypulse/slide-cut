@@ -7,11 +7,11 @@ const shapeTemplate = document.querySelector("#shapeTemplate");
 const statusText = document.querySelector("#statusText");
 const tauriInvoke = window.__TAURI__?.core?.invoke || null;
 const tauriDialog = window.__TAURI__?.dialog || null;
-const PROJECT_FILE_FILTER = [{ name: "Simple Slide Project", extensions: ["simpleslide"] }];
+const PROJECT_FILE_FILTER = [{ name: "Slide Cut Project", extensions: ["slidecut"] }];
 const VIDEO_FILE_FILTER = [{ name: "Video", extensions: ["mp4", "mov", "m4v", "webm"] }];
 const AUDIO_FILE_FILTER = [{ name: "Audio", extensions: ["mp3", "wav", "m4a", "aac", "ogg", "flac"] }];
 const MP4_FILE_FILTER = [{ name: "MP4 Video", extensions: ["mp4"] }];
-const nativeApi = window.simpleSlideNative || (tauriInvoke ? {
+const nativeApi = window.slideCutNative || (tauriInvoke ? {
   isNative: true,
   platform: window.__TAURI__?.os?.platform?.() || navigator.platform || "",
   toAssetUrl: (path) => window.__TAURI__?.core?.convertFileSrc?.(path) || path,
@@ -314,7 +314,7 @@ const CANVAS_ALIGNMENT_LABELS = {
   "bottom-right": "우측 하단",
 };
 const SVG_NS = "http://www.w3.org/2000/svg";
-const PROJECT_FORMAT = "simple-slide-project";
+const PROJECT_FORMAT = "slide-cut-project";
 const PROJECT_VERSION = 2;
 const HISTORY_LIMIT = 80;
 const SLIDE_DRAG_THRESHOLD = 6;
@@ -4408,8 +4408,8 @@ async function exportProjectFile() {
   if (nativeApi?.exportProjectFile) {
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
     const project = createProjectData();
-    const baseName = getProjectName().replace(/[\\/:*?"<>|]/g, "-") || "simple-slide";
-    const savedPath = await nativeApi.exportProjectFile(`${baseName}-${timestamp}.simpleslide`, project);
+    const baseName = getProjectName().replace(/[\\/:*?"<>|]/g, "-") || "slide-cut";
+    const savedPath = await nativeApi.exportProjectFile(`${baseName}-${timestamp}.slidecut`, project);
     if (savedPath) {
       setSaveState("Exported");
       setStatus("선택한 경로에 asset 포함 프로젝트 패키지를 저장했습니다.");
@@ -4420,7 +4420,7 @@ async function exportProjectFile() {
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
   const project = createProjectData();
   downloadTextFile(
-    `simple-slide-${timestamp}.simpleslide.json`,
+    `slide-cut-${timestamp}.slidecut.json`,
     JSON.stringify(project, null, 2),
     "application/json"
   );
@@ -4490,7 +4490,7 @@ function normalizeProjectObject(object) {
 
 function normalizeProjectData(data) {
   if (!data || data.format !== PROJECT_FORMAT || !Array.isArray(data.slides)) {
-    throw new Error("Simple Slide 프로젝트 파일이 아닙니다.");
+    throw new Error("Slide Cut 프로젝트 파일이 아닙니다.");
   }
 
   const normalizedSlides = data.slides.map((slide, index) => ({
@@ -4563,7 +4563,7 @@ async function openProjectFile(file) {
     const project = normalizeProjectData(parsed);
     if (nativeApi) {
       activeProjectId = null;
-      activeProjectName = file.name.replace(/\.simpleslide\.json$|\.json$/i, "") || "Imported Project";
+      activeProjectName = file.name.replace(/\.slidecut\.json$|\.json$/i, "") || "Imported Project";
       projectNameInput.value = activeProjectName;
     }
     applyProjectState(project);
@@ -4793,7 +4793,7 @@ async function saveCanvasAsPng() {
 
   const link = document.createElement("a");
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-  link.download = `simple-slide-${timestamp}.png`;
+  link.download = `slide-cut-${timestamp}.png`;
   link.href = exportCanvas.toDataURL("image/png");
   link.click();
   setStatus("PNG를 내보냈습니다.");
@@ -4934,7 +4934,7 @@ async function loadAppSettings() {
     settings = await nativeApi.getAppSettings();
   } else {
     try {
-      settings = JSON.parse(localStorage.getItem("simpleSlideAppSettings") || "{}");
+      settings = JSON.parse(localStorage.getItem("slideCutAppSettings") || "{}");
     } catch {
       settings = {};
     }
@@ -4959,7 +4959,7 @@ async function saveSettings() {
     if (nativeApi?.saveAppSettings) {
       appSettingsState = normalizeAppSettings(await nativeApi.saveAppSettings(nextAppSettings));
     } else {
-      localStorage.setItem("simpleSlideAppSettings", JSON.stringify(nextAppSettings));
+      localStorage.setItem("slideCutAppSettings", JSON.stringify(nextAppSettings));
       appSettingsState = nextAppSettings;
     }
     projectSettingsState = nextProjectSettings;
@@ -5334,7 +5334,7 @@ async function exportProjectAsMp4() {
 
   serializeCurrentSlide();
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-  const baseName = getProjectName().replace(/[\\/:*?"<>|]/g, "-") || "simple-slide";
+  const baseName = getProjectName().replace(/[\\/:*?"<>|]/g, "-") || "slide-cut";
   let outputPath;
   try {
     outputPath = await nativeApi.selectMp4Output(`${baseName}-${timestamp}.mp4`, projectSettingsState.exportDir);

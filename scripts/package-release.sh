@@ -4,12 +4,12 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-APP_NAME="Simple Slide"
+APP_NAME="Slide Cut"
 VERSION="$(node -p "require('./package.json').version")"
 ARCH="$(uname -m)"
 APP_PATH="$ROOT_DIR/src-tauri/target/release/bundle/macos/${APP_NAME}.app"
 RELEASE_DIR="$ROOT_DIR/release"
-ZIP_NAME="Simple-Slide-v${VERSION}-macos-${ARCH}.zip"
+ZIP_NAME="Slide-Cut-v${VERSION}-macos-${ARCH}.zip"
 ZIP_PATH="$RELEASE_DIR/$ZIP_NAME"
 CHECKSUM_PATH="$ZIP_PATH.sha256"
 

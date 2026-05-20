@@ -663,8 +663,8 @@ fn normalize_project_package_path(path: String) -> Result<PathBuf, String> {
         return Err("저장 경로를 읽지 못했습니다.".to_string());
     }
     let mut path = PathBuf::from(trimmed);
-    if path.extension().and_then(|value| value.to_str()) != Some("simpleslide") {
-        path.set_extension("simpleslide");
+    if path.extension().and_then(|value| value.to_str()) != Some("slidecut") {
+        path.set_extension("slidecut");
     }
     Ok(path)
 }
@@ -710,7 +710,7 @@ fn import_project_package(path: String) -> Result<ProjectRecord, String> {
     }
     let package_dir = PathBuf::from(path.trim());
     if !package_dir.is_dir() {
-        return Err("Simple Slide 프로젝트 패키지 폴더가 아닙니다.".to_string());
+        return Err("Slide Cut 프로젝트 패키지 폴더가 아닙니다.".to_string());
     }
     let mut data: Value = read_json(package_dir.join(PROJECT_FILE))?;
     rewrite_asset_paths(&mut data, |path| {
@@ -746,7 +746,7 @@ fn import_project_package(path: String) -> Result<ProjectRecord, String> {
         .file_name()
         .and_then(|name| name.to_str())
         .unwrap_or("Imported Project")
-        .trim_end_matches(".simpleslide");
+        .trim_end_matches(".slidecut");
     let timestamp = now_string()?;
     let meta = ProjectMeta {
         id: String::new(),
@@ -777,7 +777,7 @@ fn read_project_file(path: String) -> Result<ProjectRecord, String> {
         .file_name()
         .and_then(|name| name.to_str())
         .unwrap_or("Imported Project")
-        .replace(".simpleslide.json", "")
+        .replace(".slidecut.json", "")
         .replace(".json", "");
     let timestamp = now_string()?;
     let meta = ProjectMeta {
@@ -2222,7 +2222,7 @@ pub fn run() {
             export_video
         ])
         .run(tauri::generate_context!())
-        .expect("error while running Simple Slide");
+        .expect("error while running Slide Cut");
 }
 
 fn main() {
