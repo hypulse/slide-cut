@@ -2431,55 +2431,6 @@ function drawCodeLine(context, line, x, y, colorOverride = "") {
   }
 }
 
-function drawChatCopyIcon(context, x, y, size) {
-  const radius = Math.max(2, Math.round(size * 0.16));
-  const offset = Math.round(size * 0.25);
-  const box = Math.round(size * 0.62);
-  const lineWidth = Math.max(2, Math.round(size * 0.12));
-  context.save();
-  context.strokeStyle = "#686868";
-  context.lineWidth = lineWidth;
-  strokeRoundedRect(context, Math.round(x + offset), Math.round(y), box, box, radius);
-  strokeRoundedRect(context, Math.round(x), Math.round(y + offset), box, box, radius);
-  context.restore();
-}
-
-function drawChatEditIcon(context, x, y, size) {
-  const lineWidth = Math.max(2, Math.round(size * 0.12));
-  context.save();
-  context.translate(Math.round(x), Math.round(y));
-  context.strokeStyle = "#686868";
-  context.fillStyle = "#686868";
-  context.lineWidth = lineWidth;
-  context.lineCap = "round";
-  context.lineJoin = "round";
-
-  context.beginPath();
-  context.moveTo(size * 0.2, size * 0.78);
-  context.lineTo(size * 0.68, size * 0.3);
-  context.stroke();
-
-  context.beginPath();
-  context.moveTo(size * 0.6, size * 0.18);
-  context.lineTo(size * 0.82, size * 0.4);
-  context.stroke();
-
-  context.beginPath();
-  context.moveTo(size * 0.14, size * 0.86);
-  context.lineTo(size * 0.31, size * 0.8);
-  context.lineTo(size * 0.21, size * 0.69);
-  context.closePath();
-  context.fill();
-  context.restore();
-}
-
-function drawChatQuestionActions(context, rightX, y, iconSize, gap) {
-  const editX = rightX - iconSize;
-  const copyX = editX - gap - iconSize;
-  drawChatCopyIcon(context, copyX, y, iconSize);
-  drawChatEditIcon(context, editX, y, iconSize);
-}
-
 function drawChatTypingSlide(context, slide, width, height, timeSeconds, options = {}) {
   const data = getChatTypingData(slide);
   const speed = data.typingSpeed;
@@ -2504,24 +2455,19 @@ function drawChatTypingSlide(context, slide, width, height, timeSeconds, options
   const viewportY = topMargin;
   const viewportHeight = height - topMargin - bottomMargin;
   const messageGap = Math.round(height * 0.075);
-  const questionActionIconSize = clamp(Math.round(questionSize * 0.92), 15, 21);
-  const questionActionTopGap = Math.round(questionSize * 0.58);
-  const questionActionGap = Math.round(questionSize * 0.86);
 
   context.fillStyle = "#ffffff";
   context.fillRect(0, 0, width, height);
   context.textBaseline = "top";
 
-  context.font = `750 ${questionSize}px "Pretendard"`;
+  context.font = `600 ${questionSize}px "Pretendard"`;
   const questionLines = questionText ? wrapTextLines(context, questionText, questionMaxWidth + TEXT_PADDING_X * 2) : [];
   const questionPaddingX = Math.round(questionSize * 1.08);
   const questionPaddingY = Math.round(questionSize * 0.62);
   const questionHeight = questionLines.length ? questionLines.length * questionLineHeight + questionPaddingY * 2 : 0;
-  const shouldShowQuestionActions = questionLines.length > 0;
-  const questionActionsHeight = shouldShowQuestionActions ? questionActionTopGap + questionActionIconSize : 0;
-  const questionBlockHeight = questionHeight + questionActionsHeight;
+  const questionBlockHeight = questionHeight;
 
-  context.font = `700 ${answerSize}px "Pretendard"`;
+  context.font = `600 ${answerSize}px "Pretendard"`;
   const answerLines = answerText ? wrapTextLines(context, answerText, answerMaxWidth + TEXT_PADDING_X * 2) : [];
   const answerHeight = answerLines.length * answerLineHeight;
   const totalContentHeight =
@@ -2536,7 +2482,7 @@ function drawChatTypingSlide(context, slide, width, height, timeSeconds, options
   context.clip();
 
   if (questionLines.length) {
-    context.font = `750 ${questionSize}px "Pretendard"`;
+    context.font = `600 ${questionSize}px "Pretendard"`;
     const questionTextWidth = Math.min(questionMaxWidth, getMeasuredTextWidth(context, questionLines, questionSize * 4));
     const questionWidth = Math.min(width - marginX * 2, Math.ceil(questionTextWidth + questionPaddingX * 2));
     const questionX = width - marginX - questionWidth;
@@ -2548,20 +2494,11 @@ function drawChatTypingSlide(context, slide, width, height, timeSeconds, options
     for (const [index, line] of questionLines.entries()) {
       context.fillText(line, questionX + questionPaddingX, contentY + questionPaddingY + index * questionLineHeight);
     }
-    if (shouldShowQuestionActions) {
-      drawChatQuestionActions(
-        context,
-        questionX + questionWidth - Math.round(questionSize * 0.2),
-        contentY + questionHeight + questionActionTopGap,
-        questionActionIconSize,
-        questionActionGap
-      );
-    }
     contentY += questionBlockHeight + (answerLines.length ? messageGap : 0);
   }
 
   if (answerLines.length) {
-    context.font = `700 ${answerSize}px "Pretendard"`;
+    context.font = `600 ${answerSize}px "Pretendard"`;
     context.fillStyle = "#111111";
     context.textAlign = "left";
     for (const [index, line] of answerLines.entries()) {
@@ -2945,17 +2882,6 @@ function createPreviewElement(tagName, className, text = "") {
   return element;
 }
 
-function createPreviewIcon(iconName) {
-  const element = document.createElement("span");
-  element.className = "dynamic-preview-action-icon";
-  element.setAttribute("aria-hidden", "true");
-  const svg = createLucideSvg(iconName, "dynamic-preview-action-svg");
-  if (svg) {
-    element.append(svg);
-  }
-  return element;
-}
-
 function replaceSelectOptions(select, placeholder, items, selectedValue, getValue, getLabel) {
   select.replaceChildren();
   const emptyOption = document.createElement("option");
@@ -3040,13 +2966,11 @@ function renderDynamicSlidePreview(slide) {
     const chat = createPreviewElement("div", "dynamic-preview-chat");
     const questionBlock = createPreviewElement("div", "dynamic-preview-question-block");
     const question = createPreviewElement("div", "dynamic-preview-bubble question", data.question);
-    const questionActions = createPreviewElement("div", "dynamic-preview-question-actions");
     const answer = createPreviewElement("div", "dynamic-preview-answer", data.answer);
     if (data.question.length < 42 && !data.question.includes("\n")) {
       question.classList.add("is-compact");
     }
-    questionActions.append(createPreviewIcon("copy"), createPreviewIcon("pencil"));
-    questionBlock.append(question, questionActions);
+    questionBlock.append(question);
     chat.append(questionBlock, answer);
     surface.append(chat);
     dynamicSlidePreview.append(surface);
