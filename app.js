@@ -270,7 +270,7 @@ const COLOR_PRESETS = {
   light: { canvasColor: "#ffffff", textColor: "#000000" },
   dark: { canvasColor: "#000000", textColor: "#ffffff" },
 };
-const DEFAULT_STROKE_COLOR = "#000000";
+const DEFAULT_STROKE_COLOR = "#ff0000";
 const DEFAULT_STROKE_WIDTH = 4;
 const SHAPE_KINDS = new Set(["line", "arrow", "pen"]);
 const SHAPE_DRAW_PADDING = 14;
@@ -1460,7 +1460,7 @@ function createSvgElement(tagName, attributes = {}) {
   return node;
 }
 
-function getArrowHeadPoints(start, end, strokeWidth) {
+function getArrowGeometry(start, end, strokeWidth) {
   const dx = end.x - start.x;
   const dy = end.y - start.y;
   const distance = Math.hypot(dx, dy);
@@ -1469,18 +1469,21 @@ function getArrowHeadPoints(start, end, strokeWidth) {
   }
 
   const angle = Math.atan2(dy, dx);
-  const length = Math.max(16, strokeWidth * 4);
-  const halfWidth = Math.max(7, strokeWidth * 1.8);
+  const length = Math.min(Math.max(16, strokeWidth * 4), Math.max(1, distance * 0.65));
+  const halfWidth = Math.min(Math.max(7, strokeWidth * 1.8), Math.max(3, length * 0.55));
   const baseX = end.x - Math.cos(angle) * length;
   const baseY = end.y - Math.sin(angle) * length;
   const normalX = Math.cos(angle + Math.PI / 2);
   const normalY = Math.sin(angle + Math.PI / 2);
 
-  return [
-    { x: end.x, y: end.y },
-    { x: baseX + normalX * halfWidth, y: baseY + normalY * halfWidth },
-    { x: baseX - normalX * halfWidth, y: baseY - normalY * halfWidth },
-  ];
+  return {
+    shaftEnd: { x: baseX, y: baseY },
+    headPoints: [
+      { x: end.x, y: end.y },
+      { x: baseX + normalX * halfWidth, y: baseY + normalY * halfWidth },
+      { x: baseX - normalX * halfWidth, y: baseY - normalY * halfWidth },
+    ],
+  };
 }
 
 function renderShapeObject(element) {
@@ -1512,28 +1515,27 @@ function renderShapeObject(element) {
 
   const start = data.points[0];
   const end = data.points[data.points.length - 1];
+  const arrowGeometry = data.shapeKind === "arrow" ? getArrowGeometry(start, end, data.strokeWidth) : null;
+  const lineEnd = arrowGeometry?.shaftEnd || end;
   svg.append(
     createSvgElement("line", {
       x1: start.x,
       y1: start.y,
-      x2: end.x,
-      y2: end.y,
+      x2: lineEnd.x,
+      y2: lineEnd.y,
       stroke: data.strokeColor,
       "stroke-width": data.strokeWidth,
       "stroke-linecap": "round",
     })
   );
 
-  if (data.shapeKind === "arrow") {
-    const arrowHead = getArrowHeadPoints(start, end, data.strokeWidth);
-    if (arrowHead) {
-      svg.append(
-        createSvgElement("polygon", {
-          points: arrowHead.map((point) => `${point.x},${point.y}`).join(" "),
-          fill: data.strokeColor,
-        })
-      );
-    }
+  if (arrowGeometry) {
+    svg.append(
+      createSvgElement("polygon", {
+        points: arrowGeometry.headPoints.map((point) => `${point.x},${point.y}`).join(" "),
+        fill: data.strokeColor,
+      })
+    );
   }
 }
 
@@ -2661,21 +2663,20 @@ function drawShapeData(context, data, width, height) {
 
   const start = points[0];
   const end = points[points.length - 1];
+  const arrowGeometry = shapeKind === "arrow" ? getArrowGeometry(start, end, lineWidth) : null;
+  const lineEnd = arrowGeometry?.shaftEnd || end;
   context.beginPath();
   context.moveTo(start.x, start.y);
-  context.lineTo(end.x, end.y);
+  context.lineTo(lineEnd.x, lineEnd.y);
   context.stroke();
 
-  if (shapeKind === "arrow") {
-    const arrowHead = getArrowHeadPoints(start, end, lineWidth);
-    if (arrowHead) {
-      context.beginPath();
-      context.moveTo(arrowHead[0].x, arrowHead[0].y);
-      context.lineTo(arrowHead[1].x, arrowHead[1].y);
-      context.lineTo(arrowHead[2].x, arrowHead[2].y);
-      context.closePath();
-      context.fill();
-    }
+  if (arrowGeometry) {
+    context.beginPath();
+    context.moveTo(arrowGeometry.headPoints[0].x, arrowGeometry.headPoints[0].y);
+    context.lineTo(arrowGeometry.headPoints[1].x, arrowGeometry.headPoints[1].y);
+    context.lineTo(arrowGeometry.headPoints[2].x, arrowGeometry.headPoints[2].y);
+    context.closePath();
+    context.fill();
   }
 
   context.restore();
