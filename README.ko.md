@@ -100,8 +100,8 @@ npm run build
 
 빌드 결과:
 
-- 릴리스 ZIP: `release/Slide-Cut-v0.1.0-macos-arm64.zip`
-- SHA256 체크섬: `release/Slide-Cut-v0.1.0-macos-arm64.zip.sha256`
+- 릴리스 ZIP: `release/Slide-Cut-v1.0.0-macos-arm64.zip`
+- SHA256 체크섬: `release/Slide-Cut-v1.0.0-macos-arm64.zip.sha256`
 - macOS 앱 번들: `src-tauri/target/release/bundle/macos/Slide Cut.app`
 
 ### 아키텍처
