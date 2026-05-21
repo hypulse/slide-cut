@@ -2,7 +2,7 @@
 
 ![Slide Cut placeholder app icon](src-tauri/icons/icon.png)
 
-Slide Cut is a lightweight desktop app for turning images, text, notes, and code changes into simple slides and narrated videos.
+Slide Cut is a lightweight desktop app for quickly turning thoughts into videos.
 
 [Korean README](README.ko.md)
 

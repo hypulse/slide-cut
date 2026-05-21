@@ -2,7 +2,7 @@
 
 ![Slide Cut 임시 앱 아이콘](src-tauri/icons/icon.png)
 
-Slide Cut은 이미지, 텍스트, 노트, 코드 변경 내용을 간단한 슬라이드와 내레이션 영상으로 만드는 가벼운 데스크톱 앱입니다.
+Slide Cut은 생각을 빠르게 영상으로 만드는 도구입니다.
 
 [English README](README.md)
 
