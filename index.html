@@ -237,6 +237,36 @@
           <button id="addSlide" class="add-slide-button" type="button" data-icon="plus">Add Slide</button>
           <button id="addGitTypingSlide" type="button" data-icon="folder-git-2">Git Slide</button>
           <button id="addChatTypingSlide" type="button" data-icon="message-square">GPT Slide</button>
+          <div class="slide-translation-controls" aria-label="Current slide translation">
+            <div class="slide-language-row">
+              <label class="slide-language-field">
+                <span>From</span>
+                <select id="slideTranslateSource">
+                  <option value="Auto detect">Auto</option>
+                  <option value="Korean" selected>Korean</option>
+                  <option value="English">English</option>
+                  <option value="Japanese">Japanese</option>
+                  <option value="Chinese">Chinese</option>
+                  <option value="Spanish">Spanish</option>
+                  <option value="French">French</option>
+                  <option value="German">German</option>
+                </select>
+              </label>
+              <label class="slide-language-field">
+                <span>To</span>
+                <select id="slideTranslateTarget">
+                  <option value="English" selected>English</option>
+                  <option value="Korean">Korean</option>
+                  <option value="Japanese">Japanese</option>
+                  <option value="Chinese">Chinese</option>
+                  <option value="Spanish">Spanish</option>
+                  <option value="French">French</option>
+                  <option value="German">German</option>
+                </select>
+              </label>
+            </div>
+            <button id="translateSlide" type="button" data-icon="languages">Translate Slide</button>
+          </div>
         </div>
       </aside>
       </main>

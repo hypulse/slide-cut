@@ -792,6 +792,38 @@ button.danger:hover {
   grid-column: span 2;
 }
 
+.slide-translation-controls {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 4px;
+  border-top: 1px solid var(--border);
+  padding-top: 6px;
+}
+
+.slide-language-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 4px;
+}
+
+.slide-language-field {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: 4px;
+  min-height: 22px;
+  font-size: 10px;
+}
+
+.slide-language-field select {
+  height: 22px;
+  padding: 0 4px;
+  font-size: 10.5px;
+}
+
+#translateSlide {
+  grid-column: 1 / -1;
+}
+
 @media (min-width: 1280px) {
   .slide-footer-actions {
     grid-template-columns: 1fr 1fr;

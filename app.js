@@ -97,6 +97,7 @@ const nativeApi = {
   listGitCommitFiles: (repoPath, commitHash) => tauriInvoke("list_git_commit_files", { repoPath, commitHash }),
   readGitCommitFileChange: (repoPath, commitHash, filePath) =>
     tauriInvoke("read_git_commit_file_change", { repoPath, commitHash, filePath }),
+  translateSlide: (payload) => tauriInvoke("translate_slide", { payload }),
 };
 
 const projectNameInput = document.querySelector("#projectNameInput");
@@ -121,6 +122,9 @@ const dynamicSlidePanel = document.querySelector("#dynamicSlidePanel");
 const addSlide = document.querySelector("#addSlide");
 const duplicateSlide = document.querySelector("#duplicateSlide");
 const slideList = document.querySelector("#slideList");
+const slideTranslateSource = document.querySelector("#slideTranslateSource");
+const slideTranslateTarget = document.querySelector("#slideTranslateTarget");
+const translateSlideButton = document.querySelector("#translateSlide");
 const drawToolButtons = [...document.querySelectorAll("[data-draw-tool]")];
 const strokeColor = document.querySelector("#strokeColor");
 const strokeWidth = document.querySelector("#strokeWidth");
@@ -236,6 +240,7 @@ let appSettingsState = {
   openAiApiKey: "",
   miniMaxApiKey: "",
 };
+let isTranslatingSlide = false;
 let defaultProjectExportDir = "";
 let projectSettingsState = {
   canvasWidth: 1280,
@@ -3018,6 +3023,7 @@ function syncDynamicSlidePanel() {
   }
 
   renderDynamicSlidePreview(slide);
+  syncSlideTranslationControls();
 }
 
 function applyCanvasFrame(width, height, color) {
@@ -3347,6 +3353,7 @@ function renderSlideList() {
   });
   deleteSlide.disabled = slides.length <= 1;
   updateStatusBar();
+  syncSlideTranslationControls();
 }
 
 function reorderSlide(fromIndex, toIndex) {
@@ -4309,6 +4316,154 @@ async function saveCanvasAsPng() {
   setStatus("PNG를 내보냈습니다.");
 }
 
+function syncSlideTranslationControls() {
+  if (!slideTranslateSource || !slideTranslateTarget || !translateSlideButton) {
+    return;
+  }
+  const slide = slides[activeSlideIndex];
+  const isBlockedSlide = !slide || isDynamicSlide(slide);
+  slideTranslateSource.disabled = isTranslatingSlide;
+  slideTranslateTarget.disabled = isTranslatingSlide;
+  translateSlideButton.disabled = isTranslatingSlide || isBlockedSlide;
+  translateSlideButton.title = isBlockedSlide ? "Git/GPT 슬라이드는 번역 대상이 아닙니다." : "";
+  setButtonLabel(translateSlideButton, isTranslatingSlide ? "Translating..." : "Translate Slide");
+}
+
+function selectedOptionLabel(select) {
+  return select?.selectedOptions?.[0]?.textContent?.trim() || select?.value || "";
+}
+
+function collectActiveSlideTranslationItems() {
+  serializeCurrentSlide();
+  const slide = slides[activeSlideIndex];
+  if (!slide || isDynamicSlide(slide)) {
+    return [];
+  }
+
+  const items = [];
+  for (const [index, object] of slide.objects.entries()) {
+    if (object.type !== "text" || !String(object.text || "").trim()) {
+      continue;
+    }
+    items.push({
+      id: `object-${index}`,
+      kind: "object",
+      objectIndex: index,
+      text: object.text,
+    });
+  }
+
+  if (String(slide.notes || "").trim()) {
+    items.push({
+      id: "notes",
+      kind: "notes",
+      objectIndex: -1,
+      text: slide.notes,
+    });
+  }
+
+  return items;
+}
+
+function applyActiveSlideTranslation(items, translatedItems) {
+  const slide = slides[activeSlideIndex];
+  if (!slide || isDynamicSlide(slide)) {
+    return false;
+  }
+
+  const translatedById = new Map(
+    (translatedItems || [])
+      .filter((item) => typeof item?.id === "string" && typeof item?.text === "string")
+      .map((item) => [item.id, item.text])
+  );
+  const nextSlide = cloneProjectValue(slide);
+  let changed = false;
+
+  for (const item of items) {
+    if (!translatedById.has(item.id)) {
+      continue;
+    }
+    const translatedText = translatedById.get(item.id);
+    if (item.kind === "notes") {
+      if (nextSlide.notes !== translatedText) {
+        nextSlide.notes = translatedText;
+        changed = true;
+      }
+      continue;
+    }
+
+    const object = nextSlide.objects[item.objectIndex];
+    if (object?.type === "text" && object.text !== translatedText) {
+      object.text = translatedText;
+      changed = true;
+    }
+  }
+
+  if (!changed) {
+    return false;
+  }
+
+  slides[activeSlideIndex] = nextSlide;
+  loadSlide(activeSlideIndex, false);
+  recordHistory();
+  return true;
+}
+
+async function translateCurrentSlideContent() {
+  if (isTranslatingSlide) {
+    return;
+  }
+
+  const slide = slides[activeSlideIndex];
+  if (!slide || isDynamicSlide(slide)) {
+    setStatus("Git/GPT 슬라이드는 번역 대상이 아닙니다.");
+    return;
+  }
+
+  const sourceLanguage = slideTranslateSource.value;
+  const targetLanguage = slideTranslateTarget.value;
+  if (!sourceLanguage || !targetLanguage) {
+    setStatus("현재 언어와 타겟 언어를 선택해 주세요.");
+    return;
+  }
+  if (sourceLanguage === targetLanguage) {
+    setStatus("현재 언어와 타겟 언어가 같습니다.");
+    return;
+  }
+
+  const items = collectActiveSlideTranslationItems();
+  if (items.length === 0) {
+    setStatus("현재 슬라이드에 번역할 텍스트나 노트가 없습니다.");
+    return;
+  }
+
+  isTranslatingSlide = true;
+  syncSlideTranslationControls();
+  setStatus("현재 슬라이드를 번역하는 중입니다.");
+  try {
+    const result = await nativeApi.translateSlide({
+      apiKey: appSettingsState.openAiApiKey,
+      sourceLanguage,
+      targetLanguage,
+      items: items.map((item) => ({
+        id: item.id,
+        text: item.text,
+      })),
+    });
+    const changed = applyActiveSlideTranslation(items, result?.items || []);
+    setStatus(
+      changed
+        ? `현재 슬라이드를 ${selectedOptionLabel(slideTranslateTarget)}로 번역했습니다.`
+        : "번역 결과가 기존 내용과 같습니다."
+    );
+  } catch (error) {
+    setStatus(error?.message || "슬라이드 번역에 실패했습니다.");
+  } finally {
+    isTranslatingSlide = false;
+    syncSlideTranslationControls();
+  }
+}
+
 function setSimpleSelectOptions(select, values) {
   select.replaceChildren();
   for (const value of values) {
@@ -5120,6 +5275,7 @@ addTextBox.addEventListener("click", () => {
 });
 addGitTypingSlide.addEventListener("click", () => addDynamicSlide("gitTyping"));
 addChatTypingSlide.addEventListener("click", () => addDynamicSlide("chatTyping"));
+translateSlideButton.addEventListener("click", translateCurrentSlideContent);
 chooseGitRepo.addEventListener("click", () => {
   chooseGitRepositoryForSlide();
 });

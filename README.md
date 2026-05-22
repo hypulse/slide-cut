@@ -2,9 +2,13 @@
 
 ![Slide Cut placeholder app icon](src-tauri/icons/icon.png)
 
-Slide Cut is a lightweight desktop app for turning images, text, notes, and code changes into simple slides and narrated videos.
+[![Downloads](https://img.shields.io/github/downloads/hypulse/slide-cut/total.svg)](https://github.com/hypulse/slide-cut/releases/latest)
+[![Stars](https://img.shields.io/github/stars/hypulse/slide-cut?style=social)](https://github.com/hypulse/slide-cut/stargazers)
+[![Latest Release](https://img.shields.io/github/v/release/hypulse/slide-cut?display_name=tag)](https://github.com/hypulse/slide-cut/releases/latest)
 
-[Korean README](README.ko.md)
+[English](README.md) | [한국어](README.ko.md)
+
+Slide Cut is a lightweight desktop app for quickly turning thoughts into videos.
 
 ## What It Is
 
@@ -30,6 +34,7 @@ The app is intentionally small. It focuses on arranging visual blocks, writing n
 - Export a single slide as PNG
 - Export a slide deck as MP4
 - Generate speech from slide notes with OpenAI or MiniMax TTS
+- Translate regular slide text boxes and slide notes with OpenAI
 - Burn optional subtitles into exported video
 - Add per-slide start sounds and project background music
 - Create animated Git slides from a selected repository, commit, and file
@@ -40,13 +45,14 @@ The app is intentionally small. It focuses on arranging visual blocks, writing n
 
 Planned development areas:
 
-- Refine the editor UI and make common workflows easier to follow
-- Add presets and export options for vertical short-form videos
-- Add font controls for choosing typefaces, weights, and text styles
-- Let Git slides and GPT conversation slides use custom visual styles
-- Expand Slide Cut so it can also be used for live presentations
-- Add per-object animations for text, images, shapes, and callouts
-- Show clear setup guidance when an export feature needs an external tool or optional package
+- [x] Refine the editor UI and make common workflows easier to follow
+- [ ] Add presets and export options for vertical short-form videos
+- [ ] Add font controls for choosing typefaces, weights, and text styles
+- [ ] Let Git slides and GPT conversation slides use custom visual styles
+- [ ] Provide an MCP interface so AI agents can create, inspect, and export Slide Cut projects
+- [ ] Expand Slide Cut so it can also be used for live presentations
+- [ ] Add per-object animations for text, images, shapes, and callouts
+- [ ] Show clear setup guidance when an export feature needs an external tool or optional package
 
 ## Install
 
@@ -70,12 +76,13 @@ If macOS blocks the app because it is unsigned, open it from Finder with right c
 
 MP4 export uses FFmpeg and ffprobe. They must be available on your machine.
 
-For narrated exports, add an API key in Settings:
+For narrated exports and slide translation, add an API key in Settings:
 
-- OpenAI for `gpt-4o-mini-tts`, `tts-1`, or `tts-1-hd`
+- OpenAI for slide translation and `gpt-4o-mini-tts`, `tts-1`, or `tts-1-hd`
 - MiniMax for supported MiniMax speech models and voices
 
 Canvas size, narration defaults, subtitle settings, export folder, and background music are saved with the current project.
+Translation is available from the slide list footer for regular slides. It updates text boxes and slide notes on the selected slide only; Git slides and GPT conversation slides are skipped.
 
 ## Local-First Projects
 
@@ -100,8 +107,8 @@ npm run build
 
 Build output:
 
-- Release ZIP: `release/Slide-Cut-v1.0.0-macos-arm64.zip`
-- SHA256 checksum: `release/Slide-Cut-v1.0.0-macos-arm64.zip.sha256`
+- Release ZIP: `release/Slide-Cut-v1.1.0-macos-arm64.zip`
+- SHA256 checksum: `release/Slide-Cut-v1.1.0-macos-arm64.zip.sha256`
 - macOS app bundle: `src-tauri/target/release/bundle/macos/Slide Cut.app`
 
 ### Architecture
@@ -209,6 +216,4 @@ npm run build
 
 ## License
 
-Slide Cut is licensed under the MIT License. See [LICENSE](LICENSE).
-
-Third-party software and asset notices are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+[MIT](LICENSE)

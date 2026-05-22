@@ -1,5 +1,6 @@
 mod git;
 mod project_store;
+mod translation;
 mod video_export;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -23,6 +24,7 @@ pub fn run() {
             git::list_git_commits,
             git::list_git_commit_files,
             git::read_git_commit_file_change,
+            translation::translate_slide,
             video_export::export_video
         ])
         .run(tauri::generate_context!())
