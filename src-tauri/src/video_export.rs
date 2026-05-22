@@ -86,6 +86,7 @@ pub(crate) struct PreparedSlide {
 }
 const EXPORT_AUDIO_SAMPLE_RATE: &str = "44100";
 const EXPORT_AUDIO_CHANNELS: &str = "2";
+const TTS_TRIM_FILTER: &str = "aresample=44100,aformat=channel_layouts=stereo,silenceremove=start_periods=1:start_duration=0.03:start_threshold=-50dB,areverse,silenceremove=start_periods=1:start_duration=0.08:start_threshold=-50dB,areverse";
 
 fn now_millis() -> Result<u128, String> {
     SystemTime::now()
@@ -610,7 +611,7 @@ fn trim_tts_silence(
         .arg("-i")
         .arg(input_path)
         .arg("-af")
-        .arg("aresample=44100,aformat=channel_layouts=stereo,silenceremove=start_periods=1:start_duration=0.03:start_threshold=-50dB:stop_periods=1:stop_duration=0.08:stop_threshold=-50dB")
+        .arg(TTS_TRIM_FILTER)
         .args([
             "-c:a",
             "aac",
@@ -641,6 +642,19 @@ fn trim_tts_silence(
                 Ok(input_path.to_path_buf())
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tts_trim_filter_only_trims_outer_edges() {
+        assert!(TTS_TRIM_FILTER.contains("areverse"));
+        assert!(!TTS_TRIM_FILTER.contains("stop_periods"));
+        assert!(!TTS_TRIM_FILTER.contains("stop_duration"));
+        assert!(!TTS_TRIM_FILTER.contains("stop_threshold"));
     }
 }
 
