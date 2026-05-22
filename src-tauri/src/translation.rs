@@ -2,6 +2,7 @@ use crate::project_store::get_app_settings;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
+    collections::HashSet,
     env, fs,
     path::{Path, PathBuf},
     process::Command,
@@ -356,6 +357,47 @@ fn parse_translation_response(response: &Value) -> Result<TranslateSlideResult, 
         .map_err(|error| format!("OpenAI 번역 JSON을 읽지 못했습니다: {error}"))
 }
 
+fn validate_translation_result(
+    request_items: &[TranslateSlideItem],
+    result: &TranslateSlideResult,
+) -> Result<(), String> {
+    let request_ids = request_items
+        .iter()
+        .map(|item| item.id.as_str())
+        .collect::<HashSet<_>>();
+    let response_ids = result
+        .items
+        .iter()
+        .map(|item| item.id.as_str())
+        .collect::<HashSet<_>>();
+
+    if request_ids == response_ids && result.items.len() == request_items.len() {
+        return Ok(());
+    }
+
+    let missing = request_ids
+        .difference(&response_ids)
+        .copied()
+        .collect::<Vec<_>>();
+    let extra = response_ids
+        .difference(&request_ids)
+        .copied()
+        .collect::<Vec<_>>();
+    if !missing.is_empty() {
+        return Err(format!(
+            "OpenAI 번역 응답에 누락된 항목이 있습니다: {}",
+            missing.join(", ")
+        ));
+    }
+    if !extra.is_empty() {
+        return Err(format!(
+            "OpenAI 번역 응답에 요청하지 않은 항목이 있습니다: {}",
+            extra.join(", ")
+        ));
+    }
+    Err("OpenAI 번역 응답의 항목 수가 요청과 다릅니다.".to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -410,6 +452,34 @@ mod tests {
         let error = parse_translation_response(&response).expect_err("incomplete should fail");
         assert!(error.contains("max_output_tokens"));
     }
+
+    #[test]
+    fn accepts_translation_items_in_different_order() {
+        let request_items = vec![
+            TranslateSlideItem {
+                id: "object-0".to_string(),
+                text: "안녕하세요".to_string(),
+            },
+            TranslateSlideItem {
+                id: "notes".to_string(),
+                text: "노트입니다".to_string(),
+            },
+        ];
+        let result = TranslateSlideResult {
+            items: vec![
+                TranslateSlideItem {
+                    id: "notes".to_string(),
+                    text: "These are notes.".to_string(),
+                },
+                TranslateSlideItem {
+                    id: "object-0".to_string(),
+                    text: "Hello".to_string(),
+                },
+            ],
+        };
+
+        validate_translation_result(&request_items, &result).expect("IDs should match by set");
+    }
 }
 
 #[tauri::command]
@@ -422,13 +492,6 @@ pub(crate) fn translate_slide(
     let request_value = build_translation_request(&payload);
     let response = run_openai_translation_request(&app, &api_key, &request_value)?;
     let result = parse_translation_response(&response)?;
-    if result.items.len() != payload.items.len() {
-        return Err("OpenAI 번역 응답의 항목 수가 요청과 다릅니다.".to_string());
-    }
-    for (request_item, response_item) in payload.items.iter().zip(result.items.iter()) {
-        if request_item.id != response_item.id {
-            return Err("OpenAI 번역 응답의 항목 ID가 요청과 다릅니다.".to_string());
-        }
-    }
+    validate_translation_result(&payload.items, &result)?;
     Ok(result)
 }

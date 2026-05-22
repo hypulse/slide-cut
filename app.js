@@ -794,6 +794,16 @@ function setStatus(message) {
   }
 }
 
+function formatErrorMessage(error, fallback) {
+  if (typeof error === "string" && error.trim()) {
+    return error.trim();
+  }
+  if (error && typeof error.message === "string" && error.message.trim()) {
+    return error.message.trim();
+  }
+  return fallback;
+}
+
 function toLucideIconKey(name) {
   return String(name || "")
     .split("-")
@@ -4457,7 +4467,8 @@ async function translateCurrentSlideContent() {
         : "번역 결과가 기존 내용과 같습니다."
     );
   } catch (error) {
-    setStatus(error?.message || "슬라이드 번역에 실패했습니다.");
+    console.error("Slide translation failed", error);
+    setStatus(formatErrorMessage(error, "슬라이드 번역에 실패했습니다."));
   } finally {
     isTranslatingSlide = false;
     syncSlideTranslationControls();
