@@ -332,11 +332,14 @@ fn run_openai_translation_request(
 }
 
 fn parse_translation_response(response: &Value) -> Result<TranslateSlideResult, String> {
-    if let Some(error) = response.get("error") {
+    if let Some(error) = response.get("error").filter(|value| !value.is_null()) {
         let message = error
             .get("message")
             .and_then(Value::as_str)
-            .unwrap_or("unknown error");
+            .or_else(|| error.as_str())
+            .map(str::to_string)
+            .or_else(|| serde_json::to_string(error).ok())
+            .unwrap_or_else(|| "unknown error".to_string());
         return Err(format!("OpenAI 번역 요청 실패: {message}"));
     }
 
@@ -425,6 +428,31 @@ mod tests {
         let parsed = parse_translation_response(&response).expect("response should parse");
         assert_eq!(parsed.items.len(), 1);
         assert_eq!(parsed.items[0].id, "object-0");
+        assert_eq!(parsed.items[0].text, "Hello");
+    }
+
+    #[test]
+    fn ignores_null_error_field_on_success() {
+        let response = serde_json::json!({
+            "status": "completed",
+            "error": null,
+            "output": [
+                {
+                    "type": "message",
+                    "status": "completed",
+                    "content": [
+                        {
+                            "type": "output_text",
+                            "text": "{\"items\":[{\"id\":\"object-0\",\"text\":\"Hello\"}]}",
+                            "refusal": null
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let parsed = parse_translation_response(&response).expect("null error is not a failure");
+        assert_eq!(parsed.items.len(), 1);
         assert_eq!(parsed.items[0].text, "Hello");
     }
 

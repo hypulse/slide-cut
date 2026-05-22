@@ -107,8 +107,8 @@ npm run build
 
 Build output:
 
-- Release ZIP: `release/Slide-Cut-v1.1.4-macos-arm64.zip`
-- SHA256 checksum: `release/Slide-Cut-v1.1.4-macos-arm64.zip.sha256`
+- Release ZIP: `release/Slide-Cut-v1.1.5-macos-arm64.zip`
+- SHA256 checksum: `release/Slide-Cut-v1.1.5-macos-arm64.zip.sha256`
 - macOS app bundle: `src-tauri/target/release/bundle/macos/Slide Cut.app`
 
 ### Architecture
