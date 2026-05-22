@@ -13,6 +13,8 @@ const OPENAI_RESPONSES_URL: &str = "https://api.openai.com/v1/responses";
 const DEFAULT_TRANSLATION_MODEL: &str = "gpt-5-mini";
 const MAX_TRANSLATION_ITEMS: usize = 80;
 const MAX_TRANSLATION_CHARS: usize = 40_000;
+const MIN_TRANSLATION_OUTPUT_TOKENS: usize = 4096;
+const MAX_TRANSLATION_OUTPUT_TOKENS: usize = 32_768;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -144,6 +146,30 @@ fn response_text(response: &Value) -> Option<String> {
     }
 }
 
+fn response_refusal(response: &Value) -> Option<String> {
+    let output = response.get("output").and_then(Value::as_array)?;
+    for item in output {
+        let Some(content) = item.get("content").and_then(Value::as_array) else {
+            continue;
+        };
+        for part in content {
+            if let Some(refusal) = part.get("refusal").and_then(Value::as_str) {
+                return Some(refusal.to_string());
+            }
+        }
+    }
+    None
+}
+
+fn response_incomplete_reason(response: &Value) -> Option<String> {
+    response
+        .get("incomplete_details")
+        .and_then(Value::as_object)
+        .and_then(|details| details.get("reason"))
+        .and_then(Value::as_str)
+        .map(str::to_string)
+}
+
 fn resolve_openai_api_key(app: &AppHandle, direct_key: Option<&str>) -> Result<String, String> {
     if let Some(key) = direct_key.map(str::trim).filter(|value| !value.is_empty()) {
         return Ok(key.to_string());
@@ -209,15 +235,22 @@ fn build_translation_request(payload: &TranslateSlidePayload) -> Value {
         "targetLanguage": target_language,
         "items": &payload.items,
     });
+    let output_tokens = payload
+        .items
+        .iter()
+        .map(|item| item.text.chars().count())
+        .sum::<usize>()
+        .saturating_mul(2)
+        .clamp(MIN_TRANSLATION_OUTPUT_TOKENS, MAX_TRANSLATION_OUTPUT_TOKENS);
 
-    serde_json::json!({
+    let mut request = serde_json::json!({
         "model": model,
         "instructions": "You translate slide text. Preserve meaning, line breaks, punctuation style, markdown-like markers, URLs, code identifiers, product names, and numbers. Return only the requested JSON shape. Do not add explanations.",
         "input": format!(
             "Translate each item from {source_language} to {target_language}. Return the same item ids in the same order.\n\n{}",
             input
         ),
-        "max_output_tokens": 8000,
+        "max_output_tokens": output_tokens,
         "text": {
             "format": {
                 "type": "json_schema",
@@ -244,7 +277,13 @@ fn build_translation_request(payload: &TranslateSlidePayload) -> Value {
                 }
             }
         }
-    })
+    });
+
+    if model.starts_with("gpt-5") {
+        request["reasoning"] = serde_json::json!({ "effort": "minimal" });
+    }
+
+    request
 }
 
 fn run_openai_translation_request(
@@ -267,7 +306,7 @@ fn run_openai_translation_request(
     write_json(request_path.clone(), request_value)?;
 
     let config = format!(
-        "url = \"{}\"\nrequest = \"POST\"\nheader = \"Authorization: Bearer {}\"\nheader = \"Content-Type: application/json\"\ndata-binary = \"@{}\"\noutput = \"{}\"\nfail\nsilent\nshow-error\nlocation\n",
+        "url = \"{}\"\nrequest = \"POST\"\nheader = \"Authorization: Bearer {}\"\nheader = \"Content-Type: application/json\"\ndata-binary = \"@{}\"\noutput = \"{}\"\nsilent\nshow-error\nlocation\n",
         OPENAI_RESPONSES_URL,
         quote_curl_value(api_key),
         quote_curl_value(&request_path.to_string_lossy()),
@@ -300,10 +339,77 @@ fn parse_translation_response(response: &Value) -> Result<TranslateSlideResult, 
         return Err(format!("OpenAI 번역 요청 실패: {message}"));
     }
 
+    if let Some(refusal) = response_refusal(response) {
+        return Err(format!("OpenAI가 번역 요청을 거절했습니다: {refusal}"));
+    }
+
+    if response.get("status").and_then(Value::as_str) == Some("incomplete") {
+        let reason = response_incomplete_reason(response).unwrap_or_else(|| "unknown".to_string());
+        return Err(format!(
+            "OpenAI 번역 응답이 끝까지 생성되지 않았습니다: {reason}"
+        ));
+    }
+
     let text = response_text(response)
         .ok_or_else(|| "OpenAI 번역 응답에 텍스트가 없습니다.".to_string())?;
     serde_json::from_str::<TranslateSlideResult>(&text)
         .map_err(|error| format!("OpenAI 번역 JSON을 읽지 못했습니다: {error}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_responses_output_message_text() {
+        let response = serde_json::json!({
+            "status": "completed",
+            "output": [
+                { "type": "reasoning", "content": [] },
+                {
+                    "type": "message",
+                    "status": "completed",
+                    "content": [
+                        {
+                            "type": "output_text",
+                            "text": "{\"items\":[{\"id\":\"object-0\",\"text\":\"Hello\"}]}",
+                            "refusal": null
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let parsed = parse_translation_response(&response).expect("response should parse");
+        assert_eq!(parsed.items.len(), 1);
+        assert_eq!(parsed.items[0].id, "object-0");
+        assert_eq!(parsed.items[0].text, "Hello");
+    }
+
+    #[test]
+    fn surfaces_openai_error_message() {
+        let response = serde_json::json!({
+            "error": {
+                "message": "Invalid API key",
+                "type": "invalid_request_error"
+            }
+        });
+
+        let error = parse_translation_response(&response).expect_err("error should surface");
+        assert!(error.contains("Invalid API key"));
+    }
+
+    #[test]
+    fn reports_incomplete_response_reason() {
+        let response = serde_json::json!({
+            "status": "incomplete",
+            "incomplete_details": { "reason": "max_output_tokens" },
+            "output": []
+        });
+
+        let error = parse_translation_response(&response).expect_err("incomplete should fail");
+        assert!(error.contains("max_output_tokens"));
+    }
 }
 
 #[tauri::command]
