@@ -83,7 +83,6 @@ For narrated exports and slide translation, add an API key in Settings:
 
 Canvas size, narration defaults, subtitle settings, export folder, and background music are saved with the current project.
 Translation is available from the slide list footer for regular slides. It updates text boxes and slide notes on the selected slide only; Git slides and GPT conversation slides are skipped.
-TTS silence trimming only removes leading and trailing silence from each generated audio file, preserving pauses inside the narration.
 
 ## Local-First Projects
 
@@ -108,8 +107,8 @@ npm run build
 
 Build output:
 
-- Release ZIP: `release/Slide-Cut-v1.1.2-macos-arm64.zip`
-- SHA256 checksum: `release/Slide-Cut-v1.1.2-macos-arm64.zip.sha256`
+- Release ZIP: `release/Slide-Cut-v1.1.3-macos-arm64.zip`
+- SHA256 checksum: `release/Slide-Cut-v1.1.3-macos-arm64.zip.sha256`
 - macOS app bundle: `src-tauri/target/release/bundle/macos/Slide Cut.app`
 
 ### Architecture
