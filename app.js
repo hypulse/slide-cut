@@ -221,6 +221,7 @@ let currentDrawTool = "select";
 let activeShapeDraft = null;
 let historyStack = [];
 let historyIndex = -1;
+const slidePreviewCache = new Map();
 let isRestoringHistory = false;
 let statusTimer = null;
 let defaultTextColor = "#000000";
@@ -309,6 +310,7 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 const PROJECT_FORMAT = "slide-cut-project";
 const PROJECT_VERSION = 2;
 const HISTORY_LIMIT = 80;
+const SLIDE_PREVIEW_CACHE_LIMIT = 160;
 const SLIDE_DRAG_THRESHOLD = 6;
 const IS_MAC_PLATFORM = /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent || "");
 const DEFAULT_TTS_INSTRUCTIONS =
@@ -3342,6 +3344,35 @@ function renderSlidePreview(slide, previewCanvas) {
   context.restore();
 }
 
+function getSlidePreviewCacheKey(slide) {
+  return JSON.stringify(compactHistoryValue(slide));
+}
+
+function rememberSlidePreview(key, dataUrl) {
+  slidePreviewCache.set(key, dataUrl);
+  if (slidePreviewCache.size <= SLIDE_PREVIEW_CACHE_LIMIT) {
+    return;
+  }
+  const [oldestKey] = slidePreviewCache.keys();
+  slidePreviewCache.delete(oldestKey);
+}
+
+function getSlidePreviewDataUrl(slide) {
+  const key = getSlidePreviewCacheKey(slide);
+  const cached = slidePreviewCache.get(key);
+  if (cached) {
+    slidePreviewCache.delete(key);
+    slidePreviewCache.set(key, cached);
+    return cached;
+  }
+
+  const preview = document.createElement("canvas");
+  renderSlidePreview(slide, preview);
+  const dataUrl = preview.toDataURL("image/png");
+  rememberSlidePreview(key, dataUrl);
+  return dataUrl;
+}
+
 function clearSlideDropTargets() {
   slideList.classList.remove("is-reordering");
   for (const card of slideList.querySelectorAll(".slide-card")) {
@@ -3469,9 +3500,11 @@ function renderSlideList() {
       loadSlide(index);
     });
 
-    const preview = document.createElement("canvas");
+    const preview = document.createElement("img");
     preview.className = "slide-preview";
-    renderSlidePreview(slide, preview);
+    preview.alt = "";
+    preview.decoding = "async";
+    preview.src = getSlidePreviewDataUrl(slide);
 
     const name = document.createElement("span");
     name.className = "slide-name";
