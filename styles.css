@@ -1086,7 +1086,8 @@ button.danger:hover {
   padding-top: 10px;
 }
 
-label {
+label,
+.field-row {
   display: grid;
   grid-template-columns: 68px minmax(0, 1fr);
   align-items: center;
@@ -1097,7 +1098,8 @@ label {
   font-weight: 600;
 }
 
-label > span:first-child {
+label > span:first-child,
+.field-row > span:first-child {
   letter-spacing: 0.01em;
 }
 
@@ -1352,6 +1354,7 @@ input[type="checkbox"] {
 }
 
 .selected-panel.is-empty label,
+.selected-panel.is-empty .field-row,
 .selected-panel.is-empty .arrange-controls,
 .selected-panel.is-empty .canvas-align-controls,
 .selected-panel.is-empty .selected-actions {

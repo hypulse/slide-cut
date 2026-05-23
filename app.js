@@ -1085,6 +1085,7 @@ function statesEqual(a, b) {
 }
 
 function applyState(element, nextState) {
+  const previousWidth = Number(element.dataset.width);
   const state = {
     x: numberOr(nextState.x, 0),
     y: numberOr(nextState.y, 0),
@@ -1107,6 +1108,13 @@ function applyState(element, nextState) {
 
   if (element.dataset.type === "text") {
     renderTextObject(element);
+    if (
+      element.classList.contains("is-editing") &&
+      element.dataset.isFittingTextHeight !== "true" &&
+      state.width !== previousWidth
+    ) {
+      fitTextBoxToContent(element);
+    }
   }
 
   if (element.dataset.type === "shape") {
@@ -1124,11 +1132,11 @@ function syncTextEditorValue(element, options = {}) {
   }
   const editor = element.querySelector(".text-editor");
   element.dataset.text = editor.value;
-  const grew = growTextBoxToContent(element);
-  if (!grew && options.render !== false) {
+  const fitted = fitTextBoxToContent(element);
+  if (!fitted && options.render !== false) {
     renderTextObject(element);
   }
-  return grew;
+  return fitted;
 }
 
 function centerPosition(width, height) {
@@ -1717,23 +1725,43 @@ function renderTextObject(element) {
   delete context.__textColor;
 }
 
-function growTextBoxToContent(element) {
+function getTextContentHeight(element) {
   const state = getState(element);
   const preset = getTextPreset(element);
   textMeasureContext.font = `600 ${preset.fontSize}px "Pretendard"`;
   const lines = wrapTextLines(textMeasureContext, element.dataset.text || "", state.width);
-  const nextWidth = state.width;
-  const nextHeight = Math.max(state.height, Math.ceil(lines.length * preset.lineHeight + TEXT_PADDING_Y * 2));
-  if (nextWidth === state.width && nextHeight === state.height) {
+  return Math.max(16, Math.ceil(lines.length * preset.lineHeight + TEXT_PADDING_Y * 2));
+}
+
+function fitTextBoxToContent(element) {
+  const state = getState(element);
+  const nextHeight = getTextContentHeight(element);
+  if (nextHeight === state.height) {
     return false;
   }
 
-  applyState(element, {
-    ...state,
-    width: nextWidth,
-    height: nextHeight,
-  });
-  return true;
+  element.dataset.isFittingTextHeight = "true";
+  try {
+    applyState(element, {
+      ...state,
+      height: nextHeight,
+    });
+    return true;
+  } finally {
+    delete element.dataset.isFittingTextHeight;
+  }
+}
+
+function fitTextBoxToContentAfterWidthChange(element, previousWidth) {
+  if (
+    !element ||
+    element.dataset.type !== "text" ||
+    element.dataset.isFittingTextHeight === "true" ||
+    getState(element).width === previousWidth
+  ) {
+    return false;
+  }
+  return fitTextBoxToContent(element);
 }
 
 function wireTextEditor(element) {
@@ -1916,6 +1944,7 @@ function handlePointerMove(event) {
     width,
     height,
   });
+  fitTextBoxToContentAfterWidthChange(element, state.width);
 }
 
 function handlePointerEnd(event) {
@@ -5096,6 +5125,7 @@ function applySelectedInputChange() {
   if (!selectedObject) {
     return;
   }
+  const previousState = getState(selectedObject);
   applyState(selectedObject, {
     x: numberOr(selectedX.value, 0),
     y: numberOr(selectedY.value, 0),
@@ -5103,6 +5133,7 @@ function applySelectedInputChange() {
     height: numberOr(selectedH.value, 8),
     rotation: numberOr(selectedR.value, 0),
   });
+  fitTextBoxToContentAfterWidthChange(selectedObject, previousState.width);
 }
 
 function applySelectedTextSizeChange(sizeKey) {
@@ -5116,7 +5147,7 @@ function applySelectedTextSizeChange(sizeKey) {
   const preset = getTextPreset(selectedObject);
   editor.style.fontSize = `${preset.fontSize}px`;
   editor.style.lineHeight = `${preset.lineHeight}px`;
-  if (!growTextBoxToContent(selectedObject)) {
+  if (!fitTextBoxToContent(selectedObject)) {
     renderTextObject(selectedObject);
   }
   setStatus(`텍스트 크기를 ${sizeKey.toUpperCase()}로 변경했습니다.`);
