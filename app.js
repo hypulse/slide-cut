@@ -4150,20 +4150,48 @@ async function initializeNativeMode() {
   projectLibrary.hidden = false;
 }
 
+function compactHistoryString(value) {
+  if (!/^data:/i.test(value)) {
+    return value;
+  }
+  return `${value.slice(0, 48)}:${value.length}:${value.slice(-24)}`;
+}
+
+function compactHistoryValue(value) {
+  if (typeof value === "string") {
+    return compactHistoryString(value);
+  }
+  if (Array.isArray(value)) {
+    return value.map(compactHistoryValue);
+  }
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).map(([key, childValue]) => [key, compactHistoryValue(childValue)])
+  );
+}
+
+function createHistorySnapshotKey(activeIndex, slideData) {
+  return JSON.stringify({
+    activeSlideIndex: activeIndex,
+    slides: compactHistoryValue(slideData),
+  });
+}
+
 function createHistorySnapshot() {
   serializeCurrentSlide();
   return {
     activeSlideIndex,
     slideSeed,
     slides: cloneProjectValue(slides),
+    key: createHistorySnapshotKey(activeSlideIndex, slides),
   };
 }
 
 function getHistorySnapshotKey(snapshot) {
-  return JSON.stringify({
-    activeSlideIndex: snapshot.activeSlideIndex,
-    slides: snapshot.slides,
-  });
+  return snapshot.key || createHistorySnapshotKey(snapshot.activeSlideIndex, snapshot.slides);
 }
 
 function resetHistory() {
