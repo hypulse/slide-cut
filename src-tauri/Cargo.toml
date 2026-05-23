@@ -1,6 +1,6 @@
 [package]
 name = "slide-cut"
-version = "1.1.5"
+version = "1.2.0"
 description = "A small desktop slide compositor for arranging images, text, and simple vector-like marks."
 authors = ["seungjae"]
 license = "MIT"
