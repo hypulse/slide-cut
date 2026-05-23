@@ -324,6 +324,8 @@ const PROJECT_FORMAT = "slide-cut-project";
 const PROJECT_VERSION = 2;
 const HISTORY_LIMIT = 80;
 const SLIDE_PREVIEW_CACHE_LIMIT = 160;
+const SLIDE_PREVIEW_WIDTH = 144;
+const SLIDE_PREVIEW_HEIGHT = 81;
 const NATIVE_SAVE_DEBOUNCE_MS = 1600;
 const SLIDE_DRAG_THRESHOLD = 6;
 const IS_MAC_PLATFORM = /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent || "");
@@ -3380,9 +3382,33 @@ function loadSlide(index, shouldSaveCurrent = true) {
   renderSlideList();
 }
 
-function renderSlidePreview(slide, previewCanvas) {
-  const width = 144;
-  const height = 81;
+function getSlidePreviewMetrics(slide) {
+  const slideWidth = Math.max(1, roundedCanvasSize(slide.width));
+  const slideHeight = Math.max(1, roundedCanvasSize(slide.height));
+  if (isDynamicSlide(slide)) {
+    return {
+      width: SLIDE_PREVIEW_WIDTH,
+      height: SLIDE_PREVIEW_HEIGHT,
+      offsetX: 0,
+      offsetY: 0,
+      scaleX: SLIDE_PREVIEW_WIDTH / slideWidth,
+      scaleY: SLIDE_PREVIEW_HEIGHT / slideHeight,
+    };
+  }
+  const scale = Math.min(SLIDE_PREVIEW_WIDTH / slideWidth, SLIDE_PREVIEW_HEIGHT / slideHeight);
+  return {
+    width: SLIDE_PREVIEW_WIDTH,
+    height: SLIDE_PREVIEW_HEIGHT,
+    offsetX: (SLIDE_PREVIEW_WIDTH - slideWidth * scale) / 2,
+    offsetY: (SLIDE_PREVIEW_HEIGHT - slideHeight * scale) / 2,
+    scaleX: scale,
+    scaleY: scale,
+  };
+}
+
+function renderSlidePreview(slide, previewCanvas, options = {}) {
+  const metrics = getSlidePreviewMetrics(slide);
+  const { width, height } = metrics;
   previewCanvas.width = width;
   previewCanvas.height = height;
   const context = previewCanvas.getContext("2d");
@@ -3400,16 +3426,13 @@ function renderSlidePreview(slide, previewCanvas) {
     context.drawImage(previewSource, 0, 0, width, height);
     return;
   }
-  const scale = Math.min(width / slide.width, height / slide.height);
-  const offsetX = (width - slide.width * scale) / 2;
-  const offsetY = (height - slide.height * scale) / 2;
 
   context.clearRect(0, 0, width, height);
   context.fillStyle = "#eef0f4";
   context.fillRect(0, 0, width, height);
   context.save();
-  context.translate(offsetX, offsetY);
-  context.scale(scale, scale);
+  context.translate(metrics.offsetX, metrics.offsetY);
+  context.scale(metrics.scaleX, metrics.scaleY);
   context.fillStyle = slide.color;
   context.fillRect(0, 0, slide.width, slide.height);
   if (normalizeSlideVideo(slide.video)) {
@@ -3431,6 +3454,10 @@ function renderSlidePreview(slide, previewCanvas) {
     context.translate(-object.width / 2, -object.height / 2);
 
     if (object.type === "image") {
+      if (options.excludeAnimatedGifs && isAnimatedGifObject(object)) {
+        context.restore();
+        continue;
+      }
       context.fillStyle = "#dbeafe";
       context.fillRect(0, 0, object.width, object.height);
       context.strokeStyle = "#93c5fd";
@@ -3472,10 +3499,50 @@ function getSlidePreviewDataUrl(slide) {
   }
 
   const preview = document.createElement("canvas");
-  renderSlidePreview(slide, preview);
+  renderSlidePreview(slide, preview, {
+    excludeAnimatedGifs: getAnimatedGifOverlays(slide).length > 0,
+  });
   const dataUrl = preview.toDataURL("image/png");
   rememberSlidePreview(key, dataUrl);
   return dataUrl;
+}
+
+function createSlidePreviewGifOverlay(object, metrics) {
+  const image = document.createElement("img");
+  image.className = "slide-preview-gif";
+  image.alt = "";
+  image.decoding = "async";
+  image.loading = "lazy";
+  image.src = getDisplayAssetUrl(object.src);
+  image.style.left = `${metrics.offsetX + object.x * metrics.scaleX}px`;
+  image.style.top = `${metrics.offsetY + object.y * metrics.scaleY}px`;
+  image.style.width = `${Math.max(1, object.width * metrics.scaleX)}px`;
+  image.style.height = `${Math.max(1, object.height * metrics.scaleY)}px`;
+  image.style.transform = `rotate(${numberOr(object.rotation, 0)}deg)`;
+  return image;
+}
+
+function createSlidePreviewFrame(slide) {
+  const frame = document.createElement("span");
+  frame.className = "slide-preview-frame";
+
+  const preview = document.createElement("img");
+  preview.className = "slide-preview";
+  preview.alt = "";
+  preview.decoding = "async";
+  preview.src = getSlidePreviewDataUrl(slide);
+  frame.append(preview);
+
+  const gifOverlays = getAnimatedGifOverlays(slide);
+  if (gifOverlays.length) {
+    const metrics = getSlidePreviewMetrics(slide);
+    frame.classList.add("has-gif-preview");
+    for (const object of gifOverlays) {
+      frame.append(createSlidePreviewGifOverlay(object, metrics));
+    }
+  }
+
+  return frame;
 }
 
 function clearSlideDropTargets() {
@@ -3605,11 +3672,7 @@ function renderSlideList() {
       loadSlide(index);
     });
 
-    const preview = document.createElement("img");
-    preview.className = "slide-preview";
-    preview.alt = "";
-    preview.decoding = "async";
-    preview.src = getSlidePreviewDataUrl(slide);
+    const previewFrame = createSlidePreviewFrame(slide);
 
     const name = document.createElement("span");
     name.className = "slide-name";
@@ -3619,7 +3682,7 @@ function renderSlideList() {
     grip.className = "slide-grip";
     grip.setAttribute("aria-hidden", "true");
 
-    thumbButton.append(preview, grip, name);
+    thumbButton.append(previewFrame, grip, name);
     card.append(thumbButton);
     slideList.append(card);
   });
