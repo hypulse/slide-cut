@@ -311,6 +311,7 @@ const PROJECT_FORMAT = "slide-cut-project";
 const PROJECT_VERSION = 2;
 const HISTORY_LIMIT = 80;
 const SLIDE_PREVIEW_CACHE_LIMIT = 160;
+const NATIVE_SAVE_DEBOUNCE_MS = 1600;
 const SLIDE_DRAG_THRESHOLD = 6;
 const IS_MAC_PLATFORM = /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent || "");
 const DEFAULT_TTS_INSTRUCTIONS =
@@ -3954,6 +3955,10 @@ async function saveActiveNativeProject(options = {}) {
   return nativeSavePromise;
 }
 
+function isInteractiveChangeInProgress() {
+  return Boolean(activePointer || activeShapeDraft || slideDragState);
+}
+
 function scheduleNativeProjectSave() {
   if (isLoadingNativeProject) {
     return;
@@ -3961,8 +3966,16 @@ function scheduleNativeProjectSave() {
   setSaveState("Saving...");
   window.clearTimeout(nativeSaveTimer);
   nativeSaveTimer = window.setTimeout(() => {
+    if (isInteractiveChangeInProgress()) {
+      scheduleNativeProjectSave();
+      return;
+    }
+    if (nativeSavePromise) {
+      nativeSaveQueued = true;
+      return;
+    }
     saveActiveNativeProject();
-  }, 700);
+  }, NATIVE_SAVE_DEBOUNCE_MS);
 }
 
 function formatProjectTime(value) {
