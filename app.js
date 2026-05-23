@@ -1499,12 +1499,19 @@ async function importImageBlobAsset(blob, name = "clipboard-image") {
 async function importImageFileAsset(path) {
   const projectId = await ensureActiveProjectForAsset();
   const importedAsset = await nativeApi.importProjectAsset(projectId, path);
-  const image = await loadImageForRender(importedAsset.path);
-  addImageObject(
-    importedAsset.path,
-    image.naturalWidth || image.width || 1,
-    image.naturalHeight || image.height || 1
-  );
+  let width = numberOr(importedAsset.width, 0);
+  let height = numberOr(importedAsset.height, 0);
+  if (width <= 0 || height <= 0) {
+    if (isAnimatedGifSource(importedAsset.path || path)) {
+      width = 300;
+      height = 200;
+    } else {
+      const image = await loadImageForRender(importedAsset.path);
+      width = image.naturalWidth || image.width || 1;
+      height = image.naturalHeight || image.height || 1;
+    }
+  }
+  addImageObject(importedAsset.path, width, height);
 }
 
 function addTextObject(text, statusMessage = "텍스트를 붙여넣었습니다. 텍스트 폰트는 Pretendard로 고정됩니다.") {
@@ -2774,7 +2781,16 @@ async function drawSlideObjectsForExport(context, objects = [], options = {}) {
           imagePromise = loadImageForRender(object.src);
           imageCache.set(object.src, imagePromise);
         }
-        drawFittedImage(context, await imagePromise, object.width, object.height);
+        let image;
+        try {
+          image = await imagePromise;
+        } catch (error) {
+          if (isAnimatedGifObject(object)) {
+            continue;
+          }
+          throw error;
+        }
+        drawFittedImage(context, image, object.width, object.height);
       } else if (object.type === "text") {
         context.__textColor = object.textColor || DEFAULT_TEXT_COLOR;
         drawTextLines(context, object.text || "", object.width, object.height, false, object.textSize || "h3", object.textAlign || "left");

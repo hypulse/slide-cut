@@ -61,6 +61,10 @@ pub(crate) struct ProjectRecord {
 pub(crate) struct ProjectAsset {
     path: String,
     name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    width: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    height: Option<u32>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -218,6 +222,35 @@ fn ensure_image_file_extension(name: Option<&str>, extension: &str) -> String {
     } else {
         format!("{clean_name}.{extension}")
     }
+}
+
+fn gif_dimensions_from_bytes(bytes: &[u8]) -> Option<(u32, u32)> {
+    if bytes.len() < 10 || (&bytes[0..6] != b"GIF87a" && &bytes[0..6] != b"GIF89a") {
+        return None;
+    }
+    let width = u16::from_le_bytes([bytes[6], bytes[7]]) as u32;
+    let height = u16::from_le_bytes([bytes[8], bytes[9]]) as u32;
+    (width > 0 && height > 0).then_some((width, height))
+}
+
+fn png_dimensions_from_bytes(bytes: &[u8]) -> Option<(u32, u32)> {
+    const PNG_SIGNATURE: &[u8; 8] = b"\x89PNG\r\n\x1a\n";
+    if bytes.len() < 24 || &bytes[0..8] != PNG_SIGNATURE || &bytes[12..16] != b"IHDR" {
+        return None;
+    }
+    let width = u32::from_be_bytes([bytes[16], bytes[17], bytes[18], bytes[19]]);
+    let height = u32::from_be_bytes([bytes[20], bytes[21], bytes[22], bytes[23]]);
+    (width > 0 && height > 0).then_some((width, height))
+}
+
+fn image_dimensions_from_bytes(bytes: &[u8]) -> Option<(u32, u32)> {
+    gif_dimensions_from_bytes(bytes).or_else(|| png_dimensions_from_bytes(bytes))
+}
+
+fn image_dimensions_from_path(path: &Path) -> Option<(u32, u32)> {
+    fs::read(path)
+        .ok()
+        .and_then(|bytes| image_dimensions_from_bytes(&bytes))
 }
 
 fn asset_hash_key(source_path: &Path, metadata: &fs::Metadata) -> String {
@@ -511,9 +544,12 @@ pub(crate) fn import_project_asset(
         .and_then(|name| name.to_str())
         .unwrap_or("asset")
         .to_string();
+    let dimensions = image_dimensions_from_path(&copied);
     Ok(ProjectAsset {
         path: copied.to_string_lossy().to_string(),
         name,
+        width: dimensions.map(|(width, _)| width),
+        height: dimensions.map(|(_, height)| height),
     })
 }
 
@@ -531,6 +567,7 @@ pub(crate) fn import_project_image_blob(
     if bytes.is_empty() {
         return Err("이미지 데이터가 비어 있습니다.".to_string());
     }
+    let dimensions = image_dimensions_from_bytes(&bytes);
 
     let extension = image_extension_for_mime(payload.mime_type.as_deref());
     let file_name = ensure_image_file_extension(payload.name.as_deref(), extension);
@@ -544,6 +581,8 @@ pub(crate) fn import_project_image_blob(
     Ok(ProjectAsset {
         path: destination.to_string_lossy().to_string(),
         name: file_name,
+        width: dimensions.map(|(width, _)| width),
+        height: dimensions.map(|(_, height)| height),
     })
 }
 
