@@ -30,6 +30,7 @@ const nativeApi = {
   getAppSettings: () => tauriInvoke("get_app_settings"),
   getDefaultExportDir: () => tauriInvoke("get_default_export_dir"),
   saveAppSettings: (settings) => tauriInvoke("save_app_settings", { settings }),
+  importImageBlob: (payload) => tauriInvoke("import_project_image_blob", { payload }),
   exportProjectFile: async (suggestedName, data) => {
     const path = await tauriDialog.save({
       defaultPath: suggestedName,
@@ -1358,12 +1359,53 @@ function addImageObject(src, naturalWidth = 300, naturalHeight = 200) {
   recordHistory();
 }
 
-function readBlobAsDataUrl(blob) {
+function blobToBase64(blob) {
+  return blob.arrayBuffer().then((buffer) => {
+    const bytes = new Uint8Array(buffer);
+    const chunkSize = 0x8000;
+    let binary = "";
+    for (let index = 0; index < bytes.length; index += chunkSize) {
+      binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
+    }
+    return btoa(binary);
+  });
+}
+
+function loadImageElementFromBlob(blob) {
   return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(reader.error || new Error("파일을 읽지 못했습니다."));
-    reader.readAsDataURL(blob);
+    const url = URL.createObjectURL(blob);
+    const image = new Image();
+    image.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(image);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("이미지를 읽지 못했습니다."));
+    };
+    image.src = url;
+  });
+}
+
+async function ensureActiveProjectForAsset() {
+  if (activeProjectId) {
+    return activeProjectId;
+  }
+  const record = await saveActiveNativeProject();
+  if (!record?.meta?.id) {
+    throw new Error("이미지를 저장할 프로젝트를 만들지 못했습니다.");
+  }
+  return record.meta.id;
+}
+
+async function importImageBlobAsset(blob, name = "clipboard-image") {
+  const projectId = await ensureActiveProjectForAsset();
+  const dataBase64 = await blobToBase64(blob);
+  return nativeApi.importImageBlob({
+    projectId,
+    dataBase64,
+    mimeType: blob.type || "image/png",
+    name,
   });
 }
 
@@ -1989,15 +2031,15 @@ async function pasteImageFromClipboard() {
 }
 
 async function loadImageBlob(blob) {
-  const src = await readBlobAsDataUrl(blob);
-  const image = new Image();
-  image.onload = () => {
-    addImageObject(src, image.naturalWidth, image.naturalHeight);
-  };
-  image.onerror = () => {
+  if (!blob) {
     setStatus("이미지를 읽지 못했습니다.");
-  };
-  image.src = src;
+    return;
+  }
+
+  setStatus("이미지를 프로젝트 asset으로 저장하고 있습니다.");
+  const image = await loadImageElementFromBlob(blob);
+  const importedAsset = await importImageBlobAsset(blob);
+  addImageObject(importedAsset.path, image.naturalWidth, image.naturalHeight);
 }
 
 function roundedCanvasSize(value) {

@@ -1,3 +1,4 @@
+use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -38,6 +39,15 @@ pub(crate) struct SaveProjectPayload {
 pub(crate) struct RenameProjectPayload {
     id: String,
     name: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ImportImageBlobPayload {
+    project_id: String,
+    data_base64: String,
+    mime_type: Option<String>,
+    name: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -185,6 +195,31 @@ fn clean_asset_file_name(path: &Path) -> String {
     }
 }
 
+fn image_extension_for_mime(mime_type: Option<&str>) -> &'static str {
+    match mime_type.unwrap_or("").trim().to_ascii_lowercase().as_str() {
+        "image/jpeg" | "image/jpg" => "jpg",
+        "image/webp" => "webp",
+        "image/gif" => "gif",
+        "image/bmp" => "bmp",
+        _ => "png",
+    }
+}
+
+fn ensure_image_file_extension(name: Option<&str>, extension: &str) -> String {
+    let fallback = format!("clipboard-image.{extension}");
+    let clean_name = name
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| clean_asset_file_name(Path::new(value)))
+        .unwrap_or(fallback);
+    let has_extension = Path::new(&clean_name).extension().is_some();
+    if has_extension {
+        clean_name
+    } else {
+        format!("{clean_name}.{extension}")
+    }
+}
+
 fn asset_hash_key(source_path: &Path, metadata: &fs::Metadata) -> String {
     let modified_millis = metadata
         .modified()
@@ -199,6 +234,11 @@ fn asset_hash_key(source_path: &Path, metadata: &fs::Metadata) -> String {
         modified_millis
     );
     let hash = hex::encode(Sha256::digest(key.as_bytes()));
+    hash.chars().take(16).collect()
+}
+
+fn asset_bytes_hash_key(bytes: &[u8]) -> String {
+    let hash = hex::encode(Sha256::digest(bytes));
     hash.chars().take(16).collect()
 }
 
@@ -474,6 +514,36 @@ pub(crate) fn import_project_asset(
     Ok(ProjectAsset {
         path: copied.to_string_lossy().to_string(),
         name,
+    })
+}
+
+#[tauri::command]
+pub(crate) fn import_project_image_blob(
+    app: AppHandle,
+    payload: ImportImageBlobPayload,
+) -> Result<ProjectAsset, String> {
+    let assets_dir = project_assets_dir(&app, &payload.project_id)?;
+    fs::create_dir_all(&assets_dir).map_err(|error| error.to_string())?;
+
+    let bytes = general_purpose::STANDARD
+        .decode(payload.data_base64.trim())
+        .map_err(|error| format!("이미지 데이터를 읽지 못했습니다: {error}"))?;
+    if bytes.is_empty() {
+        return Err("이미지 데이터가 비어 있습니다.".to_string());
+    }
+
+    let extension = image_extension_for_mime(payload.mime_type.as_deref());
+    let file_name = ensure_image_file_extension(payload.name.as_deref(), extension);
+    let asset_name = format!("{}-{}", asset_bytes_hash_key(&bytes), file_name);
+    let destination = assets_dir.join(asset_name);
+    if !destination.exists() {
+        fs::write(&destination, bytes)
+            .map_err(|error| format!("이미지를 프로젝트 assets로 저장하지 못했습니다: {error}"))?;
+    }
+
+    Ok(ProjectAsset {
+        path: destination.to_string_lossy().to_string(),
+        name: file_name,
     })
 }
 

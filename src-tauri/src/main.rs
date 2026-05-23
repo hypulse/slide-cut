@@ -15,6 +15,7 @@ pub fn run() {
             project_store::duplicate_project,
             project_store::delete_project,
             project_store::import_project_asset,
+            project_store::import_project_image_blob,
             project_store::export_project_package,
             project_store::import_project_package,
             project_store::get_app_settings,
