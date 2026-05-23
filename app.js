@@ -276,6 +276,8 @@ const COLOR_PRESETS = {
   light: { canvasColor: "#ffffff", textColor: "#000000" },
   dark: { canvasColor: "#000000", textColor: "#ffffff" },
 };
+const IMAGE_IMPORT_MAX_DIMENSION = 1920;
+const IMAGE_IMPORT_JPEG_QUALITY = 0.88;
 const DEFAULT_STROKE_COLOR = "#ff0000";
 const DEFAULT_STROKE_WIDTH = 4;
 const SHAPE_KINDS = new Set(["line", "arrow", "pen"]);
@@ -1387,6 +1389,56 @@ function loadImageElementFromBlob(blob) {
   });
 }
 
+function getConstrainedImageSize(width, height, maxDimension = IMAGE_IMPORT_MAX_DIMENSION) {
+  const safeWidth = Math.max(1, Math.round(width || 1));
+  const safeHeight = Math.max(1, Math.round(height || 1));
+  const scale = Math.min(1, maxDimension / Math.max(safeWidth, safeHeight));
+  return {
+    width: Math.max(1, Math.round(safeWidth * scale)),
+    height: Math.max(1, Math.round(safeHeight * scale)),
+  };
+}
+
+function canvasToBlob(canvas, mimeType, quality) {
+  return new Promise((resolve) => {
+    canvas.toBlob((blob) => resolve(blob), mimeType, quality);
+  });
+}
+
+function canvasHasTransparentPixels(context, width, height) {
+  const { data } = context.getImageData(0, 0, width, height);
+  for (let index = 3; index < data.length; index += 4) {
+    if (data[index] < 255) {
+      return true;
+    }
+  }
+  return false;
+}
+
+async function optimizeImageBlob(blob, image) {
+  const naturalWidth = image.naturalWidth || image.width || 1;
+  const naturalHeight = image.naturalHeight || image.height || 1;
+  const size = getConstrainedImageSize(naturalWidth, naturalHeight);
+  const canvas = document.createElement("canvas");
+  canvas.width = size.width;
+  canvas.height = size.height;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = "high";
+  context.drawImage(image, 0, 0, size.width, size.height);
+
+  const hasTransparency = !/^image\/jpe?g$/i.test(blob.type || "") && canvasHasTransparentPixels(context, size.width, size.height);
+  const mimeType = hasTransparency ? "image/png" : "image/jpeg";
+  const extension = hasTransparency ? "png" : "jpg";
+  const output = await canvasToBlob(canvas, mimeType, hasTransparency ? undefined : IMAGE_IMPORT_JPEG_QUALITY);
+  return {
+    blob: output || blob,
+    width: size.width,
+    height: size.height,
+    name: `clipboard-image.${extension}`,
+  };
+}
+
 async function ensureActiveProjectForAsset() {
   if (activeProjectId) {
     return activeProjectId;
@@ -2036,10 +2088,11 @@ async function loadImageBlob(blob) {
     return;
   }
 
-  setStatus("이미지를 프로젝트 asset으로 저장하고 있습니다.");
+  setStatus("이미지를 최적화해 프로젝트 asset으로 저장하고 있습니다.");
   const image = await loadImageElementFromBlob(blob);
-  const importedAsset = await importImageBlobAsset(blob);
-  addImageObject(importedAsset.path, image.naturalWidth, image.naturalHeight);
+  const optimized = await optimizeImageBlob(blob, image);
+  const importedAsset = await importImageBlobAsset(optimized.blob, optimized.name);
+  addImageObject(importedAsset.path, optimized.width, optimized.height);
 }
 
 function roundedCanvasSize(value) {
