@@ -181,7 +181,7 @@ export function createRenderer(deps) {
       context.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
     }
 
-    await drawSlideObjectsForExport(context, slide.objects || []);
+    await drawSlideObjectsForExport(context, slide.objects || [], options);
 
     if (options.subtitles) {
       drawSubtitleBox(context, getSubtitleTextForRender(slide, options), exportCanvas.width, exportCanvas.height);

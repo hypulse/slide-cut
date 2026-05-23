@@ -11,6 +11,7 @@ const statusText = document.querySelector("#statusText");
 const tauriInvoke = window.__TAURI__?.core?.invoke || null;
 const tauriDialog = window.__TAURI__?.dialog || null;
 const PROJECT_FILE_FILTER = [{ name: "Slide Cut Project", extensions: ["slidecut"] }];
+const IMAGE_FILE_FILTER = [{ name: "Image", extensions: ["png", "jpg", "jpeg", "gif", "webp", "bmp"] }];
 const VIDEO_FILE_FILTER = [{ name: "Video", extensions: ["mp4", "mov", "m4v", "webm"] }];
 const AUDIO_FILE_FILTER = [{ name: "Audio", extensions: ["mp3", "wav", "m4a", "aac", "ogg", "flac"] }];
 const MP4_FILE_FILTER = [{ name: "MP4 Video", extensions: ["mp4"] }];
@@ -62,6 +63,17 @@ const nativeApi = {
     }
     return path;
   },
+  selectImageFile: async () => {
+    const path = await tauriDialog.open({
+      multiple: false,
+      directory: false,
+      filters: IMAGE_FILE_FILTER,
+    });
+    if (!path || Array.isArray(path)) {
+      return null;
+    }
+    return path;
+  },
   selectVideoFile: async () => {
     const path = await tauriDialog.open({
       multiple: false,
@@ -106,6 +118,7 @@ const projectLibraryButton = document.querySelector("#projectLibraryButton");
 const appSettingsButton = document.querySelector("#appSettingsButton");
 const colorPresetButtons = [...document.querySelectorAll("[data-color-preset]")];
 const pasteImage = document.querySelector("#pasteImage");
+const chooseImage = document.querySelector("#chooseImage");
 const addTextBox = document.querySelector("#addTextBox");
 const addGitTypingSlide = document.querySelector("#addGitTypingSlide");
 const addChatTypingSlide = document.querySelector("#addChatTypingSlide");
@@ -939,6 +952,11 @@ function isExternalUrl(value) {
   return /^(data:|blob:|asset:)/i.test(String(value || ""));
 }
 
+function isAnimatedGifSource(value) {
+  const source = String(value || "").trim();
+  return /^data:image\/gif[;,]/i.test(source) || source.split(/[?#]/)[0].toLowerCase().endsWith(".gif");
+}
+
 function getDisplayAssetUrl(value) {
   const path = String(value || "");
   if (!path || isExternalUrl(path)) {
@@ -1345,7 +1363,7 @@ function attachObjectEvents(element) {
 function addImageObject(src, naturalWidth = 300, naturalHeight = 200) {
   const element = imageTemplate.content.firstElementChild.cloneNode(true);
   const image = element.querySelector("img");
-  image.src = src;
+  image.src = getDisplayAssetUrl(src);
   image.dataset.src = src;
 
   const maxWidth = canvas.clientWidth * 0.7;
@@ -1402,6 +1420,10 @@ function getConstrainedImageSize(width, height, maxDimension = IMAGE_IMPORT_MAX_
   };
 }
 
+function isGifBlob(blob) {
+  return /^image\/gif$/i.test(blob?.type || "");
+}
+
 function canvasToBlob(canvas, mimeType, quality) {
   return new Promise((resolve) => {
     canvas.toBlob((blob) => resolve(blob), mimeType, quality);
@@ -1418,9 +1440,19 @@ function canvasHasTransparentPixels(context, width, height) {
   return false;
 }
 
-async function optimizeImageBlob(blob, image) {
+async function optimizeImageBlob(blob, image, name = "image") {
   const naturalWidth = image.naturalWidth || image.width || 1;
   const naturalHeight = image.naturalHeight || image.height || 1;
+  if (isGifBlob(blob)) {
+    const gifName = String(name || "image").replace(/\.[a-z0-9]+$/i, "");
+    return {
+      blob,
+      width: naturalWidth,
+      height: naturalHeight,
+      name: `${gifName || "image"}.gif`,
+    };
+  }
+
   const size = getConstrainedImageSize(naturalWidth, naturalHeight);
   const canvas = document.createElement("canvas");
   canvas.width = size.width;
@@ -1462,6 +1494,17 @@ async function importImageBlobAsset(blob, name = "clipboard-image") {
     mimeType: blob.type || "image/png",
     name,
   });
+}
+
+async function importImageFileAsset(path) {
+  const projectId = await ensureActiveProjectForAsset();
+  const importedAsset = await nativeApi.importProjectAsset(projectId, path);
+  const image = await loadImageForRender(importedAsset.path);
+  addImageObject(
+    importedAsset.path,
+    image.naturalWidth || image.width || 1,
+    image.naturalHeight || image.height || 1
+  );
 }
 
 function addTextObject(text, statusMessage = "텍스트를 붙여넣었습니다. 텍스트 폰트는 Pretendard로 고정됩니다.") {
@@ -2085,7 +2128,7 @@ async function pasteImageFromClipboard() {
   }
 }
 
-async function loadImageBlob(blob) {
+async function loadImageBlob(blob, name = "clipboard-image") {
   if (!blob) {
     setStatus("이미지를 읽지 못했습니다.");
     return;
@@ -2093,9 +2136,32 @@ async function loadImageBlob(blob) {
 
   setStatus("이미지를 최적화해 프로젝트 asset으로 저장하고 있습니다.");
   const image = await loadImageElementFromBlob(blob);
-  const optimized = await optimizeImageBlob(blob, image);
-  const importedAsset = await importImageBlobAsset(optimized.blob, optimized.name);
+  const optimized = await optimizeImageBlob(blob, image, name);
+  const importedAsset = await importImageBlobAsset(optimized.blob, optimized.name || name);
   addImageObject(importedAsset.path, optimized.width, optimized.height);
+}
+
+async function chooseImageFileForCurrentSlide() {
+  try {
+    const path = await nativeApi.selectImageFile();
+    if (!path) {
+      return;
+    }
+    if (isAnimatedGifSource(path)) {
+      setStatus("GIF를 프로젝트 asset으로 저장하고 있습니다.");
+      await importImageFileAsset(path);
+      return;
+    }
+    const displayUrl = nativeApi.toAssetUrl(path);
+    const response = await fetch(displayUrl);
+    if (!response.ok) {
+      throw new Error("이미지 파일을 읽지 못했습니다.");
+    }
+    const blob = await response.blob();
+    await loadImageBlob(blob, getFileNameFromPath(path));
+  } catch (error) {
+    setStatus(error?.message || "이미지 파일을 추가하지 못했습니다.");
+  }
 }
 
 function roundedCanvasSize(value) {
@@ -2668,8 +2734,30 @@ function drawDynamicSlide(context, slide, width, height, timeSeconds, options = 
   }
 }
 
-async function drawSlideObjectsForExport(context, objects = [], imageCache = new Map()) {
+function isAnimatedGifObject(object) {
+  return object?.type === "image" && isAnimatedGifSource(object.src);
+}
+
+function getAnimatedGifOverlays(slide) {
+  return (slide?.objects || [])
+    .filter(isAnimatedGifObject)
+    .map((object) => ({
+      src: object.src,
+      x: numberOr(object.x, 0),
+      y: numberOr(object.y, 0),
+      width: Math.max(1, numberOr(object.width, 1)),
+      height: Math.max(1, numberOr(object.height, 1)),
+      rotation: numberOr(object.rotation, 0),
+    }));
+}
+
+async function drawSlideObjectsForExport(context, objects = [], options = {}) {
+  const imageCache = options instanceof Map ? options : options.imageCache || new Map();
+  const excludeAnimatedGifs = !(options instanceof Map) && Boolean(options.excludeAnimatedGifs);
   for (const object of objects) {
+    if (excludeAnimatedGifs && isAnimatedGifObject(object)) {
+      continue;
+    }
     const center = {
       x: object.x + object.width / 2,
       y: object.y + object.height / 2,
@@ -2711,7 +2799,7 @@ async function renderDynamicSlideToDataUrl(slide, timeSeconds, options = {}) {
     subtitles: false,
     reserveSubtitles: options.subtitles,
   });
-  await drawSlideObjectsForExport(context, slide.objects || [], options.imageCache);
+  await drawSlideObjectsForExport(context, slide.objects || [], options);
   if (options.subtitles) {
     drawSubtitleBox(context, getSubtitleTextForRender(slide, options), exportCanvas.width, exportCanvas.height);
   }
@@ -5194,6 +5282,7 @@ async function exportProjectAsMp4() {
       setExportModalProgress("Rendering", `슬라이드 ${index + 1} / ${slides.length} 렌더링 중입니다.`, index, slides.length);
       const noteSegments = splitNotesForExport(slide.notes);
       const exportNoteSegments = noteSegments.length ? noteSegments : [""];
+      const gifOverlays = getAnimatedGifOverlays(slide);
       const baseSlidePayload = {
         index,
         width: roundedCanvasSize(slide.width),
@@ -5206,6 +5295,7 @@ async function exportProjectAsMp4() {
         const continueAfterTts = normalizeContinueAfterTts(slide.continueAfterTts);
         const hasTtsNotes = Boolean(exportNoteSegments[0]?.trim());
         const animation = await renderDynamicSlideFrames(slide, {
+          excludeAnimatedGifs: gifOverlays.length > 0,
           subtitles: projectSettingsState.subtitleEnabled,
           subtitleText: exportNoteSegments[0],
         });
@@ -5219,13 +5309,21 @@ async function exportProjectAsMp4() {
           animationFrames: animation.frames,
           frameRate: animation.frameRate,
           animationDurationSeconds: animation.duration,
+          ...(gifOverlays.length ? { gifOverlays } : {}),
         });
         for (const segmentNotes of exportNoteSegments.slice(1)) {
           renderedSlides.push({
             ...baseSlidePayload,
             notes: segmentNotes,
             startSoundPath: null,
+            ...(gifOverlays.length
+              ? {
+                  gifOverlays,
+                  animationAffectsDuration: false,
+                }
+              : {}),
             framePng: await renderDynamicSlideToDataUrl(slide, animation.duration, {
+              excludeAnimatedGifs: gifOverlays.length > 0,
               subtitles: projectSettingsState.subtitleEnabled,
               subtitleText: segmentNotes,
             }),
@@ -5237,8 +5335,15 @@ async function exportProjectAsMp4() {
             ...baseSlidePayload,
             notes: segmentNotes,
             startSoundPath: segmentIndex === 0 ? startSound?.path || null : null,
+            ...(gifOverlays.length
+              ? {
+                  gifOverlays,
+                  animationAffectsDuration: false,
+                }
+              : {}),
             framePng: await renderSlideToDataUrl(slide, {
               transparentBackground: Boolean(video),
+              excludeAnimatedGifs: gifOverlays.length > 0,
               subtitles: projectSettingsState.subtitleEnabled,
               subtitleText: segmentNotes,
             }),
@@ -5279,7 +5384,8 @@ function handlePaste(event) {
   const imageItem = items.find((item) => item.type.startsWith("image/"));
   if (imageItem) {
     event.preventDefault();
-    loadImageBlob(imageItem.getAsFile()).catch(() => setStatus("이미지를 읽지 못했습니다."));
+    const file = imageItem.getAsFile();
+    loadImageBlob(file, file?.name || "clipboard-image").catch(() => setStatus("이미지를 읽지 못했습니다."));
     return;
   }
 
@@ -5480,6 +5586,7 @@ settingsTtsSpeed.addEventListener("blur", () => {
 });
 
 pasteImage.addEventListener("click", pasteImageFromClipboard);
+chooseImage.addEventListener("click", chooseImageFileForCurrentSlide);
 addTextBox.addEventListener("click", () => {
   addTextObject("텍스트", "텍스트 상자를 만들었습니다. 바로 입력해서 내용을 바꿀 수 있습니다.");
   startTextEdit(selectedObject);
