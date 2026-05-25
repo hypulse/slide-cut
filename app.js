@@ -1604,15 +1604,6 @@ function hasLoopAnimation(data = {}) {
   return getObjectAnimationConfig(data).animationLoop !== DEFAULT_ANIMATION_LOOP;
 }
 
-function getLoopAnimationPeriod(data = {}) {
-  const config = getObjectAnimationConfig(data);
-  const basePeriod = ANIMATION_LOOP_PERIOD_SECONDS[config.animationLoop] || 0;
-  if (!basePeriod) {
-    return 0;
-  }
-  return basePeriod * (ANIMATION_SPEED_PERIOD_FACTORS[config.animationSpeed] || 1);
-}
-
 function getObjectOneShotAnimationDuration(data = {}) {
   return Math.max(getAnimationInDuration(data), getMoveAnimationDuration(data));
 }
@@ -1626,14 +1617,6 @@ function getCanvasObjectAnimationDuration() {
     0,
     ...[...canvas.querySelectorAll(".object")].map((element) => getObjectOneShotAnimationDuration(getElementAnimationData(element)))
   );
-}
-
-function getSlideLoopAnimationFrameDuration(slide) {
-  const periods = (slide?.objects || [])
-    .filter((object) => canAnimateObjectData(object) && hasLoopAnimation(object))
-    .map(getLoopAnimationPeriod)
-    .filter((period) => period > 0);
-  return Math.max(0.5, ...periods);
 }
 
 function shouldLoopAnimationFrames(slide) {
@@ -1700,7 +1683,7 @@ function getObjectAnimationState(object, timeSeconds = 0, durationSeconds = VIDE
     } else if (config.animationLoop === "pulse") {
       state.scale *= 1 + riseAndFall * 0.08;
     } else if (config.animationLoop === "blink") {
-      state.opacity *= 1 - riseAndFall * 0.92;
+      state.opacity *= Math.pow((1 + Math.cos(angle)) / 2, 2);
     } else if (config.animationLoop === "float") {
       state.y += wave * 8;
     }
@@ -6529,9 +6512,7 @@ async function exportProjectAsMp4() {
           const loopAnimationFrames = shouldLoopAnimationFrames(slide);
           const animation = await renderCanvasSlideAnimationFrames(slide, {
             ...renderOptions,
-            durationSeconds: loopAnimationFrames
-              ? getSlideLoopAnimationFrameDuration(slide)
-              : getSlideAnimationFrameDuration(slide, notes),
+            durationSeconds: getSlideAnimationFrameDuration(slide, notes),
             loopFrames: loopAnimationFrames,
           });
           renderedSlides.push({
