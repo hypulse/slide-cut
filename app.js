@@ -1636,7 +1636,6 @@ function getObjectAnimationState(object, timeSeconds = 0, durationSeconds = VIDE
     rotation: numberOr(object.rotation, 0),
     opacity: 1,
     scale: 1,
-    hidden: false,
   };
   if (!canAnimateObjectData(object) || !hasObjectAnimation(object)) {
     return base;
@@ -1688,9 +1687,7 @@ function getObjectAnimationState(object, timeSeconds = 0, durationSeconds = VIDE
     } else if (config.animationLoop === "pulse") {
       state.scale *= 1 + riseAndFall * 0.08;
     } else if (config.animationLoop === "blink") {
-      const blinkOpacity = getBlinkOpacityForPhase(angle);
-      state.opacity *= blinkOpacity;
-      state.hidden = blinkOpacity <= 0.02;
+      state.opacity *= getBlinkOpacityForPhase(angle);
     } else if (config.animationLoop === "float") {
       state.y += wave * 8;
     }
@@ -1856,7 +1853,6 @@ function resetObjectAnimationPreview(element) {
   const state = getState(element);
   element.style.transform = `rotate(${state.rotation}deg)`;
   element.style.opacity = "";
-  element.style.visibility = "";
 }
 
 function updateObjectAnimationPreview(timeSeconds, durationSeconds) {
@@ -1869,7 +1865,6 @@ function updateObjectAnimationPreview(timeSeconds, durationSeconds) {
     const animatedState = getObjectAnimationState(data, timeSeconds, durationSeconds);
     element.style.transform = getAnimatedObjectTransform(animatedState, data);
     element.style.opacity = String(animatedState.opacity);
-    element.style.visibility = animatedState.hidden ? "hidden" : "";
   }
 }
 
@@ -3761,9 +3756,6 @@ async function drawSlideObjectsForExport(context, objects = [], options = {}) {
       continue;
     }
     const renderState = getObjectAnimationState(object, timeSeconds, durationSeconds);
-    if (renderState.hidden || renderState.opacity <= 0.005) {
-      continue;
-    }
     const center = {
       x: renderState.x + renderState.width / 2,
       y: renderState.y + renderState.height / 2,
