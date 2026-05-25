@@ -3057,6 +3057,42 @@ function splitNotesForExport(notes) {
     .filter(Boolean);
 }
 
+function estimateNoteSegmentDuration(notes) {
+  const text = String(notes || "").trim();
+  if (!text) {
+    return VIDEO_EXPORT_FALLBACK_DURATION;
+  }
+  const characterCount = text.replace(/\s+/g, "").length;
+  return clamp(characterCount / 7 + 1.2, VIDEO_EXPORT_FALLBACK_DURATION, DYNAMIC_MAX_DURATION);
+}
+
+function getSlideVisualTimelineDuration(slide) {
+  return Math.max(isDynamicSlide(slide) ? getDynamicSlideDuration(slide) : 0, getSlideObjectAnimationDuration(slide));
+}
+
+function getSlideExportTimelinePlan(slide, noteSegments) {
+  const segmentDurations = noteSegments.map(estimateNoteSegmentDuration);
+  const hasTtsNotes = noteSegments.some((segment) => Boolean(String(segment || "").trim()));
+  const visualDuration = getSlideVisualTimelineDuration(slide);
+  const shouldExtendToVisual = !hasTtsNotes || (isDynamicSlide(slide) && normalizeContinueAfterTts(slide.continueAfterTts));
+  const estimatedAudioDuration = segmentDurations.reduce((total, duration) => total + duration, 0);
+  if (segmentDurations.length > 0 && shouldExtendToVisual && estimatedAudioDuration < visualDuration) {
+    segmentDurations[segmentDurations.length - 1] += visualDuration - estimatedAudioDuration;
+  }
+
+  let offset = 0;
+  const segmentOffsets = segmentDurations.map((duration) => {
+    const currentOffset = offset;
+    offset += duration;
+    return currentOffset;
+  });
+  return {
+    segmentDurations,
+    segmentOffsets,
+    duration: Math.max(VIDEO_EXPORT_FALLBACK_DURATION, offset, visualDuration),
+  };
+}
+
 function getSubtitleTextForRender(slide, options = {}) {
   return typeof options.subtitleText === "string" ? options.subtitleText : slide.notes;
 }
@@ -3553,10 +3589,14 @@ async function renderDynamicSlideToDataUrl(slide, timeSeconds, options = {}) {
     subtitles: false,
     reserveSubtitles: options.subtitles,
   });
+  const defaultObjectTimelineDuration = Math.max(getDynamicSlideDuration(slide), getSlideObjectAnimationDuration(slide));
   await drawSlideObjectsForExport(context, slide.objects || [], {
     ...options,
     timeSeconds,
-    durationSeconds: Math.max(getDynamicSlideDuration(slide), getSlideObjectAnimationDuration(slide)),
+    durationSeconds: Math.max(
+      defaultObjectTimelineDuration,
+      numberOr(options.objectTimelineDurationSeconds, defaultObjectTimelineDuration)
+    ),
   });
   if (options.subtitles) {
     drawSubtitleBox(context, getSubtitleTextForRender(slide, options), exportCanvas.width, exportCanvas.height, options);
@@ -3565,7 +3605,10 @@ async function renderDynamicSlideToDataUrl(slide, timeSeconds, options = {}) {
 }
 
 async function renderDynamicSlideFrames(slide, options = {}) {
-  const duration = Math.max(getDynamicSlideDuration(slide), getSlideObjectAnimationDuration(slide));
+  const defaultDuration = Math.max(getDynamicSlideDuration(slide), getSlideObjectAnimationDuration(slide));
+  const duration = Math.max(0.5, numberOr(options.segmentDurationSeconds, defaultDuration));
+  const timelineOffset = Math.max(0, numberOr(options.timelineOffsetSeconds, 0));
+  const objectTimelineDuration = Math.max(defaultDuration, timelineOffset + duration, numberOr(options.objectTimelineDurationSeconds, defaultDuration));
   const frameRate = DYNAMIC_FRAME_RATE;
   const frameCount = Math.max(2, Math.ceil(duration * frameRate));
   const frames = [];
@@ -3575,10 +3618,22 @@ async function renderDynamicSlideFrames(slide, options = {}) {
     if (index % frameRate === 0) {
       await new Promise((resolve) => window.requestAnimationFrame(resolve));
     }
-    const timeSeconds = Math.min(duration, index / frameRate);
-    frames.push(await renderDynamicSlideToDataUrl(slide, timeSeconds, { ...options, imageCache }));
+    const timeSeconds = timelineOffset + Math.min(duration, index / frameRate);
+    frames.push(
+      await renderDynamicSlideToDataUrl(slide, timeSeconds, {
+        ...options,
+        imageCache,
+        objectTimelineDurationSeconds: objectTimelineDuration,
+      })
+    );
   }
-  frames.push(await renderDynamicSlideToDataUrl(slide, duration, { ...options, imageCache }));
+  frames.push(
+    await renderDynamicSlideToDataUrl(slide, timelineOffset + duration, {
+      ...options,
+      imageCache,
+      objectTimelineDurationSeconds: objectTimelineDuration,
+    })
+  );
   return {
     frames,
     frameRate,
@@ -3591,18 +3646,10 @@ function slideHasObjectAnimations(slide) {
   return (slide?.objects || []).some((object) => canAnimateObjectData(object) && hasObjectAnimation(object));
 }
 
-function estimateObjectAnimationExportDuration(slide, notes) {
-  const text = String(notes || "").trim();
-  const moveDuration = getSlideObjectAnimationDuration(slide);
-  if (!text) {
-    return Math.max(VIDEO_EXPORT_FALLBACK_DURATION, moveDuration);
-  }
-  const characterCount = text.replace(/\s+/g, "").length;
-  return Math.max(moveDuration, clamp(characterCount / 7 + 1.2, VIDEO_EXPORT_FALLBACK_DURATION, DYNAMIC_MAX_DURATION));
-}
-
 async function renderCanvasSlideAnimationFrames(slide, options = {}) {
-  const duration = Math.max(VIDEO_EXPORT_FALLBACK_DURATION, numberOr(options.durationSeconds, VIDEO_EXPORT_FALLBACK_DURATION));
+  const duration = Math.max(0.5, numberOr(options.segmentDurationSeconds, numberOr(options.durationSeconds, VIDEO_EXPORT_FALLBACK_DURATION)));
+  const timelineOffset = Math.max(0, numberOr(options.timelineOffsetSeconds, 0));
+  const timelineDuration = Math.max(duration + timelineOffset, numberOr(options.durationSeconds, duration));
   const frameRate = VIDEO_EXPORT_FPS;
   const frameCount = Math.max(2, Math.ceil(duration * frameRate));
   const frames = [];
@@ -3612,13 +3659,13 @@ async function renderCanvasSlideAnimationFrames(slide, options = {}) {
     if (index % frameRate === 0) {
       await new Promise((resolve) => window.requestAnimationFrame(resolve));
     }
-    const timeSeconds = Math.min(duration, index / frameRate);
+    const timeSeconds = timelineOffset + Math.min(duration, index / frameRate);
     frames.push(
       await renderSlideToDataUrl(slide, {
         ...options,
         imageCache,
         timeSeconds,
-        durationSeconds: duration,
+        durationSeconds: timelineDuration,
       })
     );
   }
@@ -3626,8 +3673,8 @@ async function renderCanvasSlideAnimationFrames(slide, options = {}) {
     await renderSlideToDataUrl(slide, {
       ...options,
       imageCache,
-      timeSeconds: duration,
-      durationSeconds: duration,
+      timeSeconds: timelineOffset + duration,
+      durationSeconds: timelineDuration,
     })
   );
   return {
@@ -6213,6 +6260,7 @@ async function exportProjectAsMp4() {
       setExportModalProgress("Rendering", `슬라이드 ${index + 1} / ${slides.length} 렌더링 중입니다.`, index, slides.length);
       const noteSegments = splitNotesForExport(slide.notes);
       const exportNoteSegments = noteSegments.length ? noteSegments : [""];
+      const timelinePlan = getSlideExportTimelinePlan(slide, exportNoteSegments);
       const gifOverlays = getAnimatedGifOverlays(slide);
       const baseSlidePayload = {
         index,
@@ -6224,48 +6272,34 @@ async function exportProjectAsMp4() {
       if (isDynamicSlide(slide)) {
         setExportModalProgress("Rendering", `슬라이드 ${index + 1} / ${slides.length} 타이핑 프레임을 만들고 있습니다.`, index, slides.length);
         const continueAfterTts = normalizeContinueAfterTts(slide.continueAfterTts);
-        const hasTtsNotes = Boolean(exportNoteSegments[0]?.trim());
-        const animation = await renderDynamicSlideFrames(slide, {
-          excludeAnimatedGifs: gifOverlays.length > 0,
-          subtitles: projectSettingsState.subtitleEnabled,
-          subtitleText: exportNoteSegments[0],
-          subtitleSize: projectSettingsState.subtitleSize,
-          subtitleY: projectSettingsState.subtitleY,
-        });
-        renderedSlides.push({
-          ...baseSlidePayload,
-          notes: exportNoteSegments[0],
-          startSoundPath: startSound?.path || null,
-          endOnTtsEnd: hasTtsNotes ? !continueAfterTts : false,
-          fitAnimationToDuration: false,
-          framePng: animation.framePng,
-          animationFrames: animation.frames,
-          frameRate: animation.frameRate,
-          animationDurationSeconds: animation.duration,
-          ...(gifOverlays.length ? { gifOverlays } : {}),
-        });
-        for (const segmentNotes of exportNoteSegments.slice(1)) {
+        for (const [segmentIndex, segmentNotes] of exportNoteSegments.entries()) {
+          const hasTtsNotes = Boolean(segmentNotes?.trim());
+          const animation = await renderDynamicSlideFrames(slide, {
+            excludeAnimatedGifs: gifOverlays.length > 0,
+            subtitles: projectSettingsState.subtitleEnabled,
+            subtitleText: segmentNotes,
+            subtitleSize: projectSettingsState.subtitleSize,
+            subtitleY: projectSettingsState.subtitleY,
+            segmentDurationSeconds: timelinePlan.segmentDurations[segmentIndex],
+            timelineOffsetSeconds: timelinePlan.segmentOffsets[segmentIndex],
+            objectTimelineDurationSeconds: timelinePlan.duration,
+          });
           renderedSlides.push({
             ...baseSlidePayload,
             notes: segmentNotes,
-            startSoundPath: null,
-            ...(gifOverlays.length
-              ? {
-                  gifOverlays,
-                  animationAffectsDuration: false,
-                }
-              : {}),
-            framePng: await renderDynamicSlideToDataUrl(slide, animation.duration, {
-              excludeAnimatedGifs: gifOverlays.length > 0,
-              subtitles: projectSettingsState.subtitleEnabled,
-              subtitleText: segmentNotes,
-              subtitleSize: projectSettingsState.subtitleSize,
-              subtitleY: projectSettingsState.subtitleY,
-            }),
+            startSoundPath: segmentIndex === 0 ? startSound?.path || null : null,
+            endOnTtsEnd: hasTtsNotes ? !continueAfterTts : false,
+            fitAnimationToDuration: false,
+            framePng: animation.framePng,
+            animationFrames: animation.frames,
+            frameRate: animation.frameRate,
+            animationDurationSeconds: animation.duration,
+            ...(gifOverlays.length ? { gifOverlays } : {}),
           });
         }
       } else {
         for (const [segmentIndex, segmentNotes] of exportNoteSegments.entries()) {
+          const hasTtsNotes = Boolean(segmentNotes?.trim());
           const renderOptions = {
             transparentBackground: Boolean(video),
             excludeAnimatedGifs: gifOverlays.length > 0,
@@ -6275,27 +6309,23 @@ async function exportProjectAsMp4() {
             subtitleY: projectSettingsState.subtitleY,
           };
           if (slideHasObjectAnimations(slide)) {
-            const animationDuration = estimateObjectAnimationExportDuration(slide, segmentNotes);
             const animation = await renderCanvasSlideAnimationFrames(slide, {
               ...renderOptions,
-              durationSeconds: animationDuration,
+              segmentDurationSeconds: timelinePlan.segmentDurations[segmentIndex],
+              timelineOffsetSeconds: timelinePlan.segmentOffsets[segmentIndex],
+              durationSeconds: timelinePlan.duration,
             });
             renderedSlides.push({
               ...baseSlidePayload,
               notes: segmentNotes,
               startSoundPath: segmentIndex === 0 ? startSound?.path || null : null,
-              ...(gifOverlays.length
-                ? {
-                    gifOverlays,
-                    animationAffectsDuration: false,
-                  }
-                : {}),
+              ...(gifOverlays.length ? { gifOverlays } : {}),
               framePng: animation.framePng,
               animationFrames: animation.frames,
               frameRate: animation.frameRate,
               animationDurationSeconds: animation.duration,
               fitAnimationToDuration: false,
-              animationAffectsDuration: false,
+              animationAffectsDuration: !hasTtsNotes,
             });
           } else {
             renderedSlides.push({
