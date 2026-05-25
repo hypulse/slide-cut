@@ -795,13 +795,7 @@ fn append_gif_overlay_filters(
         if overlay.flip_y {
             source_filter.push_str(",vflip");
         }
-        source_filter.push_str(&format!(
-            ",scale={}:{}:force_original_aspect_ratio=decrease,pad={}:{}:(ow-iw)/2:(oh-ih)/2:color=black@0,format=rgba",
-            width as u32,
-            height as u32,
-            width as u32,
-            height as u32
-        ));
+        source_filter.push_str(&format!(",scale={}:{}:format=rgba", width as u32, height as u32));
         let (overlay_width, overlay_height) = if overlay.rotation.abs() > 0.01 {
             let angle = format_filter_number(overlay.rotation.to_radians());
             source_filter.push_str(&format!(

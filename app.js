@@ -2342,8 +2342,18 @@ function handlePointerMove(event) {
 
   const horizontalSign = activePointer.handle.includes("w") ? -1 : 1;
   const verticalSign = activePointer.handle.includes("n") ? -1 : 1;
-  const width = Math.max(16, state.width + dx * horizontalSign);
-  const height = Math.max(16, state.height + dy * verticalSign);
+  let width = Math.max(16, state.width + dx * horizontalSign);
+  let height = Math.max(16, state.height + dy * verticalSign);
+  if (element.dataset.type === "image" && event.shiftKey) {
+    const aspectRatio = Math.max(0.01, state.width / Math.max(1, state.height));
+    const widthRatio = Math.abs(width - state.width) / Math.max(1, state.width);
+    const heightRatio = Math.abs(height - state.height) / Math.max(1, state.height);
+    if (widthRatio >= heightRatio) {
+      height = Math.max(16, width / aspectRatio);
+    } else {
+      width = Math.max(16, height * aspectRatio);
+    }
+  }
   const x = activePointer.handle.includes("w") ? state.x + (state.width - width) : state.x;
   const y = activePointer.handle.includes("n") ? state.y + (state.height - height) : state.y;
 
@@ -2438,12 +2448,7 @@ function getObjectCenter(state) {
 }
 
 function drawFittedImage(context, image, width, height) {
-  const naturalWidth = image.naturalWidth || width;
-  const naturalHeight = image.naturalHeight || height;
-  const scale = Math.min(width / naturalWidth, height / naturalHeight);
-  const drawWidth = naturalWidth * scale;
-  const drawHeight = naturalHeight * scale;
-  context.drawImage(image, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight);
+  context.drawImage(image, 0, 0, width, height);
 }
 
 function drawFlippedFittedImage(context, image, width, height, data = {}) {
