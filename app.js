@@ -3328,19 +3328,26 @@ function getAnimatedGifOverlays(slide) {
 async function drawSlideObjectsForExport(context, objects = [], options = {}) {
   const imageCache = options instanceof Map ? options : options.imageCache || new Map();
   const excludeAnimatedGifs = !(options instanceof Map) && Boolean(options.excludeAnimatedGifs);
+  const timeSeconds = !(options instanceof Map) ? numberOr(options.timeSeconds, 0) : 0;
+  const durationSeconds = !(options instanceof Map)
+    ? numberOr(options.durationSeconds, VIDEO_EXPORT_FALLBACK_DURATION)
+    : VIDEO_EXPORT_FALLBACK_DURATION;
   for (const object of objects) {
     if (excludeAnimatedGifs && isAnimatedGifObject(object)) {
       continue;
     }
+    const renderState = getObjectAnimationState(object, timeSeconds, durationSeconds);
     const center = {
-      x: object.x + object.width / 2,
-      y: object.y + object.height / 2,
+      x: renderState.x + renderState.width / 2,
+      y: renderState.y + renderState.height / 2,
     };
     context.save();
     try {
+      context.globalAlpha *= renderState.opacity;
       context.translate(center.x, center.y);
-      context.rotate((object.rotation * Math.PI) / 180);
-      context.translate(-object.width / 2, -object.height / 2);
+      context.rotate((renderState.rotation * Math.PI) / 180);
+      context.scale(renderState.scale, renderState.scale);
+      context.translate(-renderState.width / 2, -renderState.height / 2);
 
       if (object.type === "image") {
         let imagePromise = imageCache.get(object.src);
@@ -3357,13 +3364,22 @@ async function drawSlideObjectsForExport(context, objects = [], options = {}) {
           }
           throw error;
         }
-        drawFlippedFittedImage(context, image, object.width, object.height, object);
+        drawFlippedFittedImage(context, image, renderState.width, renderState.height, object);
       } else if (object.type === "text") {
         context.__textColor = object.textColor || DEFAULT_TEXT_COLOR;
-        drawTextLines(context, object.text || "", object.width, object.height, false, object.textSize || "h3", object.textAlign || "left", object);
+        drawTextLines(
+          context,
+          object.text || "",
+          renderState.width,
+          renderState.height,
+          false,
+          object.textSize || "h3",
+          object.textAlign || "left",
+          object
+        );
         delete context.__textColor;
       } else if (object.type === "shape") {
-        drawShapeData(context, object, object.width, object.height);
+        drawShapeData(context, object, renderState.width, renderState.height);
       }
     } finally {
       delete context.__textColor;
@@ -3382,7 +3398,11 @@ async function renderDynamicSlideToDataUrl(slide, timeSeconds, options = {}) {
     subtitles: false,
     reserveSubtitles: options.subtitles,
   });
-  await drawSlideObjectsForExport(context, slide.objects || [], options);
+  await drawSlideObjectsForExport(context, slide.objects || [], {
+    ...options,
+    timeSeconds,
+    durationSeconds: getDynamicSlideDuration(slide),
+  });
   if (options.subtitles) {
     drawSubtitleBox(context, getSubtitleTextForRender(slide, options), exportCanvas.width, exportCanvas.height);
   }
@@ -3404,6 +3424,56 @@ async function renderDynamicSlideFrames(slide, options = {}) {
     frames.push(await renderDynamicSlideToDataUrl(slide, timeSeconds, { ...options, imageCache }));
   }
   frames.push(await renderDynamicSlideToDataUrl(slide, duration, { ...options, imageCache }));
+  return {
+    frames,
+    frameRate,
+    duration,
+    framePng: frames[frames.length - 1],
+  };
+}
+
+function slideHasObjectAnimations(slide) {
+  return (slide?.objects || []).some((object) => canAnimateObjectData(object) && hasObjectAnimation(object));
+}
+
+function estimateObjectAnimationExportDuration(notes) {
+  const text = String(notes || "").trim();
+  if (!text) {
+    return VIDEO_EXPORT_FALLBACK_DURATION;
+  }
+  const characterCount = text.replace(/\s+/g, "").length;
+  return clamp(characterCount / 7 + 1.2, VIDEO_EXPORT_FALLBACK_DURATION, DYNAMIC_MAX_DURATION);
+}
+
+async function renderCanvasSlideAnimationFrames(slide, options = {}) {
+  const duration = Math.max(VIDEO_EXPORT_FALLBACK_DURATION, numberOr(options.durationSeconds, VIDEO_EXPORT_FALLBACK_DURATION));
+  const frameRate = VIDEO_EXPORT_FPS;
+  const frameCount = Math.max(2, Math.ceil(duration * frameRate));
+  const frames = [];
+  const imageCache = new Map();
+  for (let index = 0; index < frameCount; index += 1) {
+    throwIfExportCancelled();
+    if (index % frameRate === 0) {
+      await new Promise((resolve) => window.requestAnimationFrame(resolve));
+    }
+    const timeSeconds = Math.min(duration, index / frameRate);
+    frames.push(
+      await renderSlideToDataUrl(slide, {
+        ...options,
+        imageCache,
+        timeSeconds,
+        durationSeconds: duration,
+      })
+    );
+  }
+  frames.push(
+    await renderSlideToDataUrl(slide, {
+      ...options,
+      imageCache,
+      timeSeconds: duration,
+      durationSeconds: duration,
+    })
+  );
   return {
     frames,
     frameRate,
@@ -5274,13 +5344,18 @@ async function saveCanvasAsPng() {
     drawCoverMedia(context, slideVideo, exportCanvas.width, exportCanvas.height);
   }
 
+  const animationDuration = VIDEO_EXPORT_FALLBACK_DURATION;
+  const animationTime = animationDuration / 2;
   for (const object of canvas.querySelectorAll(".object")) {
-    const state = getState(object);
+    const baseState = getElementAnimationData(object);
+    const state = getObjectAnimationState(baseState, animationTime, animationDuration);
     const center = getObjectCenter(state);
 
     context.save();
+    context.globalAlpha *= state.opacity;
     context.translate(center.x, center.y);
     context.rotate((state.rotation * Math.PI) / 180);
+    context.scale(state.scale, state.scale);
     context.translate(-state.width / 2, -state.height / 2);
 
     if (object.dataset.type === "image") {
@@ -6023,23 +6098,49 @@ async function exportProjectAsMp4() {
         }
       } else {
         for (const [segmentIndex, segmentNotes] of exportNoteSegments.entries()) {
-          renderedSlides.push({
-            ...baseSlidePayload,
-            notes: segmentNotes,
-            startSoundPath: segmentIndex === 0 ? startSound?.path || null : null,
-            ...(gifOverlays.length
-              ? {
-                  gifOverlays,
-                  animationAffectsDuration: false,
-                }
-              : {}),
-            framePng: await renderSlideToDataUrl(slide, {
-              transparentBackground: Boolean(video),
-              excludeAnimatedGifs: gifOverlays.length > 0,
-              subtitles: projectSettingsState.subtitleEnabled,
-              subtitleText: segmentNotes,
-            }),
-          });
+          const renderOptions = {
+            transparentBackground: Boolean(video),
+            excludeAnimatedGifs: gifOverlays.length > 0,
+            subtitles: projectSettingsState.subtitleEnabled,
+            subtitleText: segmentNotes,
+          };
+          if (slideHasObjectAnimations(slide)) {
+            const animationDuration = estimateObjectAnimationExportDuration(segmentNotes);
+            const animation = await renderCanvasSlideAnimationFrames(slide, {
+              ...renderOptions,
+              durationSeconds: animationDuration,
+            });
+            renderedSlides.push({
+              ...baseSlidePayload,
+              notes: segmentNotes,
+              startSoundPath: segmentIndex === 0 ? startSound?.path || null : null,
+              ...(gifOverlays.length
+                ? {
+                    gifOverlays,
+                    animationAffectsDuration: false,
+                  }
+                : {}),
+              framePng: animation.framePng,
+              animationFrames: animation.frames,
+              frameRate: animation.frameRate,
+              animationDurationSeconds: animation.duration,
+              fitAnimationToDuration: true,
+              animationAffectsDuration: false,
+            });
+          } else {
+            renderedSlides.push({
+              ...baseSlidePayload,
+              notes: segmentNotes,
+              startSoundPath: segmentIndex === 0 ? startSound?.path || null : null,
+              ...(gifOverlays.length
+                ? {
+                    gifOverlays,
+                    animationAffectsDuration: false,
+                  }
+                : {}),
+              framePng: await renderSlideToDataUrl(slide, renderOptions),
+            });
+          }
         }
       }
     }

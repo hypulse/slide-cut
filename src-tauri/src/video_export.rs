@@ -1036,6 +1036,58 @@ fn create_animation_segment(
         "scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=white,tpad=stop_mode=clone:stop_duration={},format=yuv420p",
         format_seconds(stop_duration)
     );
+    if let Some(video_path) = prepared.video_path.as_ref() {
+        let mut filter = format!(
+            "[0:v]scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},setsar=1[bg];[1:v]scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=black@0,tpad=stop_mode=clone:stop_duration={},format=rgba[fg];[bg][fg]overlay=0:0:format=auto[base0];",
+            format_seconds(stop_duration)
+        );
+        let final_label = if prepared.gif_overlays.is_empty() {
+            "base0".to_string()
+        } else {
+            append_gif_overlay_filters(&mut filter, "base0", 3, &prepared.gif_overlays, fps)
+        };
+        filter.push_str(&format!("[{final_label}]format=yuv420p[v]"));
+
+        let mut command = Command::new(ffmpeg);
+        command
+            .args(["-y", "-stream_loop", "-1"])
+            .arg("-i")
+            .arg(video_path)
+            .args(["-framerate"])
+            .arg(format_seconds(input_frame_rate))
+            .arg("-i")
+            .arg(first_frame)
+            .arg("-i")
+            .arg(&prepared.audio_path);
+        append_gif_inputs(&mut command, &prepared.gif_overlays);
+        command
+            .arg("-t")
+            .arg(format_seconds(prepared.duration_seconds))
+            .arg("-filter_complex")
+            .arg(filter)
+            .arg("-af")
+            .arg("apad")
+            .args([
+                "-map", "[v]", "-map", "2:a", "-c:v", "libx264", "-preset", "veryfast",
+            ])
+            .arg("-r")
+            .arg(fps.to_string())
+            .args([
+                "-pix_fmt",
+                "yuv420p",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "192k",
+                "-ar",
+                EXPORT_AUDIO_SAMPLE_RATE,
+                "-ac",
+                EXPORT_AUDIO_CHANNELS,
+            ])
+            .args(["-movflags", "+faststart"])
+            .arg(output_path);
+        return run_command(command, "애니메이션 영상 배경 슬라이드 세그먼트 생성", export_id);
+    }
     if !prepared.gif_overlays.is_empty() {
         let mut filter = format!(
             "[0:v]scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=white,tpad=stop_mode=clone:stop_duration={},format=rgba[base0];",
