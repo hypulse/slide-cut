@@ -242,7 +242,7 @@ export function createRenderer(deps) {
     await drawSlideObjectsForExport(context, slide.objects || [], options);
 
     if (options.subtitles) {
-      drawSubtitleBox(context, getSubtitleTextForRender(slide, options), exportCanvas.width, exportCanvas.height);
+      drawSubtitleBox(context, getSubtitleTextForRender(slide, options), exportCanvas.width, exportCanvas.height, options);
     }
 
     return exportCanvas.toDataURL("image/png");

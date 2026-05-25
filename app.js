@@ -186,6 +186,8 @@ const settingsTtsVoiceSuggestions = document.querySelector("#ttsVoiceSuggestions
 const settingsTtsSpeed = document.querySelector("#settingsTtsSpeed");
 const settingsTtsInstructions = document.querySelector("#settingsTtsInstructions");
 const settingsSubtitleEnabled = document.querySelector("#settingsSubtitleEnabled");
+const settingsSubtitleSize = document.querySelector("#settingsSubtitleSize");
+const settingsSubtitleY = document.querySelector("#settingsSubtitleY");
 const settingsExportDir = document.querySelector("#settingsExportDir");
 const chooseExportDir = document.querySelector("#chooseExportDir");
 const resetExportDir = document.querySelector("#resetExportDir");
@@ -285,6 +287,8 @@ let projectSettingsState = {
   ttsInstructions:
     "Read the input text naturally as written. For Korean text, keep pronunciation clear and natural. Keep the pacing conversational, warm, and not exaggerated.",
   subtitleEnabled: true,
+  subtitleSize: 100,
+  subtitleY: 90,
   exportDir: "",
   backgroundMusic: null,
 };
@@ -855,6 +859,8 @@ const DEFAULT_TTS_SETTINGS = {
   instructions: TTS_PROVIDER_CONFIGS[DEFAULT_TTS_PROVIDER].defaultInstructions,
 };
 const DEFAULT_SUBTITLE_ENABLED = true;
+const DEFAULT_SUBTITLE_SIZE = 100;
+const DEFAULT_SUBTITLE_Y = 90;
 const SUBTITLE_MAX_LINES = 2;
 const VIDEO_EXPORT_FPS = 30;
 const VIDEO_EXPORT_FALLBACK_DURATION = 3;
@@ -1072,6 +1078,14 @@ function normalizeTtsInstructions(value, provider = DEFAULT_TTS_PROVIDER) {
 
 function normalizeSubtitleEnabled(value) {
   return value === undefined ? DEFAULT_SUBTITLE_ENABLED : Boolean(value);
+}
+
+function normalizeSubtitleSize(value) {
+  return sanitizeNumber(value, DEFAULT_SUBTITLE_SIZE, 60, 180);
+}
+
+function normalizeSubtitleY(value) {
+  return sanitizeNumber(value, DEFAULT_SUBTITLE_Y, 5, 95);
 }
 
 function normalizeContinueAfterTts(value) {
@@ -2970,18 +2984,20 @@ function trimSubtitleLines(lines, maxLines) {
   return output;
 }
 
-function getSubtitleLayout(context, text, width, height) {
+function getSubtitleLayout(context, text, width, height, options = {}) {
   const cleanText = String(text || "").trim();
   if (!cleanText) {
     return null;
   }
 
-  const fontSize = clamp(Math.round(width * 0.032), 22, 34);
+  const subtitleSize = normalizeSubtitleSize(options.subtitleSize);
+  const subtitleY = normalizeSubtitleY(options.subtitleY);
+  const baseFontSize = clamp(Math.round(width * 0.032), 22, 34);
+  const fontSize = clamp(Math.round(baseFontSize * (subtitleSize / 100)), 14, 72);
   const lineHeight = Math.round(fontSize * 1.24);
   const paddingX = Math.round(fontSize * 0.45);
   const paddingY = Math.round(fontSize * 0.22);
   const maxTextWidth = Math.round(width * 0.78);
-  const bottomOffset = Math.round(height * 0.055);
 
   context.save();
   context.font = `700 ${fontSize}px "Pretendard"`;
@@ -2991,20 +3007,27 @@ function getSubtitleLayout(context, text, width, height) {
   const boxWidth = Math.min(width - 48, Math.ceil(measuredWidth + paddingX * 2));
   const boxHeight = Math.ceil(lines.length * lineHeight + paddingY * 2);
   const boxX = (width - boxWidth) / 2;
-  const boxY = height - bottomOffset - boxHeight;
-  return { fontSize, lineHeight, paddingY, lines, boxWidth, boxHeight, boxX, boxY, bottomOffset };
+  const verticalMargin = Math.round(height * 0.02);
+  const targetCenterY = (height * subtitleY) / 100;
+  const maxBoxY = Math.max(verticalMargin, height - boxHeight - verticalMargin);
+  const boxY = clamp(targetCenterY - boxHeight / 2, verticalMargin, maxBoxY);
+  const bottomOffset = Math.max(0, height - boxY - boxHeight);
+  return { fontSize, lineHeight, paddingY, lines, boxWidth, boxHeight, boxX, boxY, bottomOffset, subtitleY };
 }
 
-function getSubtitleReservedHeight(context, text, width, height) {
-  const layout = getSubtitleLayout(context, text, width, height);
+function getSubtitleReservedHeight(context, text, width, height, options = {}) {
+  const layout = getSubtitleLayout(context, text, width, height, options);
   if (!layout) {
+    return 0;
+  }
+  if (layout.subtitleY < 70) {
     return 0;
   }
   return Math.ceil(layout.boxHeight + layout.bottomOffset + Math.round(height * 0.03));
 }
 
-function drawSubtitleBox(context, text, width, height) {
-  const layout = getSubtitleLayout(context, text, width, height);
+function drawSubtitleBox(context, text, width, height, options = {}) {
+  const layout = getSubtitleLayout(context, text, width, height, options);
   if (!layout) {
     return;
   }
@@ -3357,7 +3380,9 @@ function drawChatTypingSlide(context, slide, width, height, timeSeconds, options
   const topMargin = Math.round(height * 0.022);
   const bottomMargin = Math.round(height * 0.045);
   const shouldReserveSubtitle = Boolean(options.subtitles || options.reserveSubtitles);
-  const subtitleReserve = shouldReserveSubtitle ? getSubtitleReservedHeight(context, getSubtitleTextForRender(slide, options), width, height) : 0;
+  const subtitleReserve = shouldReserveSubtitle
+    ? getSubtitleReservedHeight(context, getSubtitleTextForRender(slide, options), width, height, options)
+    : 0;
   const questionSize = clamp(Math.round(width * 0.0175 * textScale), 16, 40);
   const answerSize = clamp(Math.round(width * 0.017 * textScale), 15, 38);
   const questionLineHeight = Math.round(questionSize * 1.36);
@@ -3432,7 +3457,7 @@ function drawDynamicSlide(context, slide, width, height, timeSeconds, options = 
     drawChatTypingSlide(context, slide, width, height, timeSeconds, options);
   }
   if (options.subtitles) {
-    drawSubtitleBox(context, getSubtitleTextForRender(slide, options), width, height);
+    drawSubtitleBox(context, getSubtitleTextForRender(slide, options), width, height, options);
   }
 }
 
@@ -3534,7 +3559,7 @@ async function renderDynamicSlideToDataUrl(slide, timeSeconds, options = {}) {
     durationSeconds: Math.max(getDynamicSlideDuration(slide), getSlideObjectAnimationDuration(slide)),
   });
   if (options.subtitles) {
-    drawSubtitleBox(context, getSubtitleTextForRender(slide, options), exportCanvas.width, exportCanvas.height);
+    drawSubtitleBox(context, getSubtitleTextForRender(slide, options), exportCanvas.width, exportCanvas.height, options);
   }
   return exportCanvas.toDataURL("image/png");
 }
@@ -5496,6 +5521,14 @@ async function saveCanvasAsPng() {
     context.restore();
   }
 
+  const currentSlide = slides[activeSlideIndex];
+  if (projectSettingsState.subtitleEnabled && currentSlide) {
+    drawSubtitleBox(context, getSubtitleTextForRender(currentSlide, {}), exportCanvas.width, exportCanvas.height, {
+      subtitleSize: projectSettingsState.subtitleSize,
+      subtitleY: projectSettingsState.subtitleY,
+    });
+  }
+
   const link = document.createElement("a");
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
   link.download = `slide-cut-${timestamp}.png`;
@@ -5724,6 +5757,8 @@ function normalizeProjectSettings(value = {}) {
     ttsSpeed: normalizeTtsSpeed(value.ttsSpeed, ttsProvider),
     ttsInstructions: normalizeTtsInstructions(value.ttsInstructions, ttsProvider),
     subtitleEnabled: normalizeSubtitleEnabled(value.subtitleEnabled),
+    subtitleSize: normalizeSubtitleSize(value.subtitleSize),
+    subtitleY: normalizeSubtitleY(value.subtitleY),
     exportDir: typeof value.exportDir === "string" && value.exportDir.trim() ? value.exportDir.trim() : defaultProjectExportDir,
     backgroundMusic: normalizeProjectBackgroundMusic(value.backgroundMusic),
   };
@@ -5741,6 +5776,8 @@ function syncSettingsControls() {
   settingsTtsSpeed.value = String(projectSettingsState.ttsSpeed);
   settingsTtsInstructions.value = projectSettingsState.ttsInstructions;
   settingsSubtitleEnabled.checked = projectSettingsState.subtitleEnabled;
+  settingsSubtitleSize.value = String(projectSettingsState.subtitleSize);
+  settingsSubtitleY.value = String(projectSettingsState.subtitleY);
   settingsExportDir.value = projectSettingsState.exportDir;
   updateBackgroundMusicView();
   syncColorPresetButtons();
@@ -5757,6 +5794,8 @@ function getProjectSettingsFromControls() {
     ttsSpeed: settingsTtsSpeed.value,
     ttsInstructions: settingsTtsInstructions.value,
     subtitleEnabled: settingsSubtitleEnabled.checked,
+    subtitleSize: settingsSubtitleSize.value,
+    subtitleY: settingsSubtitleY.value,
     exportDir: settingsExportDir.value,
     backgroundMusic: projectSettingsState.backgroundMusic,
   });
@@ -6190,6 +6229,8 @@ async function exportProjectAsMp4() {
           excludeAnimatedGifs: gifOverlays.length > 0,
           subtitles: projectSettingsState.subtitleEnabled,
           subtitleText: exportNoteSegments[0],
+          subtitleSize: projectSettingsState.subtitleSize,
+          subtitleY: projectSettingsState.subtitleY,
         });
         renderedSlides.push({
           ...baseSlidePayload,
@@ -6218,6 +6259,8 @@ async function exportProjectAsMp4() {
               excludeAnimatedGifs: gifOverlays.length > 0,
               subtitles: projectSettingsState.subtitleEnabled,
               subtitleText: segmentNotes,
+              subtitleSize: projectSettingsState.subtitleSize,
+              subtitleY: projectSettingsState.subtitleY,
             }),
           });
         }
@@ -6228,6 +6271,8 @@ async function exportProjectAsMp4() {
             excludeAnimatedGifs: gifOverlays.length > 0,
             subtitles: projectSettingsState.subtitleEnabled,
             subtitleText: segmentNotes,
+            subtitleSize: projectSettingsState.subtitleSize,
+            subtitleY: projectSettingsState.subtitleY,
           };
           if (slideHasObjectAnimations(slide)) {
             const animationDuration = estimateObjectAnimationExportDuration(slide, segmentNotes);
@@ -6613,6 +6658,12 @@ settingsTtsVoice.addEventListener("blur", () => {
 });
 settingsTtsSpeed.addEventListener("blur", () => {
   settingsTtsSpeed.value = String(normalizeTtsSpeed(settingsTtsSpeed.value, settingsTtsProvider.value));
+});
+settingsSubtitleSize.addEventListener("blur", () => {
+  settingsSubtitleSize.value = String(normalizeSubtitleSize(settingsSubtitleSize.value));
+});
+settingsSubtitleY.addEventListener("blur", () => {
+  settingsSubtitleY.value = String(normalizeSubtitleY(settingsSubtitleY.value));
 });
 
 pasteImage.addEventListener("click", pasteImageFromClipboard);
