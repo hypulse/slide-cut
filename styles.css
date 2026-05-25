@@ -1373,6 +1373,34 @@ select {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.animation-buttons.move-mode {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.animation-buttons.move-easing {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.move-settings {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.move-settings label {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 3px;
+}
+
+.animation-point-buttons {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px;
+}
+
 .text-style-buttons {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
@@ -1391,6 +1419,7 @@ select {
 .text-size-buttons button,
 .text-style-buttons button,
 .animation-buttons button,
+.animation-point-buttons button,
 .chat-size-buttons button {
   height: 24px;
   border-radius: 3px;
@@ -1427,6 +1456,7 @@ select {
 .text-size-buttons button:disabled,
 .text-style-buttons button:disabled,
 .animation-buttons button:disabled,
+.animation-point-buttons button:disabled,
 .chat-size-buttons button:disabled,
 .text-align-buttons button:disabled,
 .image-flip-buttons button:disabled {
@@ -1463,6 +1493,7 @@ input[type="checkbox"] {
 
 .selected-panel.is-empty label,
 .selected-panel.is-empty .field-row,
+.selected-panel.is-empty .move-settings,
 .selected-panel.is-empty .arrange-controls,
 .selected-panel.is-empty .canvas-align-controls,
 .selected-panel.is-empty .image-flip-buttons,

@@ -29,6 +29,10 @@ export function createProjectModel(deps) {
     sanitizeAnimationLoop,
     sanitizeAnimationOut,
     sanitizeAnimationSpeed,
+    sanitizeAnimationMove,
+    sanitizeAnimationMoveCoordinate,
+    sanitizeAnimationMoveDuration,
+    sanitizeAnimationMoveEasing,
     sanitizeColor,
     sanitizeNumber,
     normalizeFlipFlag,
@@ -53,6 +57,13 @@ export function createProjectModel(deps) {
       animationLoop: sanitizeAnimationLoop(object.dataset.animationLoop),
       animationOut: sanitizeAnimationOut(object.dataset.animationOut),
       animationSpeed: sanitizeAnimationSpeed(object.dataset.animationSpeed),
+      animationMove: sanitizeAnimationMove(object.dataset.animationMove),
+      animationMoveFromX: sanitizeAnimationMoveCoordinate(object.dataset.animationMoveFromX),
+      animationMoveFromY: sanitizeAnimationMoveCoordinate(object.dataset.animationMoveFromY),
+      animationMoveToX: sanitizeAnimationMoveCoordinate(object.dataset.animationMoveToX),
+      animationMoveToY: sanitizeAnimationMoveCoordinate(object.dataset.animationMoveToY),
+      animationMoveDuration: sanitizeAnimationMoveDuration(object.dataset.animationMoveDuration),
+      animationMoveEasing: sanitizeAnimationMoveEasing(object.dataset.animationMoveEasing),
     };
   }
 
@@ -62,6 +73,13 @@ export function createProjectModel(deps) {
       animationLoop: sanitizeAnimationLoop(object.animationLoop),
       animationOut: sanitizeAnimationOut(object.animationOut),
       animationSpeed: sanitizeAnimationSpeed(object.animationSpeed),
+      animationMove: sanitizeAnimationMove(object.animationMove),
+      animationMoveFromX: sanitizeAnimationMoveCoordinate(object.animationMoveFromX),
+      animationMoveFromY: sanitizeAnimationMoveCoordinate(object.animationMoveFromY),
+      animationMoveToX: sanitizeAnimationMoveCoordinate(object.animationMoveToX),
+      animationMoveToY: sanitizeAnimationMoveCoordinate(object.animationMoveToY),
+      animationMoveDuration: sanitizeAnimationMoveDuration(object.animationMoveDuration),
+      animationMoveEasing: sanitizeAnimationMoveEasing(object.animationMoveEasing),
     };
   }
 

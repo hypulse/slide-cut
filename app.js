@@ -196,6 +196,11 @@ const selectedY = document.querySelector("#selectedY");
 const selectedW = document.querySelector("#selectedW");
 const selectedH = document.querySelector("#selectedH");
 const selectedR = document.querySelector("#selectedR");
+const selectedMoveFromX = document.querySelector("#selectedMoveFromX");
+const selectedMoveFromY = document.querySelector("#selectedMoveFromY");
+const selectedMoveToX = document.querySelector("#selectedMoveToX");
+const selectedMoveToY = document.querySelector("#selectedMoveToY");
+const selectedMoveDuration = document.querySelector("#selectedMoveDuration");
 const selectedTextSize = document.querySelector("#selectedTextSize");
 const imageFlipButtons = [...document.querySelectorAll("[data-image-flip]")];
 const canvasAlignButtons = [...document.querySelectorAll("[data-canvas-align]")];
@@ -206,6 +211,9 @@ const animationInButtons = [...document.querySelectorAll("[data-animation-in]")]
 const animationLoopButtons = [...document.querySelectorAll("[data-animation-loop]")];
 const animationOutButtons = [...document.querySelectorAll("[data-animation-out]")];
 const animationSpeedButtons = [...document.querySelectorAll("[data-animation-speed]")];
+const animationMoveButtons = [...document.querySelectorAll("[data-animation-move]")];
+const animationMoveEasingButtons = [...document.querySelectorAll("[data-animation-move-easing]")];
+const animationMovePointButtons = [...document.querySelectorAll("[data-animation-move-point]")];
 const selectedTextColor = document.querySelector("#selectedTextColor");
 const duplicateSelected = document.querySelector("#duplicateSelected");
 const editSelectedText = document.querySelector("#editSelectedText");
@@ -409,6 +417,9 @@ const DEFAULT_ANIMATION_IN = "none";
 const DEFAULT_ANIMATION_LOOP = "none";
 const DEFAULT_ANIMATION_OUT = "none";
 const DEFAULT_ANIMATION_SPEED = "normal";
+const DEFAULT_ANIMATION_MOVE = "none";
+const DEFAULT_ANIMATION_MOVE_EASING = "linear";
+const DEFAULT_ANIMATION_MOVE_DURATION = 2;
 const ANIMATION_IN_PRESETS = {
   none: { label: "None" },
   fade: { label: "Fade" },
@@ -432,6 +443,15 @@ const ANIMATION_SPEED_PRESETS = {
   slow: { label: "Slow" },
   normal: { label: "Normal" },
   fast: { label: "Fast" },
+};
+const ANIMATION_MOVE_PRESETS = {
+  none: { label: "None" },
+  move: { label: "Move" },
+};
+const ANIMATION_MOVE_EASINGS = {
+  linear: { label: "Linear" },
+  easeOut: { label: "Ease Out" },
+  easeInOut: { label: "Smooth" },
 };
 const ANIMATION_SPEED_PERIOD_FACTORS = {
   slow: 1.5,
@@ -916,6 +936,10 @@ const { serializeObject, serializeCurrentSlide, cloneProjectValue, normalizeProj
   sanitizeAnimationLoop,
   sanitizeAnimationOut,
   sanitizeAnimationSpeed,
+  sanitizeAnimationMove,
+  sanitizeAnimationMoveCoordinate,
+  sanitizeAnimationMoveDuration,
+  sanitizeAnimationMoveEasing,
   sanitizeColor,
   sanitizeNumber,
   normalizeFlipFlag,
@@ -1099,12 +1123,35 @@ function sanitizeAnimationSpeed(value) {
   return ANIMATION_SPEED_PRESETS[value] ? value : DEFAULT_ANIMATION_SPEED;
 }
 
+function sanitizeAnimationMove(value) {
+  return ANIMATION_MOVE_PRESETS[value] ? value : DEFAULT_ANIMATION_MOVE;
+}
+
+function sanitizeAnimationMoveEasing(value) {
+  return ANIMATION_MOVE_EASINGS[value] ? value : DEFAULT_ANIMATION_MOVE_EASING;
+}
+
+function sanitizeAnimationMoveCoordinate(value) {
+  return sanitizeNumber(value, 0, -8192, 8192);
+}
+
+function sanitizeAnimationMoveDuration(value) {
+  return sanitizeNumber(value, DEFAULT_ANIMATION_MOVE_DURATION, 0.1, 60);
+}
+
 function getObjectAnimationConfig(data = {}) {
   return {
     animationIn: sanitizeAnimationIn(data.animationIn),
     animationLoop: sanitizeAnimationLoop(data.animationLoop),
     animationOut: sanitizeAnimationOut(data.animationOut),
     animationSpeed: sanitizeAnimationSpeed(data.animationSpeed),
+    animationMove: sanitizeAnimationMove(data.animationMove),
+    animationMoveFromX: sanitizeAnimationMoveCoordinate(data.animationMoveFromX),
+    animationMoveFromY: sanitizeAnimationMoveCoordinate(data.animationMoveFromY),
+    animationMoveToX: sanitizeAnimationMoveCoordinate(data.animationMoveToX),
+    animationMoveToY: sanitizeAnimationMoveCoordinate(data.animationMoveToY),
+    animationMoveDuration: sanitizeAnimationMoveDuration(data.animationMoveDuration),
+    animationMoveEasing: sanitizeAnimationMoveEasing(data.animationMoveEasing),
   };
 }
 
@@ -1113,7 +1160,8 @@ function hasObjectAnimation(data = {}) {
   return (
     config.animationIn !== DEFAULT_ANIMATION_IN ||
     config.animationLoop !== DEFAULT_ANIMATION_LOOP ||
-    config.animationOut !== DEFAULT_ANIMATION_OUT
+    config.animationOut !== DEFAULT_ANIMATION_OUT ||
+    config.animationMove !== DEFAULT_ANIMATION_MOVE
   );
 }
 
@@ -1122,6 +1170,34 @@ function canAnimateObjectData(data = {}) {
     return true;
   }
   return data.type === "image" && !isAnimatedGifSource(data.src);
+}
+
+function setDefaultAnimationDataset(element) {
+  element.dataset.animationIn = DEFAULT_ANIMATION_IN;
+  element.dataset.animationLoop = DEFAULT_ANIMATION_LOOP;
+  element.dataset.animationOut = DEFAULT_ANIMATION_OUT;
+  element.dataset.animationSpeed = DEFAULT_ANIMATION_SPEED;
+  element.dataset.animationMove = DEFAULT_ANIMATION_MOVE;
+  element.dataset.animationMoveFromX = "0";
+  element.dataset.animationMoveFromY = "0";
+  element.dataset.animationMoveToX = "0";
+  element.dataset.animationMoveToY = "0";
+  element.dataset.animationMoveDuration = String(DEFAULT_ANIMATION_MOVE_DURATION);
+  element.dataset.animationMoveEasing = DEFAULT_ANIMATION_MOVE_EASING;
+}
+
+function setAnimationDatasetFromData(element, data = {}) {
+  element.dataset.animationIn = sanitizeAnimationIn(data.animationIn);
+  element.dataset.animationLoop = sanitizeAnimationLoop(data.animationLoop);
+  element.dataset.animationOut = sanitizeAnimationOut(data.animationOut);
+  element.dataset.animationSpeed = sanitizeAnimationSpeed(data.animationSpeed);
+  element.dataset.animationMove = sanitizeAnimationMove(data.animationMove);
+  element.dataset.animationMoveFromX = String(sanitizeAnimationMoveCoordinate(data.animationMoveFromX));
+  element.dataset.animationMoveFromY = String(sanitizeAnimationMoveCoordinate(data.animationMoveFromY));
+  element.dataset.animationMoveToX = String(sanitizeAnimationMoveCoordinate(data.animationMoveToX));
+  element.dataset.animationMoveToY = String(sanitizeAnimationMoveCoordinate(data.animationMoveToY));
+  element.dataset.animationMoveDuration = String(sanitizeAnimationMoveDuration(data.animationMoveDuration));
+  element.dataset.animationMoveEasing = sanitizeAnimationMoveEasing(data.animationMoveEasing);
 }
 
 function quoteFontFamily(value) {
@@ -1326,6 +1402,13 @@ function getElementAnimationData(element) {
     animationLoop: element.dataset.animationLoop,
     animationOut: element.dataset.animationOut,
     animationSpeed: element.dataset.animationSpeed,
+    animationMove: element.dataset.animationMove,
+    animationMoveFromX: element.dataset.animationMoveFromX,
+    animationMoveFromY: element.dataset.animationMoveFromY,
+    animationMoveToX: element.dataset.animationMoveToX,
+    animationMoveToY: element.dataset.animationMoveToY,
+    animationMoveDuration: element.dataset.animationMoveDuration,
+    animationMoveEasing: element.dataset.animationMoveEasing,
   };
 }
 
@@ -1335,6 +1418,19 @@ function canAnimateElement(element) {
 
 function easeOutCubic(value) {
   return 1 - Math.pow(1 - clamp(value, 0, 1), 3);
+}
+
+function getMoveAnimationDuration(data = {}) {
+  const config = getObjectAnimationConfig(data);
+  return config.animationMove === "move" ? config.animationMoveDuration : 0;
+}
+
+function getSlideObjectAnimationDuration(slide) {
+  return Math.max(0, ...(slide?.objects || []).map(getMoveAnimationDuration));
+}
+
+function getCanvasObjectAnimationDuration() {
+  return Math.max(0, ...[...canvas.querySelectorAll(".object")].map((element) => getMoveAnimationDuration(getElementAnimationData(element))));
 }
 
 function getObjectAnimationState(object, timeSeconds = 0, durationSeconds = VIDEO_EXPORT_FALLBACK_DURATION) {
@@ -1355,6 +1451,20 @@ function getObjectAnimationState(object, timeSeconds = 0, durationSeconds = VIDE
   const duration = Math.max(0.5, numberOr(durationSeconds, VIDEO_EXPORT_FALLBACK_DURATION));
   const time = clamp(numberOr(timeSeconds, 0), 0, duration);
   const state = { ...base };
+
+  if (config.animationMove === "move") {
+    const moveProgress = clamp(time / config.animationMoveDuration, 0, 1);
+    const easedMoveProgress =
+      config.animationMoveEasing === "easeOut"
+        ? easeOutCubic(moveProgress)
+        : config.animationMoveEasing === "easeInOut"
+          ? moveProgress < 0.5
+            ? 4 * moveProgress * moveProgress * moveProgress
+            : 1 - Math.pow(-2 * moveProgress + 2, 3) / 2
+          : moveProgress;
+    state.x = config.animationMoveFromX + (config.animationMoveToX - config.animationMoveFromX) * easedMoveProgress;
+    state.y = config.animationMoveFromY + (config.animationMoveToY - config.animationMoveFromY) * easedMoveProgress;
+  }
 
   if (config.animationIn === "fade" && time < 0.45) {
     state.opacity *= clamp(time / 0.45, 0, 1);
@@ -1607,7 +1717,7 @@ function runObjectAnimationPreview(timestamp) {
   if (!objectAnimationPreviewStart) {
     objectAnimationPreviewStart = timestamp;
   }
-  const duration = VIDEO_EXPORT_FALLBACK_DURATION;
+  const duration = Math.max(VIDEO_EXPORT_FALLBACK_DURATION, getCanvasObjectAnimationDuration());
   const time = ((timestamp - objectAnimationPreviewStart) / 1000) % duration;
   updateObjectAnimationPreview(time, duration);
   objectAnimationPreviewFrame = window.requestAnimationFrame(runObjectAnimationPreview);
@@ -1745,6 +1855,12 @@ function syncSelectedInputs() {
   for (const button of [...animationInButtons, ...animationLoopButtons, ...animationOutButtons, ...animationSpeedButtons]) {
     button.disabled = !hasAnimationSelection;
   }
+  for (const button of [...animationMoveButtons, ...animationMoveEasingButtons, ...animationMovePointButtons]) {
+    button.disabled = !hasAnimationSelection;
+  }
+  for (const input of [selectedMoveFromX, selectedMoveFromY, selectedMoveToX, selectedMoveToY, selectedMoveDuration]) {
+    input.disabled = !hasAnimationSelection;
+  }
   duplicateSelected.disabled = !hasSelection;
   selectedTextColor.disabled = !hasTextSelection;
   editSelectedText.disabled = !hasTextSelection;
@@ -1765,7 +1881,14 @@ function syncSelectedInputs() {
       animationLoop: DEFAULT_ANIMATION_LOOP,
       animationOut: DEFAULT_ANIMATION_OUT,
       animationSpeed: DEFAULT_ANIMATION_SPEED,
+      animationMove: DEFAULT_ANIMATION_MOVE,
+      animationMoveEasing: DEFAULT_ANIMATION_MOVE_EASING,
     });
+    selectedMoveFromX.value = "";
+    selectedMoveFromY.value = "";
+    selectedMoveToX.value = "";
+    selectedMoveToY.value = "";
+    selectedMoveDuration.value = "";
     selectedTextColor.value = defaultTextColor;
     updateStatusBar();
     return;
@@ -1780,7 +1903,14 @@ function syncSelectedInputs() {
   setActiveTextSizeButton(selectedObject.dataset.textSize || "h3");
   setActiveTextStyleButton(selectedObject.dataset.textEffect || DEFAULT_TEXT_EFFECT);
   setActiveTextAlignButton(selectedObject.dataset.textAlign || "left");
-  syncAnimationButtons(getElementAnimationData(selectedObject));
+  const animationData = getElementAnimationData(selectedObject);
+  const hasMoveAnimation = sanitizeAnimationMove(animationData.animationMove) === "move";
+  syncAnimationButtons(animationData);
+  selectedMoveFromX.value = Math.round(hasMoveAnimation ? sanitizeAnimationMoveCoordinate(animationData.animationMoveFromX) : state.x);
+  selectedMoveFromY.value = Math.round(hasMoveAnimation ? sanitizeAnimationMoveCoordinate(animationData.animationMoveFromY) : state.y);
+  selectedMoveToX.value = Math.round(hasMoveAnimation ? sanitizeAnimationMoveCoordinate(animationData.animationMoveToX) : state.x);
+  selectedMoveToY.value = Math.round(hasMoveAnimation ? sanitizeAnimationMoveCoordinate(animationData.animationMoveToY) : state.y);
+  selectedMoveDuration.value = String(sanitizeAnimationMoveDuration(animationData.animationMoveDuration));
   selectedTextColor.value = selectedObject.dataset.textColor || defaultTextColor;
   if (selectedObject.dataset.type === "shape") {
     strokeColor.value = sanitizeColor(selectedObject.dataset.strokeColor, DEFAULT_STROKE_COLOR);
@@ -1813,6 +1943,12 @@ function syncAnimationButtons(config) {
   setActiveAnimationButtons(animationLoopButtons, "animationLoop", sanitizeAnimationLoop(config?.animationLoop));
   setActiveAnimationButtons(animationOutButtons, "animationOut", sanitizeAnimationOut(config?.animationOut));
   setActiveAnimationButtons(animationSpeedButtons, "animationSpeed", sanitizeAnimationSpeed(config?.animationSpeed));
+  setActiveAnimationButtons(animationMoveButtons, "animationMove", sanitizeAnimationMove(config?.animationMove));
+  setActiveAnimationButtons(
+    animationMoveEasingButtons,
+    "animationMoveEasing",
+    sanitizeAnimationMoveEasing(config?.animationMoveEasing)
+  );
 }
 
 function setActiveTextAlignButton(align) {
@@ -1893,10 +2029,7 @@ function addImageObject(src, naturalWidth = 300, naturalHeight = 200) {
   const position = centerPosition(width, height);
 
   element.dataset.id = `object-${++objectSeed}`;
-  element.dataset.animationIn = DEFAULT_ANIMATION_IN;
-  element.dataset.animationLoop = DEFAULT_ANIMATION_LOOP;
-  element.dataset.animationOut = DEFAULT_ANIMATION_OUT;
-  element.dataset.animationSpeed = DEFAULT_ANIMATION_SPEED;
+  setDefaultAnimationDataset(element);
   canvas.append(element);
   attachObjectEvents(element);
   applyState(element, { ...position, width, height, rotation: 0 });
@@ -2053,10 +2186,7 @@ function addTextObject(text, statusMessage = "텍스트를 붙여넣었습니다
   element.dataset.fontFamily = DEFAULT_TEXT_FONT_FAMILY;
   element.dataset.fontWeight = String(DEFAULT_TEXT_FONT_WEIGHT);
   element.dataset.textEffect = DEFAULT_TEXT_EFFECT;
-  element.dataset.animationIn = DEFAULT_ANIMATION_IN;
-  element.dataset.animationLoop = DEFAULT_ANIMATION_LOOP;
-  element.dataset.animationOut = DEFAULT_ANIMATION_OUT;
-  element.dataset.animationSpeed = DEFAULT_ANIMATION_SPEED;
+  setDefaultAnimationDataset(element);
   canvas.append(element);
   attachObjectEvents(element);
   wireTextEditor(element);
@@ -3401,7 +3531,7 @@ async function renderDynamicSlideToDataUrl(slide, timeSeconds, options = {}) {
   await drawSlideObjectsForExport(context, slide.objects || [], {
     ...options,
     timeSeconds,
-    durationSeconds: getDynamicSlideDuration(slide),
+    durationSeconds: Math.max(getDynamicSlideDuration(slide), getSlideObjectAnimationDuration(slide)),
   });
   if (options.subtitles) {
     drawSubtitleBox(context, getSubtitleTextForRender(slide, options), exportCanvas.width, exportCanvas.height);
@@ -3410,7 +3540,7 @@ async function renderDynamicSlideToDataUrl(slide, timeSeconds, options = {}) {
 }
 
 async function renderDynamicSlideFrames(slide, options = {}) {
-  const duration = getDynamicSlideDuration(slide);
+  const duration = Math.max(getDynamicSlideDuration(slide), getSlideObjectAnimationDuration(slide));
   const frameRate = DYNAMIC_FRAME_RATE;
   const frameCount = Math.max(2, Math.ceil(duration * frameRate));
   const frames = [];
@@ -3436,13 +3566,14 @@ function slideHasObjectAnimations(slide) {
   return (slide?.objects || []).some((object) => canAnimateObjectData(object) && hasObjectAnimation(object));
 }
 
-function estimateObjectAnimationExportDuration(notes) {
+function estimateObjectAnimationExportDuration(slide, notes) {
   const text = String(notes || "").trim();
+  const moveDuration = getSlideObjectAnimationDuration(slide);
   if (!text) {
-    return VIDEO_EXPORT_FALLBACK_DURATION;
+    return Math.max(VIDEO_EXPORT_FALLBACK_DURATION, moveDuration);
   }
   const characterCount = text.replace(/\s+/g, "").length;
-  return clamp(characterCount / 7 + 1.2, VIDEO_EXPORT_FALLBACK_DURATION, DYNAMIC_MAX_DURATION);
+  return Math.max(moveDuration, clamp(characterCount / 7 + 1.2, VIDEO_EXPORT_FALLBACK_DURATION, DYNAMIC_MAX_DURATION));
 }
 
 async function renderCanvasSlideAnimationFrames(slide, options = {}) {
@@ -3938,10 +4069,7 @@ function addImageObjectFromData(data) {
   const element = imageTemplate.content.firstElementChild.cloneNode(true);
   const image = element.querySelector("img");
   element.dataset.id = `object-${++objectSeed}`;
-  element.dataset.animationIn = sanitizeAnimationIn(data.animationIn);
-  element.dataset.animationLoop = sanitizeAnimationLoop(data.animationLoop);
-  element.dataset.animationOut = sanitizeAnimationOut(data.animationOut);
-  element.dataset.animationSpeed = sanitizeAnimationSpeed(data.animationSpeed);
+  setAnimationDatasetFromData(element, data);
   image.src = getDisplayAssetUrl(data.src);
   image.dataset.src = data.src;
   canvas.append(element);
@@ -3960,10 +4088,7 @@ function addTextObjectFromData(data) {
   element.dataset.fontFamily = sanitizeTextFontFamily(data.fontFamily);
   element.dataset.fontWeight = String(sanitizeTextFontWeight(data.fontWeight));
   element.dataset.textEffect = sanitizeTextEffect(data.textEffect);
-  element.dataset.animationIn = sanitizeAnimationIn(data.animationIn);
-  element.dataset.animationLoop = sanitizeAnimationLoop(data.animationLoop);
-  element.dataset.animationOut = sanitizeAnimationOut(data.animationOut);
-  element.dataset.animationSpeed = sanitizeAnimationSpeed(data.animationSpeed);
+  setAnimationDatasetFromData(element, data);
   canvas.append(element);
   attachObjectEvents(element);
   wireTextEditor(element);
@@ -5344,7 +5469,7 @@ async function saveCanvasAsPng() {
     drawCoverMedia(context, slideVideo, exportCanvas.width, exportCanvas.height);
   }
 
-  const animationDuration = VIDEO_EXPORT_FALLBACK_DURATION;
+  const animationDuration = Math.max(VIDEO_EXPORT_FALLBACK_DURATION, getCanvasObjectAnimationDuration());
   const animationTime = animationDuration / 2;
   for (const object of canvas.querySelectorAll(".object")) {
     const baseState = getElementAnimationData(object);
@@ -6105,7 +6230,7 @@ async function exportProjectAsMp4() {
             subtitleText: segmentNotes,
           };
           if (slideHasObjectAnimations(slide)) {
-            const animationDuration = estimateObjectAnimationExportDuration(segmentNotes);
+            const animationDuration = estimateObjectAnimationExportDuration(slide, segmentNotes);
             const animation = await renderCanvasSlideAnimationFrames(slide, {
               ...renderOptions,
               durationSeconds: animationDuration,
@@ -6124,7 +6249,7 @@ async function exportProjectAsMp4() {
               animationFrames: animation.frames,
               frameRate: animation.frameRate,
               animationDurationSeconds: animation.duration,
-              fitAnimationToDuration: true,
+              fitAnimationToDuration: false,
               animationAffectsDuration: false,
             });
           } else {
@@ -6290,6 +6415,8 @@ function applySelectedAnimationChange(kind, value) {
       loop: "animationLoop",
       out: "animationOut",
       speed: "animationSpeed",
+      move: "animationMove",
+      moveEasing: "animationMoveEasing",
     }[kind] || "";
   if (!field || !canAnimateElement(selectedObject)) {
     return;
@@ -6302,17 +6429,66 @@ function applySelectedAnimationChange(kind, value) {
         ? sanitizeAnimationLoop(value)
         : field === "animationOut"
           ? sanitizeAnimationOut(value)
-          : sanitizeAnimationSpeed(value);
+          : field === "animationMove"
+            ? sanitizeAnimationMove(value)
+            : field === "animationMoveEasing"
+              ? sanitizeAnimationMoveEasing(value)
+              : sanitizeAnimationSpeed(value);
   const targets = selectedObjects.filter(canAnimateElement);
   for (const object of targets.length ? targets : [selectedObject]) {
+    if (field === "animationMove" && nextValue === "move" && sanitizeAnimationMove(object.dataset.animationMove) !== "move") {
+      const state = getState(object);
+      object.dataset.animationMoveFromX = String(Math.round(state.x));
+      object.dataset.animationMoveFromY = String(Math.round(state.y));
+      object.dataset.animationMoveToX = String(Math.round(state.x + Math.min(160, Math.max(80, canvas.offsetWidth * 0.12))));
+      object.dataset.animationMoveToY = String(Math.round(state.y));
+      object.dataset.animationMoveDuration = String(DEFAULT_ANIMATION_MOVE_DURATION);
+      object.dataset.animationMoveEasing = DEFAULT_ANIMATION_MOVE_EASING;
+    }
     object.dataset[field] = nextValue;
   }
 
   syncAnimationButtons(getElementAnimationData(selectedObject));
+  syncSelectedInputs();
   syncObjectAnimationPreview();
   renderSlideList();
   setStatus(`${targets.length || 1}개 오브젝트의 애니메이션을 변경했습니다.`);
   recordHistory();
+}
+
+function applySelectedMoveInputChange(shouldRecord = false) {
+  if (!canAnimateElement(selectedObject)) {
+    return;
+  }
+  selectedObject.dataset.animationMove = "move";
+  selectedObject.dataset.animationMoveFromX = String(sanitizeAnimationMoveCoordinate(selectedMoveFromX.value));
+  selectedObject.dataset.animationMoveFromY = String(sanitizeAnimationMoveCoordinate(selectedMoveFromY.value));
+  selectedObject.dataset.animationMoveToX = String(sanitizeAnimationMoveCoordinate(selectedMoveToX.value));
+  selectedObject.dataset.animationMoveToY = String(sanitizeAnimationMoveCoordinate(selectedMoveToY.value));
+  selectedObject.dataset.animationMoveDuration = String(sanitizeAnimationMoveDuration(selectedMoveDuration.value));
+  selectedObject.dataset.animationMoveEasing = sanitizeAnimationMoveEasing(selectedObject.dataset.animationMoveEasing);
+  syncAnimationButtons(getElementAnimationData(selectedObject));
+  syncObjectAnimationPreview();
+  renderSlideList();
+  if (shouldRecord) {
+    setStatus("Move 애니메이션 좌표를 변경했습니다.");
+    recordHistory();
+  }
+}
+
+function setSelectedMovePoint(point) {
+  if (!canAnimateElement(selectedObject)) {
+    return;
+  }
+  const state = getState(selectedObject);
+  if (point === "from") {
+    selectedMoveFromX.value = Math.round(state.x);
+    selectedMoveFromY.value = Math.round(state.y);
+  } else if (point === "to") {
+    selectedMoveToX.value = Math.round(state.x);
+    selectedMoveToY.value = Math.round(state.y);
+  }
+  applySelectedMoveInputChange(true);
 }
 
 function applyColorPreset(presetKey) {
@@ -6533,6 +6709,19 @@ for (const button of animationOutButtons) {
 }
 for (const button of animationSpeedButtons) {
   button.addEventListener("click", () => applySelectedAnimationChange("speed", button.dataset.animationSpeed));
+}
+for (const button of animationMoveButtons) {
+  button.addEventListener("click", () => applySelectedAnimationChange("move", button.dataset.animationMove));
+}
+for (const button of animationMoveEasingButtons) {
+  button.addEventListener("click", () => applySelectedAnimationChange("moveEasing", button.dataset.animationMoveEasing));
+}
+for (const button of animationMovePointButtons) {
+  button.addEventListener("click", () => setSelectedMovePoint(button.dataset.animationMovePoint));
+}
+for (const input of [selectedMoveFromX, selectedMoveFromY, selectedMoveToX, selectedMoveToY, selectedMoveDuration]) {
+  input.addEventListener("input", () => applySelectedMoveInputChange());
+  input.addEventListener("change", () => applySelectedMoveInputChange(true));
 }
 selectedTextColor.addEventListener("input", () => applySelectedTextColorChange());
 selectedTextColor.addEventListener("change", () => applySelectedTextColorChange(true));
