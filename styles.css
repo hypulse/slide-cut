@@ -1521,93 +1521,10 @@ input[type="checkbox"] {
 .selected-panel.is-empty .field-row,
 .selected-panel.is-empty .move-settings,
 .selected-panel.is-empty .arrange-controls,
-.selected-panel.is-empty .canvas-align-controls,
 .selected-panel.is-empty .image-flip-buttons,
 .selected-panel.is-empty .selected-actions {
   opacity: 0.42;
   pointer-events: none;
-}
-
-.canvas-align-controls {
-  display: grid;
-  grid-template-columns: repeat(3, 24px);
-  gap: 2px;
-}
-
-.canvas-align-button {
-  position: relative;
-  width: 24px;
-  height: 24px;
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  background: var(--surface-raised);
-  transition:
-    border-color 80ms ease,
-    background 80ms ease;
-}
-
-.canvas-align-button::before {
-  content: "";
-  position: absolute;
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  background: var(--text-secondary);
-  transform: translate(-50%, -50%);
-}
-
-.canvas-align-button.align-top-left::before {
-  left: 28%;
-  top: 28%;
-}
-
-.canvas-align-button.align-top::before {
-  left: 50%;
-  top: 28%;
-}
-
-.canvas-align-button.align-top-right::before {
-  left: 72%;
-  top: 28%;
-}
-
-.canvas-align-button.align-left::before {
-  left: 28%;
-  top: 50%;
-}
-
-.canvas-align-button.align-center::before {
-  left: 50%;
-  top: 50%;
-}
-
-.canvas-align-button.align-right::before {
-  left: 72%;
-  top: 50%;
-}
-
-.canvas-align-button.align-bottom-left::before {
-  left: 28%;
-  top: 72%;
-}
-
-.canvas-align-button.align-bottom::before {
-  left: 50%;
-  top: 72%;
-}
-
-.canvas-align-button.align-bottom-right::before {
-  left: 72%;
-  top: 72%;
-}
-
-.canvas-align-button:hover {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-}
-
-.canvas-align-button:hover::before {
-  background: var(--accent);
 }
 
 .arrange-controls {
@@ -1637,7 +1554,6 @@ input[type="checkbox"] {
 }
 
 .arrange-controls button:disabled,
-.canvas-align-button:disabled,
 .selected-actions button:disabled {
   opacity: 0.42;
   pointer-events: none;
