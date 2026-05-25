@@ -3762,13 +3762,13 @@ async function drawSlideObjectsForExport(context, objects = [], options = {}) {
     };
     context.save();
     try {
-      context.globalAlpha = clamp(context.globalAlpha * renderState.opacity, 0, 1);
       context.translate(center.x, center.y);
       context.rotate((renderState.rotation * Math.PI) / 180);
       context.scale(renderState.scale, renderState.scale);
       context.translate(-renderState.width / 2, -renderState.height / 2);
 
       if (object.type === "image") {
+        context.globalAlpha = clamp(context.globalAlpha * renderState.opacity, 0, 1);
         let imagePromise = imageCache.get(object.src);
         if (!imagePromise) {
           imagePromise = loadImageForRender(object.src);
@@ -3794,10 +3794,14 @@ async function drawSlideObjectsForExport(context, objects = [], options = {}) {
           false,
           object.textSize || "h3",
           object.textAlign || "left",
-          object
+          {
+            ...object,
+            renderOpacity: renderState.opacity,
+          }
         );
         delete context.__textColor;
       } else if (object.type === "shape") {
+        context.globalAlpha = clamp(context.globalAlpha * renderState.opacity, 0, 1);
         drawShapeData(context, object, renderState.width, renderState.height);
       }
     } finally {

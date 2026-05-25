@@ -27,12 +27,51 @@ export function createRenderer(deps) {
     getSubtitleTextForRender,
   } = deps;
 
+  function normalizeOpacity(value, fallback = 1) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? clamp(parsed, 0, 1) : fallback;
+  }
+
+  function colorWithOpacity(color, opacity) {
+    const alpha = normalizeOpacity(opacity);
+    const value = String(color || "").trim();
+    if (!value || alpha >= 0.999) {
+      return color;
+    }
+    if (alpha <= 0.001) {
+      return "rgba(0, 0, 0, 0)";
+    }
+    if (value === "transparent") {
+      return "rgba(0, 0, 0, 0)";
+    }
+    const hex = value.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+    if (hex) {
+      const raw = hex[1];
+      const channels =
+        raw.length === 3
+          ? raw.split("").map((part) => parseInt(part + part, 16))
+          : [raw.slice(0, 2), raw.slice(2, 4), raw.slice(4, 6)].map((part) => parseInt(part, 16));
+      return `rgba(${channels[0]}, ${channels[1]}, ${channels[2]}, ${alpha})`;
+    }
+    const rgb = value.match(/^rgba?\(([^)]+)\)$/i);
+    if (rgb) {
+      const parts = rgb[1].split(",").map((part) => part.trim());
+      if (parts.length >= 3) {
+        const existingAlpha = normalizeOpacity(parts.length >= 4 ? parts[3] : 1);
+        const finalAlpha = clamp(existingAlpha * alpha, 0, 1);
+        return `rgba(${parts[0]}, ${parts[1]}, ${parts[2]}, ${finalAlpha})`;
+      }
+    }
+    return value;
+  }
+
   function drawTextLines(context, text, width, height, shouldClear = false, textSizeKey = "h3", textAlign = "left", textStyle = {}) {
     const preset = getTextPreset(textSizeKey);
     const renderStyle = getTextRenderStyle({
       ...textStyle,
       textColor: textStyle.textColor || context.__textColor || DEFAULT_TEXT_COLOR,
     });
+    const renderOpacity = normalizeOpacity(textStyle.renderOpacity);
     const safeAlign = sanitizeTextAlign(textAlign);
     if (shouldClear) {
       context.clearRect(0, 0, width, height);
@@ -69,17 +108,17 @@ export function createRenderer(deps) {
       const blockY = Math.max(1, contentY + TEXT_PADDING_Y - paddingY * 0.65);
       context.save();
       if (renderStyle.shadowColor) {
-        context.shadowColor = renderStyle.shadowColor;
+        context.shadowColor = colorWithOpacity(renderStyle.shadowColor, renderOpacity);
         context.shadowBlur = renderStyle.shadowBlur || 0;
         context.shadowOffsetX = renderStyle.shadowOffsetX || 0;
         context.shadowOffsetY = renderStyle.shadowOffsetY || 0;
       }
-      context.fillStyle = renderStyle.backgroundColor;
+      context.fillStyle = colorWithOpacity(renderStyle.backgroundColor, renderOpacity);
       fillRoundedRect(context, blockX, blockY, blockWidth, blockHeight, renderStyle.backgroundRadius || 8);
       if (renderStyle.backgroundStrokeColor && renderStyle.backgroundStrokeWidth) {
         context.shadowColor = "transparent";
         context.lineWidth = renderStyle.backgroundStrokeWidth;
-        context.strokeStyle = renderStyle.backgroundStrokeColor;
+        context.strokeStyle = colorWithOpacity(renderStyle.backgroundStrokeColor, renderOpacity);
         strokeRoundedRect(
           context,
           blockX + renderStyle.backgroundStrokeWidth / 2,
@@ -102,14 +141,15 @@ export function createRenderer(deps) {
             : contentX + TEXT_PADDING_X;
       const shadowLayerColor = renderStyle.backgroundColor ? "" : renderStyle.shadowLayerColor;
       if (shadowLayerColor) {
+        const shadowColor = colorWithOpacity(shadowLayerColor, renderOpacity);
         const shadowX = Number(renderStyle.shadowLayerOffsetX ?? renderStyle.shadowOffsetX ?? 0) || 0;
         const shadowY = Number(renderStyle.shadowLayerOffsetY ?? renderStyle.shadowOffsetY ?? 0) || 0;
         context.save();
         context.shadowColor = "transparent";
         context.lineJoin = "round";
         context.miterLimit = 2;
-        context.strokeStyle = shadowLayerColor;
-        context.fillStyle = shadowLayerColor;
+        context.strokeStyle = shadowColor;
+        context.fillStyle = shadowColor;
         context.lineWidth = renderStyle.shadowLayerStrokeWidth || renderStyle.strokeWidth || 0;
         if (context.lineWidth) {
           context.strokeText(line, x + shadowX, y + shadowY);
@@ -118,7 +158,7 @@ export function createRenderer(deps) {
         context.restore();
       }
       if (renderStyle.shadowColor && !renderStyle.backgroundColor && !shadowLayerColor) {
-        context.shadowColor = renderStyle.shadowColor;
+        context.shadowColor = colorWithOpacity(renderStyle.shadowColor, renderOpacity);
         context.shadowBlur = renderStyle.shadowBlur || 0;
         context.shadowOffsetX = renderStyle.shadowOffsetX || 0;
         context.shadowOffsetY = renderStyle.shadowOffsetY || 0;
@@ -129,11 +169,11 @@ export function createRenderer(deps) {
         context.lineJoin = "round";
         context.miterLimit = 2;
         context.lineWidth = renderStyle.strokeWidth;
-        context.strokeStyle = renderStyle.strokeColor;
+        context.strokeStyle = colorWithOpacity(renderStyle.strokeColor, renderOpacity);
         context.strokeText(line, x, y);
       }
       context.shadowColor = "transparent";
-      context.fillStyle = renderStyle.fillColor;
+      context.fillStyle = colorWithOpacity(renderStyle.fillColor, renderOpacity);
       context.fillText(line, x, y);
     }
 
