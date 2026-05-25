@@ -283,6 +283,8 @@ const TEXT_SIZE_PRESETS = {
   h3: { fontSize: 28, lineHeight: 35 },
   h2: { fontSize: 40, lineHeight: 50 },
   h1: { fontSize: 56, lineHeight: 70 },
+  h0: { fontSize: 80, lineHeight: 100 },
+  h00: { fontSize: 112, lineHeight: 140 },
 };
 const TEXT_ALIGNMENTS = new Set(["left", "center", "right"]);
 const DEFAULT_TEXT_COLOR = "#000000";
