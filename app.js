@@ -2156,18 +2156,8 @@ async function chooseImageFileForCurrentSlide() {
     if (!path) {
       return;
     }
-    if (isAnimatedGifSource(path)) {
-      setStatus("GIF를 프로젝트 asset으로 저장하고 있습니다.");
-      await importImageFileAsset(path);
-      return;
-    }
-    const displayUrl = nativeApi.toAssetUrl(path);
-    const response = await fetch(displayUrl);
-    if (!response.ok) {
-      throw new Error("이미지 파일을 읽지 못했습니다.");
-    }
-    const blob = await response.blob();
-    await loadImageBlob(blob, getFileNameFromPath(path));
+    setStatus(`${isAnimatedGifSource(path) ? "GIF" : "이미지"}를 프로젝트 asset으로 저장하고 있습니다.`);
+    await importImageFileAsset(path);
   } catch (error) {
     setStatus(error?.message || "이미지 파일을 추가하지 못했습니다.");
   }
