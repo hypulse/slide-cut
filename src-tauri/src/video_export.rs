@@ -48,6 +48,7 @@ pub(crate) struct VideoExportSlide {
     fit_animation_to_duration: Option<bool>,
     animation_affects_duration: Option<bool>,
     subtitle_enabled: Option<bool>,
+    subtitle_images: Option<Vec<String>>,
     subtitle_size: Option<f64>,
     subtitle_y: Option<f64>,
     gif_overlays: Option<Vec<GifOverlay>>,
@@ -103,6 +104,7 @@ pub(crate) struct PreparedSlide {
     video_path: Option<PathBuf>,
     video_fit: String,
     gif_overlays: Vec<PreparedGifOverlay>,
+    subtitle_image_overlays: Vec<PreparedSubtitleImageOverlay>,
     subtitle_filter: Option<String>,
     duration_seconds: f64,
     fit_animation_to_duration: bool,
@@ -111,6 +113,13 @@ pub(crate) struct PreparedSlide {
 #[derive(Debug)]
 pub(crate) struct PreparedSubtitleSegment {
     text: String,
+    start_seconds: f64,
+    end_seconds: f64,
+}
+
+#[derive(Debug)]
+pub(crate) struct PreparedSubtitleImageOverlay {
+    path: PathBuf,
     start_seconds: f64,
     end_seconds: f64,
 }
@@ -919,6 +928,38 @@ fn write_ass_subtitles(
     fs::write(path, ass).map_err(|error| error.to_string())
 }
 
+fn prepare_subtitle_image_overlays(
+    work_dir: &Path,
+    slide_index: usize,
+    images: Option<&Vec<String>>,
+    segments: &[PreparedSubtitleSegment],
+) -> Result<Vec<PreparedSubtitleImageOverlay>, String> {
+    let Some(images) = images else {
+        return Ok(Vec::new());
+    };
+    if images.is_empty() {
+        return Ok(Vec::new());
+    }
+    if images.len() != segments.len() {
+        return Err("자막 이미지 수가 TTS 세그먼트 수와 맞지 않습니다.".to_string());
+    }
+
+    let mut overlays = Vec::new();
+    for (index, (image, segment)) in images.iter().zip(segments.iter()).enumerate() {
+        if image.trim().is_empty() || segment.end_seconds <= segment.start_seconds {
+            continue;
+        }
+        let path = work_dir.join(format!("subtitle-{slide_index:04}-{index:04}.png"));
+        fs::write(&path, decode_png_data_url(image)?).map_err(|error| error.to_string())?;
+        overlays.push(PreparedSubtitleImageOverlay {
+            path,
+            start_seconds: segment.start_seconds,
+            end_seconds: segment.end_seconds,
+        });
+    }
+    Ok(overlays)
+}
+
 fn resolve_fonts_dir(app: &AppHandle) -> Option<PathBuf> {
     let resource_fonts = app
         .path()
@@ -1060,6 +1101,12 @@ fn append_gif_inputs(command: &mut Command, overlays: &[PreparedGifOverlay]) {
     }
 }
 
+fn append_subtitle_image_inputs(command: &mut Command, overlays: &[PreparedSubtitleImageOverlay]) {
+    for overlay in overlays {
+        command.args(["-loop", "1"]).arg("-i").arg(&overlay.path);
+    }
+}
+
 fn append_gif_overlay_filters(
     filter: &mut String,
     base_label: &str,
@@ -1109,6 +1156,28 @@ fn append_gif_overlay_filters(
     current_label
 }
 
+fn append_subtitle_image_overlay_filters(
+    filter: &mut String,
+    base_label: &str,
+    subtitle_input_start: usize,
+    overlays: &[PreparedSubtitleImageOverlay],
+) -> String {
+    let mut current_label = base_label.to_string();
+    for (index, overlay) in overlays.iter().enumerate() {
+        let input_index = subtitle_input_start + index;
+        let subtitle_label = format!("subtitle{index}");
+        let next_label = format!("subtitlebase{index}");
+        filter.push_str(&format!("[{input_index}:v]format=rgba[{subtitle_label}];"));
+        filter.push_str(&format!(
+            "[{current_label}][{subtitle_label}]overlay=0:0:shortest=0:format=auto:enable='between(t,{},{})'[{next_label}];",
+            format_filter_number(overlay.start_seconds),
+            format_filter_number(overlay.end_seconds)
+        ));
+        current_label = next_label;
+    }
+    current_label
+}
+
 fn create_static_segment(
     ffmpeg: &Path,
     prepared: &PreparedSlide,
@@ -1118,6 +1187,59 @@ fn create_static_segment(
     fps: u32,
     export_id: &str,
 ) -> Result<(), String> {
+    if !prepared.gif_overlays.is_empty() || !prepared.subtitle_image_overlays.is_empty() {
+        let mut filter = format!(
+            "[0:v]scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=white,format=rgba[base0];"
+        );
+        let gif_label = if prepared.gif_overlays.is_empty() {
+            "base0".to_string()
+        } else {
+            append_gif_overlay_filters(&mut filter, "base0", 2, &prepared.gif_overlays, fps)
+        };
+        let subtitle_label = append_subtitle_image_overlay_filters(
+            &mut filter,
+            &gif_label,
+            2 + prepared.gif_overlays.len(),
+            &prepared.subtitle_image_overlays,
+        );
+        append_final_video_filter(&mut filter, &subtitle_label, prepared);
+
+        let mut command = Command::new(ffmpeg);
+        command
+            .args(["-y", "-loop", "1"])
+            .arg("-i")
+            .arg(&prepared.frame_path)
+            .arg("-i")
+            .arg(&prepared.audio_path);
+        append_gif_inputs(&mut command, &prepared.gif_overlays);
+        append_subtitle_image_inputs(&mut command, &prepared.subtitle_image_overlays);
+        command
+            .arg("-t")
+            .arg(format_seconds(prepared.duration_seconds))
+            .arg("-filter_complex")
+            .arg(filter)
+            .args([
+                "-map", "[v]", "-map", "1:a", "-c:v", "libx264", "-preset", "veryfast",
+            ])
+            .arg("-r")
+            .arg(fps.to_string())
+            .args([
+                "-pix_fmt",
+                "yuv420p",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "192k",
+                "-ar",
+                EXPORT_AUDIO_SAMPLE_RATE,
+                "-ac",
+                EXPORT_AUDIO_CHANNELS,
+            ])
+            .args(["-shortest", "-movflags", "+faststart"])
+            .arg(output_path);
+        return run_command(command, "정적 슬라이드 세그먼트 생성", export_id);
+    }
+
     let filter = simple_video_filter(
         format!(
             "scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=white"
@@ -1154,52 +1276,6 @@ fn create_static_segment(
         ])
         .args(["-shortest", "-movflags", "+faststart"])
         .arg(output_path);
-    if !prepared.gif_overlays.is_empty() {
-        let mut filter = format!(
-            "[0:v]scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=white,format=rgba[base0];"
-        );
-        let final_label =
-            append_gif_overlay_filters(&mut filter, "base0", 2, &prepared.gif_overlays, fps);
-        append_final_video_filter(&mut filter, &final_label, prepared);
-
-        let mut command = Command::new(ffmpeg);
-        command
-            .args(["-y", "-loop", "1"])
-            .arg("-i")
-            .arg(&prepared.frame_path)
-            .arg("-i")
-            .arg(&prepared.audio_path);
-        append_gif_inputs(&mut command, &prepared.gif_overlays);
-        command
-            .arg("-t")
-            .arg(format_seconds(prepared.duration_seconds))
-            .arg("-filter_complex")
-            .arg(filter)
-            .args([
-                "-map", "[v]", "-map", "1:a", "-c:v", "libx264", "-preset", "veryfast",
-            ])
-            .arg("-r")
-            .arg(fps.to_string())
-            .args([
-                "-pix_fmt",
-                "yuv420p",
-                "-c:a",
-                "aac",
-                "-b:a",
-                "192k",
-                "-ar",
-                EXPORT_AUDIO_SAMPLE_RATE,
-                "-ac",
-                EXPORT_AUDIO_CHANNELS,
-            ])
-            .args(["-shortest", "-movflags", "+faststart"])
-            .arg(output_path);
-        return run_command(
-            command,
-            "GIF 오버레이 정적 슬라이드 세그먼트 생성",
-            export_id,
-        );
-    }
     run_command(command, "정적 슬라이드 세그먼트 생성", export_id)
 }
 
@@ -1220,7 +1296,13 @@ fn create_video_segment(
     let mut filter = format!(
         "[0:v]{video_filter}[bg];[1:v]scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=black@0,format=rgba[fg];[bg][fg]overlay=0:0:format=auto[base0];"
     );
-    append_final_video_filter(&mut filter, "base0", prepared);
+    let subtitle_label = append_subtitle_image_overlay_filters(
+        &mut filter,
+        "base0",
+        3,
+        &prepared.subtitle_image_overlays,
+    );
+    append_final_video_filter(&mut filter, &subtitle_label, prepared);
     let mut command = Command::new(ffmpeg);
     command
         .args(["-y", "-stream_loop", "-1"])
@@ -1230,7 +1312,9 @@ fn create_video_segment(
         .arg("-i")
         .arg(&prepared.frame_path)
         .arg("-i")
-        .arg(&prepared.audio_path)
+        .arg(&prepared.audio_path);
+    append_subtitle_image_inputs(&mut command, &prepared.subtitle_image_overlays);
+    command
         .arg("-t")
         .arg(format_seconds(prepared.duration_seconds))
         .arg("-filter_complex")
@@ -1261,7 +1345,13 @@ fn create_video_segment(
         );
         let final_label =
             append_gif_overlay_filters(&mut filter, "base0", 3, &prepared.gif_overlays, fps);
-        append_final_video_filter(&mut filter, &final_label, prepared);
+        let subtitle_label = append_subtitle_image_overlay_filters(
+            &mut filter,
+            &final_label,
+            3 + prepared.gif_overlays.len(),
+            &prepared.subtitle_image_overlays,
+        );
+        append_final_video_filter(&mut filter, &subtitle_label, prepared);
 
         let mut command = Command::new(ffmpeg);
         command
@@ -1274,6 +1364,7 @@ fn create_video_segment(
             .arg("-i")
             .arg(&prepared.audio_path);
         append_gif_inputs(&mut command, &prepared.gif_overlays);
+        append_subtitle_image_inputs(&mut command, &prepared.subtitle_image_overlays);
         command
             .arg("-t")
             .arg(format_seconds(prepared.duration_seconds))
@@ -1353,7 +1444,13 @@ fn create_animation_segment(
         } else {
             append_gif_overlay_filters(&mut filter, "base0", 3, &prepared.gif_overlays, fps)
         };
-        append_final_video_filter(&mut filter, &final_label, prepared);
+        let subtitle_label = append_subtitle_image_overlay_filters(
+            &mut filter,
+            &final_label,
+            3 + prepared.gif_overlays.len(),
+            &prepared.subtitle_image_overlays,
+        );
+        append_final_video_filter(&mut filter, &subtitle_label, prepared);
 
         let mut command = Command::new(ffmpeg);
         command
@@ -1367,6 +1464,7 @@ fn create_animation_segment(
             .arg("-i")
             .arg(&prepared.audio_path);
         append_gif_inputs(&mut command, &prepared.gif_overlays);
+        append_subtitle_image_inputs(&mut command, &prepared.subtitle_image_overlays);
         command
             .arg("-t")
             .arg(format_seconds(prepared.duration_seconds))
@@ -1406,7 +1504,13 @@ fn create_animation_segment(
         );
         let final_label =
             append_gif_overlay_filters(&mut filter, "base0", 2, &prepared.gif_overlays, fps);
-        append_final_video_filter(&mut filter, &final_label, prepared);
+        let subtitle_label = append_subtitle_image_overlay_filters(
+            &mut filter,
+            &final_label,
+            2 + prepared.gif_overlays.len(),
+            &prepared.subtitle_image_overlays,
+        );
+        append_final_video_filter(&mut filter, &subtitle_label, prepared);
 
         let mut command = Command::new(ffmpeg);
         command
@@ -1417,6 +1521,7 @@ fn create_animation_segment(
             .arg("-i")
             .arg(&prepared.audio_path);
         append_gif_inputs(&mut command, &prepared.gif_overlays);
+        append_subtitle_image_inputs(&mut command, &prepared.subtitle_image_overlays);
         command
             .arg("-t")
             .arg(format_seconds(prepared.duration_seconds))
@@ -1448,6 +1553,56 @@ fn create_animation_segment(
             "GIF 오버레이 타이핑 슬라이드 세그먼트 생성",
             export_id,
         );
+    }
+    if !prepared.subtitle_image_overlays.is_empty() {
+        let mut filter = format!(
+            "[0:v]scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=white,tpad=stop_mode=clone:stop_duration={},format=rgba[base0];",
+            format_seconds(stop_duration)
+        );
+        let subtitle_label = append_subtitle_image_overlay_filters(
+            &mut filter,
+            "base0",
+            2,
+            &prepared.subtitle_image_overlays,
+        );
+        append_final_video_filter(&mut filter, &subtitle_label, prepared);
+
+        let mut command = Command::new(ffmpeg);
+        command
+            .args(["-y", "-framerate"])
+            .arg(format_seconds(input_frame_rate))
+            .arg("-i")
+            .arg(first_frame)
+            .arg("-i")
+            .arg(&prepared.audio_path);
+        append_subtitle_image_inputs(&mut command, &prepared.subtitle_image_overlays);
+        command
+            .arg("-t")
+            .arg(format_seconds(prepared.duration_seconds))
+            .arg("-filter_complex")
+            .arg(filter)
+            .arg("-af")
+            .arg("apad")
+            .args([
+                "-map", "[v]", "-map", "1:a", "-c:v", "libx264", "-preset", "veryfast",
+            ])
+            .arg("-r")
+            .arg(fps.to_string())
+            .args([
+                "-pix_fmt",
+                "yuv420p",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "192k",
+                "-ar",
+                EXPORT_AUDIO_SAMPLE_RATE,
+                "-ac",
+                EXPORT_AUDIO_CHANNELS,
+            ])
+            .args(["-movflags", "+faststart"])
+            .arg(output_path);
+        return run_command(command, "타이핑 슬라이드 세그먼트 생성", export_id);
     }
     let mut command = Command::new(ffmpeg);
     command
@@ -1703,7 +1858,19 @@ pub(crate) fn export_video(
                 }
             }
             let gif_overlays = prepare_gif_overlays(&work_dir, index, slide.gif_overlays.as_ref())?;
-            let subtitle_filter = if subtitles_filter_supported
+            let subtitle_image_overlays =
+                if slide.subtitle_enabled.unwrap_or(false) && !subtitle_segments.is_empty() {
+                    prepare_subtitle_image_overlays(
+                        &work_dir,
+                        index,
+                        slide.subtitle_images.as_ref(),
+                        &subtitle_segments,
+                    )?
+                } else {
+                    Vec::new()
+                };
+            let subtitle_filter = if subtitle_image_overlays.is_empty()
+                && subtitles_filter_supported
                 && slide.subtitle_enabled.unwrap_or(false)
                 && !subtitle_segments.is_empty()
             {
@@ -1728,6 +1895,7 @@ pub(crate) fn export_video(
                 video_path,
                 video_fit: sanitize_video_fit(slide.video_fit.as_deref()),
                 gif_overlays,
+                subtitle_image_overlays,
                 subtitle_filter,
                 duration_seconds: duration,
                 fit_animation_to_duration: slide.fit_animation_to_duration.unwrap_or(false),

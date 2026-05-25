@@ -3131,6 +3131,32 @@ function getSubtitleTextForRender(slide, options = {}) {
   return typeof options.subtitleText === "string" ? options.subtitleText : slide.notes;
 }
 
+async function renderSubtitleOverlayToDataUrl(slide, text, options = {}) {
+  if (document.fonts?.ready) {
+    await document.fonts.ready;
+  }
+  const exportCanvas = document.createElement("canvas");
+  exportCanvas.width = Math.max(1, roundedCanvasSize(slide.width));
+  exportCanvas.height = Math.max(1, roundedCanvasSize(slide.height));
+  const context = exportCanvas.getContext("2d");
+  drawSubtitleBox(context, text, exportCanvas.width, exportCanvas.height, options);
+  return exportCanvas.toDataURL("image/png");
+}
+
+async function renderSubtitleImagesForSegments(slide, segments) {
+  if (!projectSettingsState.subtitleEnabled || !segments.length) {
+    return [];
+  }
+  return Promise.all(
+    segments.map((segment) =>
+      renderSubtitleOverlayToDataUrl(slide, segment, {
+        subtitleSize: projectSettingsState.subtitleSize,
+        subtitleY: projectSettingsState.subtitleY,
+      })
+    )
+  );
+}
+
 function getGitTypingData(slide) {
   const data = {
     ...createDefaultGitTypingData(),
@@ -6276,6 +6302,7 @@ async function exportProjectAsMp4() {
       const ttsSegments = splitNotesForTtsSegments(slide.notes);
       const hasTtsNotes = ttsSegments.length > 0;
       const gifOverlays = getAnimatedGifOverlays(slide);
+      const subtitleImages = await renderSubtitleImagesForSegments(slide, ttsSegments);
       const baseSlidePayload = {
         index,
         width: roundedCanvasSize(slide.width),
@@ -6285,6 +6312,7 @@ async function exportProjectAsMp4() {
         videoFit: video?.fit || DEFAULT_VIDEO_FIT,
         notes,
         ttsSegments,
+        subtitleImages,
         subtitleEnabled: projectSettingsState.subtitleEnabled,
         subtitleSize: projectSettingsState.subtitleSize,
         subtitleY: projectSettingsState.subtitleY,
