@@ -146,6 +146,7 @@ const strokeWidth = document.querySelector("#strokeWidth");
 const chooseSlideVideo = document.querySelector("#chooseSlideVideo");
 const clearSlideVideo = document.querySelector("#clearSlideVideo");
 const slideVideoInfo = document.querySelector("#slideVideoInfo");
+const videoFitButtons = [...document.querySelectorAll("[data-video-fit]")];
 const chooseSlideSound = document.querySelector("#chooseSlideSound");
 const clearSlideSound = document.querySelector("#clearSlideSound");
 const slideSoundInfo = document.querySelector("#slideSoundInfo");
@@ -310,6 +311,12 @@ const DEFAULT_TEXT_FONT_FAMILY = "Pretendard";
 const DEFAULT_TEXT_FONT_WEIGHT = 600;
 const DEFAULT_TEXT_EFFECT = "clean";
 const TEXT_FONT_FAMILIES = new Set(["Pretendard", "Gmarket Sans", "Jua", "Black Han Sans", "Do Hyeon", "Noto Sans KR"]);
+const DEFAULT_VIDEO_FIT = "fill";
+const VIDEO_FIT_MODES = {
+  fill: { label: "Fill", objectFit: "cover" },
+  fit: { label: "Fit", objectFit: "contain" },
+  stretch: { label: "Stretch", objectFit: "fill" },
+};
 const TEXT_EFFECT_PRESETS = {
   clean: {
     label: "Clean",
@@ -2921,6 +2928,30 @@ function drawCoverMedia(context, media, width, height) {
   context.drawImage(media, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight);
 }
 
+function sanitizeVideoFit(value) {
+  return VIDEO_FIT_MODES[value] ? value : DEFAULT_VIDEO_FIT;
+}
+
+function drawBackgroundMedia(context, media, width, height, fit = DEFAULT_VIDEO_FIT) {
+  const safeFit = sanitizeVideoFit(fit);
+  if (safeFit === "stretch") {
+    context.drawImage(media, 0, 0, width, height);
+    return;
+  }
+
+  if (safeFit === "fit") {
+    context.fillStyle = "#000000";
+    context.fillRect(0, 0, width, height);
+  }
+
+  const naturalWidth = media.videoWidth || media.naturalWidth || width;
+  const naturalHeight = media.videoHeight || media.naturalHeight || height;
+  const scale = safeFit === "fit" ? Math.min(width / naturalWidth, height / naturalHeight) : Math.max(width / naturalWidth, height / naturalHeight);
+  const drawWidth = naturalWidth * scale;
+  const drawHeight = naturalHeight * scale;
+  context.drawImage(media, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight);
+}
+
 function wrapTextLines(context, text, width) {
   const maxTextWidth = Math.max(1, width - TEXT_PADDING_X * 2);
   const output = [];
@@ -3872,7 +3903,7 @@ function normalizeSlideVideo(value) {
   return {
     path: value.path,
     name: typeof value.name === "string" && value.name.trim() ? value.name : getFileNameFromPath(value.path),
-    fit: "fill",
+    fit: sanitizeVideoFit(value.fit),
   };
 }
 
@@ -3916,11 +3947,13 @@ function updateSlideVideoView() {
     slideVideo.pause();
     slideVideo.removeAttribute("src");
     delete slideVideo.dataset.path;
+    delete slideVideo.dataset.fit;
     slideVideo.load();
     slideVideo.hidden = true;
     slideVideoInfo.textContent = "No video selected";
     slideVideoInfo.title = "";
     clearSlideVideo.disabled = true;
+    syncVideoFitButtons(null);
     return;
   }
 
@@ -3931,12 +3964,23 @@ function updateSlideVideoView() {
     slideVideo.load();
   }
   slideVideo.hidden = false;
+  slideVideo.dataset.fit = video.fit;
+  slideVideo.style.objectFit = VIDEO_FIT_MODES[video.fit]?.objectFit || VIDEO_FIT_MODES[DEFAULT_VIDEO_FIT].objectFit;
   slideVideo.muted = true;
   slideVideo.loop = true;
   slideVideo.play().catch(() => {});
   slideVideoInfo.textContent = video.name;
   slideVideoInfo.title = video.name;
   clearSlideVideo.disabled = false;
+  syncVideoFitButtons(video.fit);
+}
+
+function syncVideoFitButtons(value) {
+  const fit = value ? sanitizeVideoFit(value) : DEFAULT_VIDEO_FIT;
+  for (const button of videoFitButtons) {
+    button.classList.toggle("is-active", sanitizeVideoFit(button.dataset.videoFit) === fit);
+    button.disabled = !value;
+  }
 }
 
 function updateSlideSoundView() {
@@ -5451,7 +5495,7 @@ async function chooseVideoForCurrentSlide() {
     slides[activeSlideIndex].video = {
       path: importedAsset.path,
       name: importedAsset.name || getFileNameFromPath(path),
-      fit: "fill",
+      fit: DEFAULT_VIDEO_FIT,
     };
     updateSlideVideoView();
     renderSlideList();
@@ -5470,6 +5514,22 @@ function clearVideoForCurrentSlide() {
   updateSlideVideoView();
   renderSlideList();
   setStatus("배경 영상을 제거했습니다.");
+  recordHistory();
+}
+
+function setVideoFitForCurrentSlide(fit) {
+  const slide = slides[activeSlideIndex];
+  const video = normalizeSlideVideo(slide?.video);
+  if (!slide || !video) {
+    return;
+  }
+  slide.video = {
+    ...video,
+    fit: sanitizeVideoFit(fit),
+  };
+  updateSlideVideoView();
+  renderSlideList();
+  setStatus(`배경 영상 맞춤을 ${VIDEO_FIT_MODES[slide.video.fit].label}로 변경했습니다.`);
   recordHistory();
 }
 
@@ -5563,7 +5623,7 @@ async function saveCanvasAsPng() {
   context.fillStyle = getComputedStyle(canvas).backgroundColor || "#ffffff";
   context.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
   if (!slideVideo.hidden && slideVideo.readyState >= 2) {
-    drawCoverMedia(context, slideVideo, exportCanvas.width, exportCanvas.height);
+    drawBackgroundMedia(context, slideVideo, exportCanvas.width, exportCanvas.height, getActiveSlideVideo()?.fit);
   }
 
   const animationDuration = Math.max(VIDEO_EXPORT_FALLBACK_DURATION, getCanvasObjectAnimationDuration());
@@ -6293,6 +6353,7 @@ async function exportProjectAsMp4() {
         height: roundedCanvasSize(slide.height),
         color: sanitizeColor(slide.color, "#ffffff"),
         videoPath: video?.path || null,
+        videoFit: video?.fit || DEFAULT_VIDEO_FIT,
         notes,
         ttsSegments,
         subtitleEnabled: projectSettingsState.subtitleEnabled,
@@ -6676,6 +6737,9 @@ strokeWidth.addEventListener("change", () => {
 strokeWidth.addEventListener("blur", normalizeStrokeWidthInput);
 chooseSlideVideo.addEventListener("click", chooseVideoForCurrentSlide);
 clearSlideVideo.addEventListener("click", clearVideoForCurrentSlide);
+for (const button of videoFitButtons) {
+  button.addEventListener("click", () => setVideoFitForCurrentSlide(button.dataset.videoFit));
+}
 chooseSlideSound.addEventListener("click", chooseSoundForCurrentSlide);
 clearSlideSound.addEventListener("click", clearSoundForCurrentSlide);
 settingsCanvasWidth.addEventListener("blur", () => {

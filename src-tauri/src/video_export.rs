@@ -37,6 +37,7 @@ pub(crate) struct VideoExportSlide {
     height: u32,
     notes: String,
     video_path: Option<String>,
+    video_fit: Option<String>,
     start_sound_path: Option<String>,
     frame_png: String,
     tts_segments: Option<Vec<String>>,
@@ -100,6 +101,7 @@ pub(crate) struct PreparedSlide {
     frame_rate: f64,
     audio_path: PathBuf,
     video_path: Option<PathBuf>,
+    video_fit: String,
     gif_overlays: Vec<PreparedGifOverlay>,
     subtitle_filter: Option<String>,
     duration_seconds: f64,
@@ -933,6 +935,26 @@ fn build_subtitle_filter(subtitle_path: &Path, fonts_dir: Option<&Path>) -> Stri
     filter
 }
 
+fn sanitize_video_fit(value: Option<&str>) -> String {
+    match value.unwrap_or("").trim() {
+        "fit" => "fit".to_string(),
+        "stretch" => "stretch".to_string(),
+        _ => "fill".to_string(),
+    }
+}
+
+fn background_video_filter(width: u32, height: u32, fit: &str) -> String {
+    match fit {
+        "fit" => format!(
+            "scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1"
+        ),
+        "stretch" => format!("scale={width}:{height},setsar=1"),
+        _ => format!(
+            "scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},setsar=1"
+        ),
+    }
+}
+
 fn simple_video_filter(base_filter: String, prepared: &PreparedSlide) -> String {
     if let Some(subtitle_filter) = prepared.subtitle_filter.as_ref() {
         format!("{base_filter},{subtitle_filter},format=yuv420p")
@@ -1178,8 +1200,9 @@ fn create_video_segment(
         .video_path
         .as_ref()
         .ok_or_else(|| "영상 소스 경로가 없습니다.".to_string())?;
+    let video_filter = background_video_filter(width, height, &prepared.video_fit);
     let mut filter = format!(
-        "[0:v]scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},setsar=1[bg];[1:v]scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=black@0,format=rgba[fg];[bg][fg]overlay=0:0:format=auto[base0];"
+        "[0:v]{video_filter}[bg];[1:v]scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=black@0,format=rgba[fg];[bg][fg]overlay=0:0:format=auto[base0];"
     );
     append_final_video_filter(&mut filter, "base0", prepared);
     let mut command = Command::new(ffmpeg);
@@ -1216,8 +1239,9 @@ fn create_video_segment(
         .args(["-shortest", "-movflags", "+faststart"])
         .arg(output_path);
     if !prepared.gif_overlays.is_empty() {
+        let video_filter = background_video_filter(width, height, &prepared.video_fit);
         let mut filter = format!(
-            "[0:v]scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},setsar=1[bg];[1:v]scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=black@0,format=rgba[fg];[bg][fg]overlay=0:0:format=auto[base0];"
+            "[0:v]{video_filter}[bg];[1:v]scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=black@0,format=rgba[fg];[bg][fg]overlay=0:0:format=auto[base0];"
         );
         let final_label =
             append_gif_overlay_filters(&mut filter, "base0", 3, &prepared.gif_overlays, fps);
@@ -1303,8 +1327,9 @@ fn create_animation_segment(
         prepared,
     );
     if let Some(video_path) = prepared.video_path.as_ref() {
+        let video_filter = background_video_filter(width, height, &prepared.video_fit);
         let mut filter = format!(
-            "[0:v]scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},setsar=1[bg];[1:v]scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=black@0,tpad=stop_mode=clone:stop_duration={},format=rgba[fg];[bg][fg]overlay=0:0:format=auto[base0];",
+            "[0:v]{video_filter}[bg];[1:v]scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=black@0,tpad=stop_mode=clone:stop_duration={},format=rgba[fg];[bg][fg]overlay=0:0:format=auto[base0];",
             format_seconds(stop_duration)
         );
         let final_label = if prepared.gif_overlays.is_empty() {
@@ -1682,6 +1707,7 @@ pub(crate) fn export_video(
                 frame_rate,
                 audio_path,
                 video_path,
+                video_fit: sanitize_video_fit(slide.video_fit.as_deref()),
                 gif_overlays,
                 subtitle_filter,
                 duration_seconds: duration,

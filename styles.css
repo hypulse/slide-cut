@@ -1266,6 +1266,32 @@ select {
   font-weight: 600;
 }
 
+.video-fit-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 2px;
+}
+
+.video-fit-buttons button {
+  height: 24px;
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.video-fit-buttons button.is-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-hover);
+}
+
+.video-fit-buttons button:disabled {
+  opacity: 0.42;
+  pointer-events: none;
+}
+
 .inline-info {
   min-height: 22px;
   overflow: hidden;
@@ -1728,6 +1754,15 @@ input[type="checkbox"] {
   height: 100%;
   object-fit: cover;
   pointer-events: none;
+}
+
+.canvas-video[data-fit="fit"] {
+  background: #000000;
+  object-fit: contain;
+}
+
+.canvas-video[data-fit="stretch"] {
+  object-fit: fill;
 }
 
 .canvas-video[hidden] {
