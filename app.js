@@ -1623,6 +1623,10 @@ function shouldLoopAnimationFrames(slide) {
   return !isDynamicSlide(slide) && slideHasLoopAnimations(slide) && getSlideObjectAnimationDuration(slide) <= 0;
 }
 
+function getBlinkOpacityForPhase(angle) {
+  return Math.pow((1 + Math.cos(angle)) / 2, 2);
+}
+
 function getObjectAnimationState(object, timeSeconds = 0, durationSeconds = VIDEO_EXPORT_FALLBACK_DURATION) {
   const base = {
     x: numberOr(object.x, 0),
@@ -1632,6 +1636,7 @@ function getObjectAnimationState(object, timeSeconds = 0, durationSeconds = VIDE
     rotation: numberOr(object.rotation, 0),
     opacity: 1,
     scale: 1,
+    hidden: false,
   };
   if (!canAnimateObjectData(object) || !hasObjectAnimation(object)) {
     return base;
@@ -1683,7 +1688,9 @@ function getObjectAnimationState(object, timeSeconds = 0, durationSeconds = VIDE
     } else if (config.animationLoop === "pulse") {
       state.scale *= 1 + riseAndFall * 0.08;
     } else if (config.animationLoop === "blink") {
-      state.opacity *= Math.pow((1 + Math.cos(angle)) / 2, 2);
+      const blinkOpacity = getBlinkOpacityForPhase(angle);
+      state.opacity *= blinkOpacity;
+      state.hidden = blinkOpacity <= 0.02;
     } else if (config.animationLoop === "float") {
       state.y += wave * 8;
     }
@@ -1849,6 +1856,7 @@ function resetObjectAnimationPreview(element) {
   const state = getState(element);
   element.style.transform = `rotate(${state.rotation}deg)`;
   element.style.opacity = "";
+  element.style.visibility = "";
 }
 
 function updateObjectAnimationPreview(timeSeconds, durationSeconds) {
@@ -1861,6 +1869,7 @@ function updateObjectAnimationPreview(timeSeconds, durationSeconds) {
     const animatedState = getObjectAnimationState(data, timeSeconds, durationSeconds);
     element.style.transform = getAnimatedObjectTransform(animatedState, data);
     element.style.opacity = String(animatedState.opacity);
+    element.style.visibility = animatedState.hidden ? "hidden" : "";
   }
 }
 
@@ -3265,6 +3274,15 @@ function estimateNoteFrameDuration(notes) {
   return clamp(characterCount / 7 + 1.2, VIDEO_EXPORT_FALLBACK_DURATION, DYNAMIC_MAX_DURATION);
 }
 
+function estimateSegmentedNoteFrameDuration(notes) {
+  const segments = splitNotesForTtsSegments(notes);
+  if (segments.length <= 1) {
+    return estimateNoteFrameDuration(notes);
+  }
+  const totalDuration = segments.reduce((sum, segment) => sum + estimateNoteFrameDuration(segment), 0);
+  return clamp(totalDuration, VIDEO_EXPORT_FALLBACK_DURATION, DYNAMIC_MAX_DURATION);
+}
+
 function slideHasLoopAnimations(slide) {
   return (slide?.objects || []).some((object) => canAnimateObjectData(object) && hasLoopAnimation(object));
 }
@@ -3276,7 +3294,10 @@ function getSlideAnimationFrameDuration(slide, notes = "") {
     VIDEO_EXPORT_FALLBACK_DURATION
   );
   if (slideHasLoopAnimations(slide) && String(notes || "").trim()) {
-    return Math.max(visualDuration, estimateNoteFrameDuration(notes));
+    const noteDuration = estimateSegmentedNoteFrameDuration(notes);
+    const oneShotDuration = getSlideObjectAnimationDuration(slide);
+    const loopDuration = oneShotDuration > 0 ? noteDuration * 1.5 : noteDuration;
+    return Math.max(visualDuration, clamp(loopDuration, VIDEO_EXPORT_FALLBACK_DURATION, DYNAMIC_MAX_DURATION));
   }
   return visualDuration;
 }
@@ -3740,13 +3761,16 @@ async function drawSlideObjectsForExport(context, objects = [], options = {}) {
       continue;
     }
     const renderState = getObjectAnimationState(object, timeSeconds, durationSeconds);
+    if (renderState.hidden || renderState.opacity <= 0.005) {
+      continue;
+    }
     const center = {
       x: renderState.x + renderState.width / 2,
       y: renderState.y + renderState.height / 2,
     };
     context.save();
     try {
-      context.globalAlpha *= renderState.opacity;
+      context.globalAlpha = clamp(context.globalAlpha * renderState.opacity, 0, 1);
       context.translate(center.x, center.y);
       context.rotate((renderState.rotation * Math.PI) / 180);
       context.scale(renderState.scale, renderState.scale);
