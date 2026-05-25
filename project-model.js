@@ -22,8 +22,12 @@ export function createProjectModel(deps) {
     numberOr,
     parseShapePoints,
     sanitizeTextAlign,
+    sanitizeTextFontFamily,
+    sanitizeTextFontWeight,
+    sanitizeTextEffect,
     sanitizeColor,
     sanitizeNumber,
+    normalizeFlipFlag,
     sanitizeSlideKind,
     isDynamicSlide,
     normalizeContinueAfterTts,
@@ -54,6 +58,8 @@ export function createProjectModel(deps) {
       return {
         ...base,
         src: image.dataset.src || image.currentSrc || image.src,
+        flipX: state.flipX,
+        flipY: state.flipY,
       };
     }
 
@@ -75,6 +81,9 @@ export function createProjectModel(deps) {
       textSize: object.dataset.textSize || "h3",
       textAlign: sanitizeTextAlign(object.dataset.textAlign),
       textColor: object.dataset.textColor || DEFAULT_TEXT_COLOR,
+      fontFamily: sanitizeTextFontFamily(object.dataset.fontFamily),
+      fontWeight: sanitizeTextFontWeight(object.dataset.fontWeight),
+      textEffect: sanitizeTextEffect(object.dataset.textEffect),
     };
   }
 
@@ -124,6 +133,8 @@ export function createProjectModel(deps) {
       return {
         ...base,
         src: object.src,
+        flipX: normalizeFlipFlag(object.flipX),
+        flipY: normalizeFlipFlag(object.flipY),
       };
     }
 
@@ -152,6 +163,9 @@ export function createProjectModel(deps) {
       textSize: TEXT_SIZE_PRESETS[object.textSize] ? object.textSize : "h3",
       textAlign: sanitizeTextAlign(object.textAlign),
       textColor: sanitizeColor(object.textColor, DEFAULT_TEXT_COLOR),
+      fontFamily: sanitizeTextFontFamily(object.fontFamily),
+      fontWeight: sanitizeTextFontWeight(object.fontWeight),
+      textEffect: sanitizeTextEffect(object.textEffect),
     };
   }
 

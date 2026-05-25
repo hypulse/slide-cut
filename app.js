@@ -196,8 +196,10 @@ const selectedW = document.querySelector("#selectedW");
 const selectedH = document.querySelector("#selectedH");
 const selectedR = document.querySelector("#selectedR");
 const selectedTextSize = document.querySelector("#selectedTextSize");
+const imageFlipButtons = [...document.querySelectorAll("[data-image-flip]")];
 const canvasAlignButtons = [...document.querySelectorAll("[data-canvas-align]")];
 const textSizeButtons = [...document.querySelectorAll("[data-text-size]")];
+const textStyleButtons = [...document.querySelectorAll("[data-text-style]")];
 const textAlignButtons = [...document.querySelectorAll("[data-text-align]")];
 const selectedTextColor = document.querySelector("#selectedTextColor");
 const duplicateSelected = document.querySelector("#duplicateSelected");
@@ -283,6 +285,81 @@ const TEXT_SIZE_PRESETS = {
 };
 const TEXT_ALIGNMENTS = new Set(["left", "center", "right"]);
 const DEFAULT_TEXT_COLOR = "#000000";
+const DEFAULT_TEXT_FONT_FAMILY = "Pretendard";
+const DEFAULT_TEXT_FONT_WEIGHT = 600;
+const DEFAULT_TEXT_EFFECT = "clean";
+const TEXT_FONT_FAMILIES = new Set(["Pretendard", "Gmarket Sans", "Jua", "Black Han Sans", "Do Hyeon", "Noto Sans KR"]);
+const TEXT_EFFECT_PRESETS = {
+  clean: {
+    label: "Clean",
+    fontFamily: "Pretendard",
+    fontWeight: 600,
+  },
+  cleanReel: {
+    label: "Clean Reel",
+    fontFamily: "Noto Sans KR",
+    fontWeight: 700,
+    fillColor: "#ffffff",
+    strokeColor: "#050505",
+    strokeWidth: 7,
+    shadowColor: "rgba(0, 0, 0, 0.32)",
+    shadowBlur: 3,
+    shadowOffsetX: 2,
+    shadowOffsetY: 3,
+  },
+  popSticker: {
+    label: "Pop Sticker",
+    fontFamily: "Gmarket Sans",
+    fontWeight: 700,
+    fillColor: "#ffffff",
+    strokeColor: "#111111",
+    strokeWidth: 7,
+    shadowColor: "#ffd83d",
+    shadowBlur: 0,
+    shadowOffsetX: 5,
+    shadowOffsetY: 5,
+  },
+  candyLabel: {
+    label: "Candy Label",
+    fontFamily: "Jua",
+    fontWeight: 400,
+    fillColor: "#ff5cab",
+    strokeColor: "#ffffff",
+    strokeWidth: 8,
+    shadowColor: "rgba(126, 51, 167, 0.55)",
+    shadowBlur: 0,
+    shadowOffsetX: 4,
+    shadowOffsetY: 5,
+  },
+  comicBubble: {
+    label: "Comic Bubble",
+    fontFamily: "Do Hyeon",
+    fontWeight: 400,
+    fillColor: "#111111",
+    backgroundColor: "#fff176",
+    backgroundStrokeColor: "#111111",
+    backgroundStrokeWidth: 4,
+    backgroundPaddingX: 16,
+    backgroundPaddingY: 8,
+    backgroundRadius: 12,
+    shadowColor: "rgba(0, 0, 0, 0.24)",
+    shadowBlur: 0,
+    shadowOffsetX: 5,
+    shadowOffsetY: 5,
+  },
+  neonPop: {
+    label: "Neon Pop",
+    fontFamily: "Black Han Sans",
+    fontWeight: 400,
+    fillColor: "#b8ff2e",
+    strokeColor: "#181728",
+    strokeWidth: 5,
+    shadowColor: "#00d8ff",
+    shadowBlur: 10,
+    shadowOffsetX: 0,
+    shadowOffsetY: 0,
+  },
+};
 const DEFAULT_CANVAS_WIDTH = 1280;
 const DEFAULT_CANVAS_HEIGHT = 720;
 const DEFAULT_CANVAS_COLOR = "#ffffff";
@@ -743,6 +820,7 @@ const { drawTextLines, drawGitTypingSlide, renderSlideToDataUrl } = createRender
   TEXT_PADDING_Y,
   DEFAULT_TEXT_COLOR,
   getTextPreset,
+  getTextRenderStyle,
   sanitizeTextAlign,
   wrapTextLines,
   getGitTypingData,
@@ -788,8 +866,12 @@ const { serializeObject, serializeCurrentSlide, cloneProjectValue, normalizeProj
   numberOr,
   parseShapePoints,
   sanitizeTextAlign,
+  sanitizeTextFontFamily,
+  sanitizeTextFontWeight,
+  sanitizeTextEffect,
   sanitizeColor,
   sanitizeNumber,
+  normalizeFlipFlag,
   sanitizeSlideKind,
   isDynamicSlide,
   normalizeContinueAfterTts,
@@ -933,8 +1015,28 @@ function numberOr(value, fallback) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function normalizeFlipFlag(value) {
+  return value === true || value === "true" || value === "1";
+}
+
 function sanitizeTextAlign(value) {
   return TEXT_ALIGNMENTS.has(value) ? value : "left";
+}
+
+function sanitizeTextFontFamily(value) {
+  return TEXT_FONT_FAMILIES.has(value) ? value : DEFAULT_TEXT_FONT_FAMILY;
+}
+
+function sanitizeTextEffect(value) {
+  return TEXT_EFFECT_PRESETS[value] ? value : DEFAULT_TEXT_EFFECT;
+}
+
+function sanitizeTextFontWeight(value, fallback = DEFAULT_TEXT_FONT_WEIGHT) {
+  return clamp(numberOr(value, fallback), 100, 900);
+}
+
+function quoteFontFamily(value) {
+  return `"${String(value || DEFAULT_TEXT_FONT_FAMILY).replace(/"/g, "")}"`;
 }
 
 function getFileNameFromPath(path) {
@@ -1077,6 +1179,18 @@ function getTextPreset(elementOrKey) {
   return TEXT_SIZE_PRESETS[key] || TEXT_SIZE_PRESETS.h3;
 }
 
+function getTextRenderStyle(data = {}) {
+  const effectKey = sanitizeTextEffect(data.textEffect);
+  const preset = TEXT_EFFECT_PRESETS[effectKey] || TEXT_EFFECT_PRESETS.clean;
+  return {
+    ...preset,
+    effectKey,
+    fontFamily: sanitizeTextFontFamily(data.fontFamily || preset.fontFamily),
+    fontWeight: sanitizeTextFontWeight(data.fontWeight, preset.fontWeight || DEFAULT_TEXT_FONT_WEIGHT),
+    fillColor: data.textColor || preset.fillColor || DEFAULT_TEXT_COLOR,
+  };
+}
+
 function fitCanvasToWorkspace() {
   const viewport = canvas.parentElement;
   const availableWidth = Math.max(1, viewport.clientWidth - 48);
@@ -1095,6 +1209,8 @@ function getState(element) {
     width: Number(element.dataset.width),
     height: Number(element.dataset.height),
     rotation: Number(element.dataset.rotation),
+    flipX: normalizeFlipFlag(element.dataset.flipX),
+    flipY: normalizeFlipFlag(element.dataset.flipY),
   };
 }
 
@@ -1106,7 +1222,9 @@ function statesEqual(a, b) {
     a.y === b.y &&
     a.width === b.width &&
     a.height === b.height &&
-    a.rotation === b.rotation
+    a.rotation === b.rotation &&
+    a.flipX === b.flipX &&
+    a.flipY === b.flipY
   );
 }
 
@@ -1118,6 +1236,8 @@ function applyState(element, nextState) {
     width: Math.max(8, numberOr(nextState.width, 8)),
     height: Math.max(8, numberOr(nextState.height, 8)),
     rotation: numberOr(nextState.rotation, 0),
+    flipX: nextState.flipX === undefined ? normalizeFlipFlag(element.dataset.flipX) : normalizeFlipFlag(nextState.flipX),
+    flipY: nextState.flipY === undefined ? normalizeFlipFlag(element.dataset.flipY) : normalizeFlipFlag(nextState.flipY),
   };
 
   element.dataset.x = String(state.x);
@@ -1125,12 +1245,18 @@ function applyState(element, nextState) {
   element.dataset.width = String(state.width);
   element.dataset.height = String(state.height);
   element.dataset.rotation = String(state.rotation);
+  element.dataset.flipX = String(state.flipX);
+  element.dataset.flipY = String(state.flipY);
 
   element.style.left = `${state.x}px`;
   element.style.top = `${state.y}px`;
   element.style.width = `${state.width}px`;
   element.style.height = `${state.height}px`;
   element.style.transform = `rotate(${state.rotation}deg)`;
+  const image = element.querySelector("img");
+  if (image) {
+    image.style.transform = `scale(${state.flipX ? -1 : 1}, ${state.flipY ? -1 : 1})`;
+  }
 
   if (element.dataset.type === "text") {
     renderTextObject(element);
@@ -1241,9 +1367,19 @@ function selectObjects(elements) {
 function syncSelectedInputs() {
   const hasSelection = selectedObjects.length > 0;
   const hasTextSelection = selectedObject?.dataset.type === "text";
+  const selectedImageObjects = selectedObjects.filter((object) => object.dataset.type === "image");
+  const hasImageSelection = selectedImageObjects.length > 0;
   selectedPanel.classList.toggle("is-empty", !hasSelection);
   for (const input of [selectedX, selectedY, selectedW, selectedH, selectedR]) {
     input.disabled = !hasSelection;
+  }
+  for (const button of imageFlipButtons) {
+    const axis = button.dataset.imageFlip;
+    const isActive =
+      hasImageSelection &&
+      selectedImageObjects.every((object) => normalizeFlipFlag(axis === "y" ? object.dataset.flipY : object.dataset.flipX));
+    button.disabled = !hasImageSelection;
+    button.classList.toggle("is-active", isActive);
   }
   for (const button of Object.values(arrangeButtons)) {
     button.disabled = !hasSelection;
@@ -1252,6 +1388,9 @@ function syncSelectedInputs() {
     button.disabled = !hasSelection;
   }
   for (const button of textSizeButtons) {
+    button.disabled = !hasTextSelection;
+  }
+  for (const button of textStyleButtons) {
     button.disabled = !hasTextSelection;
   }
   for (const button of textAlignButtons) {
@@ -1270,6 +1409,7 @@ function syncSelectedInputs() {
     selectedH.value = "";
     selectedR.value = "";
     setActiveTextSizeButton("h3");
+    setActiveTextStyleButton(DEFAULT_TEXT_EFFECT);
     setActiveTextAlignButton("left");
     selectedTextColor.value = defaultTextColor;
     updateStatusBar();
@@ -1283,6 +1423,7 @@ function syncSelectedInputs() {
   selectedH.value = Math.round(state.height);
   selectedR.value = Math.round(state.rotation);
   setActiveTextSizeButton(selectedObject.dataset.textSize || "h3");
+  setActiveTextStyleButton(selectedObject.dataset.textEffect || DEFAULT_TEXT_EFFECT);
   setActiveTextAlignButton(selectedObject.dataset.textAlign || "left");
   selectedTextColor.value = selectedObject.dataset.textColor || defaultTextColor;
   if (selectedObject.dataset.type === "shape") {
@@ -1295,6 +1436,13 @@ function syncSelectedInputs() {
 function setActiveTextSizeButton(sizeKey) {
   for (const button of textSizeButtons) {
     button.classList.toggle("is-active", button.dataset.textSize === sizeKey);
+  }
+}
+
+function setActiveTextStyleButton(effectKey) {
+  const safeEffect = sanitizeTextEffect(effectKey);
+  for (const button of textStyleButtons) {
+    button.classList.toggle("is-active", button.dataset.textStyle === safeEffect);
   }
 }
 
@@ -1529,6 +1677,9 @@ function addTextObject(text, statusMessage = "텍스트를 붙여넣었습니다
   element.dataset.textSize = "h3";
   element.dataset.textAlign = "left";
   element.dataset.textColor = defaultTextColor;
+  element.dataset.fontFamily = DEFAULT_TEXT_FONT_FAMILY;
+  element.dataset.fontWeight = String(DEFAULT_TEXT_FONT_WEIGHT);
+  element.dataset.textEffect = DEFAULT_TEXT_EFFECT;
   canvas.append(element);
   attachObjectEvents(element);
   wireTextEditor(element);
@@ -1870,16 +2021,28 @@ function renderTextObject(element) {
   const context = textCanvas.getContext("2d");
   context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
   context.__textColor = element.dataset.textColor || DEFAULT_TEXT_COLOR;
-  drawTextLines(context, text, width, height, true, element.dataset.textSize || "h3", element.dataset.textAlign || "left");
+  drawTextLines(context, text, width, height, true, element.dataset.textSize || "h3", element.dataset.textAlign || "left", {
+    fontFamily: element.dataset.fontFamily,
+    fontWeight: element.dataset.fontWeight,
+    textEffect: element.dataset.textEffect,
+    textColor: element.dataset.textColor,
+  });
   delete context.__textColor;
 }
 
 function getTextContentHeight(element) {
   const state = getState(element);
   const preset = getTextPreset(element);
-  textMeasureContext.font = `600 ${preset.fontSize}px "Pretendard"`;
+  const renderStyle = getTextRenderStyle({
+    fontFamily: element.dataset.fontFamily,
+    fontWeight: element.dataset.fontWeight,
+    textEffect: element.dataset.textEffect,
+    textColor: element.dataset.textColor,
+  });
+  textMeasureContext.font = `${renderStyle.fontWeight} ${preset.fontSize}px ${quoteFontFamily(renderStyle.fontFamily)}`;
   const lines = wrapTextLines(textMeasureContext, element.dataset.text || "", state.width);
-  return Math.max(16, Math.ceil(lines.length * preset.lineHeight + TEXT_PADDING_Y * 2));
+  const backgroundPadding = renderStyle.backgroundColor ? (renderStyle.backgroundPaddingY || 6) * 2 : 0;
+  return Math.max(16, Math.ceil(lines.length * preset.lineHeight + TEXT_PADDING_Y * 2 + backgroundPadding));
 }
 
 function fitTextBoxToContent(element) {
@@ -1967,6 +2130,8 @@ function startTextEdit(element) {
   editor.value = element.dataset.text || "";
   editor.style.fontSize = `${preset.fontSize}px`;
   editor.style.lineHeight = `${preset.lineHeight}px`;
+  editor.style.fontFamily = quoteFontFamily(sanitizeTextFontFamily(element.dataset.fontFamily));
+  editor.style.fontWeight = String(sanitizeTextFontWeight(element.dataset.fontWeight));
   editor.style.color = element.dataset.textColor || DEFAULT_TEXT_COLOR;
   editor.style.textAlign = sanitizeTextAlign(element.dataset.textAlign);
   window.requestAnimationFrame(() => {
@@ -2183,6 +2348,19 @@ function drawFittedImage(context, image, width, height) {
   context.drawImage(image, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight);
 }
 
+function drawFlippedFittedImage(context, image, width, height, data = {}) {
+  const flipX = normalizeFlipFlag(data.flipX);
+  const flipY = normalizeFlipFlag(data.flipY);
+  context.save();
+  if (flipX || flipY) {
+    context.translate(width / 2, height / 2);
+    context.scale(flipX ? -1 : 1, flipY ? -1 : 1);
+    context.translate(-width / 2, -height / 2);
+  }
+  drawFittedImage(context, image, width, height);
+  context.restore();
+}
+
 function drawCoverMedia(context, media, width, height) {
   const naturalWidth = media.videoWidth || media.naturalWidth || width;
   const naturalHeight = media.videoHeight || media.naturalHeight || height;
@@ -2227,7 +2405,13 @@ function drawTextObject(context, object, width, height) {
     height,
     false,
     object.dataset.textSize || "h3",
-    object.dataset.textAlign || "left"
+    object.dataset.textAlign || "left",
+    {
+      fontFamily: object.dataset.fontFamily,
+      fontWeight: object.dataset.fontWeight,
+      textEffect: object.dataset.textEffect,
+      textColor: object.dataset.textColor,
+    }
   );
   delete context.__textColor;
 }
@@ -2747,6 +2931,8 @@ function getAnimatedGifOverlays(slide) {
       width: Math.max(1, numberOr(object.width, 1)),
       height: Math.max(1, numberOr(object.height, 1)),
       rotation: numberOr(object.rotation, 0),
+      flipX: normalizeFlipFlag(object.flipX),
+      flipY: normalizeFlipFlag(object.flipY),
     }));
 }
 
@@ -2782,10 +2968,10 @@ async function drawSlideObjectsForExport(context, objects = [], options = {}) {
           }
           throw error;
         }
-        drawFittedImage(context, image, object.width, object.height);
+        drawFlippedFittedImage(context, image, object.width, object.height, object);
       } else if (object.type === "text") {
         context.__textColor = object.textColor || DEFAULT_TEXT_COLOR;
-        drawTextLines(context, object.text || "", object.width, object.height, false, object.textSize || "h3", object.textAlign || "left");
+        drawTextLines(context, object.text || "", object.width, object.height, false, object.textSize || "h3", object.textAlign || "left", object);
         delete context.__textColor;
       } else if (object.type === "shape") {
         drawShapeData(context, object, object.width, object.height);
@@ -3303,6 +3489,9 @@ function addTextObjectFromData(data) {
   element.dataset.textSize = data.textSize || "h3";
   element.dataset.textAlign = sanitizeTextAlign(data.textAlign);
   element.dataset.textColor = data.textColor || DEFAULT_TEXT_COLOR;
+  element.dataset.fontFamily = sanitizeTextFontFamily(data.fontFamily);
+  element.dataset.fontWeight = String(sanitizeTextFontWeight(data.fontWeight));
+  element.dataset.textEffect = sanitizeTextEffect(data.textEffect);
   canvas.append(element);
   attachObjectEvents(element);
   wireTextEditor(element);
@@ -3454,7 +3643,7 @@ function renderSlidePreview(slide, previewCanvas, options = {}) {
       context.strokeRect(0, 0, object.width, object.height);
     } else if (object.type === "text") {
       context.__textColor = object.textColor || DEFAULT_TEXT_COLOR;
-      drawTextLines(context, object.text || "", object.width, object.height, false, object.textSize || "h3", object.textAlign || "left");
+      drawTextLines(context, object.text || "", object.width, object.height, false, object.textSize || "h3", object.textAlign || "left", object);
       delete context.__textColor;
     } else if (object.type === "shape") {
       drawShapeData(context, object, object.width, object.height);
@@ -3508,7 +3697,9 @@ function createSlidePreviewGifOverlay(object, metrics) {
   image.style.top = `${metrics.offsetY + object.y * metrics.scaleY}px`;
   image.style.width = `${Math.max(1, object.width * metrics.scaleX)}px`;
   image.style.height = `${Math.max(1, object.height * metrics.scaleY)}px`;
-  image.style.transform = `rotate(${numberOr(object.rotation, 0)}deg)`;
+  image.style.transform = `rotate(${numberOr(object.rotation, 0)}deg) scale(${normalizeFlipFlag(object.flipX) ? -1 : 1}, ${
+    normalizeFlipFlag(object.flipY) ? -1 : 1
+  })`;
   return image;
 }
 
@@ -3906,6 +4097,31 @@ function nudgeSelectedObjects(deltaX, deltaY) {
     });
   }
   renderSlideList();
+  recordHistory();
+  return true;
+}
+
+function flipSelectedImages(axis) {
+  if (axis !== "x" && axis !== "y") {
+    return false;
+  }
+  const imageObjects = selectedObjects.filter((object) => object.dataset.type === "image");
+  if (imageObjects.length === 0) {
+    return false;
+  }
+
+  for (const object of imageObjects) {
+    const state = getState(object);
+    applyState(object, {
+      ...state,
+      flipX: axis === "x" ? !state.flipX : state.flipX,
+      flipY: axis === "y" ? !state.flipY : state.flipY,
+    });
+  }
+
+  syncSelectedInputs();
+  renderSlideList();
+  setStatus(`${imageObjects.length}개 이미지가 ${axis === "x" ? "좌우" : "상하"} 반전되었습니다.`);
   recordHistory();
   return true;
 }
@@ -4663,7 +4879,7 @@ async function saveCanvasAsPng() {
     context.translate(-state.width / 2, -state.height / 2);
 
     if (object.dataset.type === "image") {
-      drawFittedImage(context, object.querySelector("img"), state.width, state.height);
+      drawFlippedFittedImage(context, object.querySelector("img"), state.width, state.height, state);
     } else if (object.dataset.type === "text") {
       drawTextObject(context, object, state.width, state.height);
     } else if (object.dataset.type === "shape") {
@@ -5499,6 +5715,32 @@ function applySelectedTextSizeChange(sizeKey) {
   recordHistory();
 }
 
+function applySelectedTextStyleChange(effectKey) {
+  if (!selectedObject || selectedObject.dataset.type !== "text") {
+    return;
+  }
+  const safeEffect = sanitizeTextEffect(effectKey);
+  const preset = TEXT_EFFECT_PRESETS[safeEffect] || TEXT_EFFECT_PRESETS.clean;
+  selectedObject.dataset.textEffect = safeEffect;
+  selectedObject.dataset.fontFamily = sanitizeTextFontFamily(preset.fontFamily);
+  selectedObject.dataset.fontWeight = String(sanitizeTextFontWeight(preset.fontWeight));
+  if (preset.fillColor) {
+    selectedObject.dataset.textColor = preset.fillColor;
+    selectedTextColor.value = preset.fillColor;
+  }
+  setActiveTextStyleButton(safeEffect);
+  const editor = selectedObject.querySelector(".text-editor");
+  editor.style.fontFamily = quoteFontFamily(sanitizeTextFontFamily(selectedObject.dataset.fontFamily));
+  editor.style.fontWeight = selectedObject.dataset.fontWeight;
+  editor.style.color = selectedObject.dataset.textColor || DEFAULT_TEXT_COLOR;
+  if (!fitTextBoxToContent(selectedObject)) {
+    renderTextObject(selectedObject);
+  }
+  setStatus(`텍스트 스타일을 ${preset.label || safeEffect}로 변경했습니다.`);
+  renderSlideList();
+  recordHistory();
+}
+
 function applySelectedTextColorChange(shouldRecord = false) {
   if (!selectedObject || selectedObject.dataset.type !== "text") {
     return;
@@ -5591,6 +5833,9 @@ arrangeButtons.back.addEventListener("click", () => moveSelectedLayer("back"));
 arrangeButtons.front.addEventListener("click", () => moveSelectedLayer("front"));
 for (const button of canvasAlignButtons) {
   button.addEventListener("click", () => alignSelectedToCanvas(button.dataset.canvasAlign));
+}
+for (const button of imageFlipButtons) {
+  button.addEventListener("click", () => flipSelectedImages(button.dataset.imageFlip));
 }
 projectNameInput.addEventListener("change", () => {
   activeProjectName = getProjectName();
@@ -5730,6 +5975,9 @@ for (const input of [selectedX, selectedY, selectedW, selectedH, selectedR]) {
 }
 for (const button of textSizeButtons) {
   button.addEventListener("click", () => applySelectedTextSizeChange(button.dataset.textSize));
+}
+for (const button of textStyleButtons) {
+  button.addEventListener("click", () => applySelectedTextStyleChange(button.dataset.textStyle));
 }
 for (const button of textAlignButtons) {
   button.addEventListener("click", () => applySelectedTextAlignChange(button.dataset.textAlign));

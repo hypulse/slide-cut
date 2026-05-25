@@ -160,6 +160,13 @@
             <input id="selectedR" type="number" step="1" />
           </label>
           <div class="field-row">
+            <span>Image Flip</span>
+            <div id="selectedImageFlip" class="image-flip-buttons" role="group" aria-label="이미지 반전">
+              <button type="button" data-image-flip="x" data-icon="flip-horizontal">Flip H</button>
+              <button type="button" data-image-flip="y" data-icon="flip-vertical">Flip V</button>
+            </div>
+          </div>
+          <div class="field-row">
             <span>Canvas Align</span>
             <div class="canvas-align-controls" role="group" aria-label="캔버스 기준 정렬">
               <button type="button" class="canvas-align-button align-top-left" data-canvas-align="top-left" aria-label="좌측 상단" title="좌측 상단"></button>
@@ -180,6 +187,17 @@
               <button type="button" data-text-size="h3" class="is-active">H3</button>
               <button type="button" data-text-size="h2">H2</button>
               <button type="button" data-text-size="h1">H1</button>
+            </div>
+          </label>
+          <label>
+            <span>Sticker Style</span>
+            <div id="selectedTextStyle" class="text-style-buttons" role="group" aria-label="스티커 텍스트 스타일">
+              <button type="button" data-text-style="clean">Clean</button>
+              <button type="button" data-text-style="cleanReel">Clean Reel</button>
+              <button type="button" data-text-style="popSticker">Pop</button>
+              <button type="button" data-text-style="candyLabel">Candy</button>
+              <button type="button" data-text-style="comicBubble">Comic</button>
+              <button type="button" data-text-style="neonPop">Neon</button>
             </div>
           </label>
           <label>

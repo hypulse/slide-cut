@@ -57,6 +57,8 @@ pub(crate) struct GifOverlay {
     width: f64,
     height: f64,
     rotation: f64,
+    flip_x: Option<bool>,
+    flip_y: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -107,6 +109,8 @@ pub(crate) struct PreparedGifOverlay {
     width: f64,
     height: f64,
     rotation: f64,
+    flip_x: bool,
+    flip_y: bool,
 }
 const EXPORT_AUDIO_SAMPLE_RATE: &str = "44100";
 const EXPORT_AUDIO_CHANNELS: &str = "2";
@@ -752,6 +756,8 @@ fn prepare_gif_overlays(
             width: overlay.width.max(1.0),
             height: overlay.height.max(1.0),
             rotation: overlay.rotation,
+            flip_x: overlay.flip_x.unwrap_or(false),
+            flip_y: overlay.flip_y.unwrap_or(false),
         });
     }
     Ok(prepared)
@@ -781,12 +787,21 @@ fn append_gif_overlay_filters(
         let height = overlay.height.round().max(1.0);
         let input_index = gif_input_start + index;
         let mut source_filter = format!(
-            "[{input_index}:v]fps={fps},scale={}:{}:force_original_aspect_ratio=decrease,pad={}:{}:(ow-iw)/2:(oh-ih)/2:color=black@0,format=rgba",
+            "[{input_index}:v]fps={fps}",
+        );
+        if overlay.flip_x {
+            source_filter.push_str(",hflip");
+        }
+        if overlay.flip_y {
+            source_filter.push_str(",vflip");
+        }
+        source_filter.push_str(&format!(
+            ",scale={}:{}:force_original_aspect_ratio=decrease,pad={}:{}:(ow-iw)/2:(oh-ih)/2:color=black@0,format=rgba",
             width as u32,
             height as u32,
             width as u32,
             height as u32
-        );
+        ));
         let (overlay_width, overlay_height) = if overlay.rotation.abs() > 0.01 {
             let angle = format_filter_number(overlay.rotation.to_radians());
             source_filter.push_str(&format!(

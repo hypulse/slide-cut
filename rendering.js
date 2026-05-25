@@ -4,6 +4,7 @@ export function createRenderer(deps) {
     TEXT_PADDING_Y,
     DEFAULT_TEXT_COLOR,
     getTextPreset,
+    getTextRenderStyle,
     sanitizeTextAlign,
     wrapTextLines,
     getGitTypingData,
@@ -24,8 +25,12 @@ export function createRenderer(deps) {
     getSubtitleTextForRender,
   } = deps;
 
-  function drawTextLines(context, text, width, height, shouldClear = false, textSizeKey = "h3", textAlign = "left") {
+  function drawTextLines(context, text, width, height, shouldClear = false, textSizeKey = "h3", textAlign = "left", textStyle = {}) {
     const preset = getTextPreset(textSizeKey);
+    const renderStyle = getTextRenderStyle({
+      ...textStyle,
+      textColor: textStyle.textColor || context.__textColor || DEFAULT_TEXT_COLOR,
+    });
     const safeAlign = sanitizeTextAlign(textAlign);
     if (shouldClear) {
       context.clearRect(0, 0, width, height);
@@ -34,22 +39,75 @@ export function createRenderer(deps) {
     context.beginPath();
     context.rect(0, 0, width, height);
     context.clip();
-    context.fillStyle = context.__textColor || DEFAULT_TEXT_COLOR;
     context.textBaseline = "top";
     context.textAlign = safeAlign;
-    context.font = `600 ${preset.fontSize}px "Pretendard"`;
+    context.font = `${renderStyle.fontWeight} ${preset.fontSize}px "${renderStyle.fontFamily}"`;
 
-    for (const [index, line] of wrapTextLines(context, text, width).entries()) {
-      const y = TEXT_PADDING_Y + index * preset.lineHeight;
-      if (y >= height) {
-        break;
+    const lines = wrapTextLines(context, text, width).filter((_, index) => TEXT_PADDING_Y + index * preset.lineHeight < height);
+    const lineWidths = lines.map((line) => context.measureText(line).width);
+    if (renderStyle.backgroundColor && lines.length) {
+      const paddingX = renderStyle.backgroundPaddingX || 12;
+      const paddingY = renderStyle.backgroundPaddingY || 6;
+      const blockWidth = Math.min(width - 2, Math.max(...lineWidths, 1) + paddingX * 2);
+      const blockHeight = Math.min(height - 2, lines.length * preset.lineHeight + paddingY * 2);
+      const rawBlockX =
+        safeAlign === "center"
+          ? (width - blockWidth) / 2
+          : safeAlign === "right"
+            ? width - TEXT_PADDING_X - blockWidth
+            : TEXT_PADDING_X - paddingX;
+      const blockX = clamp(rawBlockX, 1, Math.max(1, width - blockWidth - 1));
+      const blockY = Math.max(1, TEXT_PADDING_Y - paddingY * 0.65);
+      context.save();
+      if (renderStyle.shadowColor) {
+        context.shadowColor = renderStyle.shadowColor;
+        context.shadowBlur = renderStyle.shadowBlur || 0;
+        context.shadowOffsetX = renderStyle.shadowOffsetX || 0;
+        context.shadowOffsetY = renderStyle.shadowOffsetY || 0;
       }
+      context.fillStyle = renderStyle.backgroundColor;
+      fillRoundedRect(context, blockX, blockY, blockWidth, blockHeight, renderStyle.backgroundRadius || 8);
+      if (renderStyle.backgroundStrokeColor && renderStyle.backgroundStrokeWidth) {
+        context.shadowColor = "transparent";
+        context.lineWidth = renderStyle.backgroundStrokeWidth;
+        context.strokeStyle = renderStyle.backgroundStrokeColor;
+        strokeRoundedRect(
+          context,
+          blockX + renderStyle.backgroundStrokeWidth / 2,
+          blockY + renderStyle.backgroundStrokeWidth / 2,
+          blockWidth - renderStyle.backgroundStrokeWidth,
+          blockHeight - renderStyle.backgroundStrokeWidth,
+          renderStyle.backgroundRadius || 8
+        );
+      }
+      context.restore();
+    }
+
+    for (const [index, line] of lines.entries()) {
+      const y = TEXT_PADDING_Y + index * preset.lineHeight;
       const x =
         safeAlign === "center"
           ? width / 2
           : safeAlign === "right"
             ? width - TEXT_PADDING_X
             : TEXT_PADDING_X;
+      if (renderStyle.shadowColor && !renderStyle.backgroundColor) {
+        context.shadowColor = renderStyle.shadowColor;
+        context.shadowBlur = renderStyle.shadowBlur || 0;
+        context.shadowOffsetX = renderStyle.shadowOffsetX || 0;
+        context.shadowOffsetY = renderStyle.shadowOffsetY || 0;
+      } else {
+        context.shadowColor = "transparent";
+      }
+      if (renderStyle.strokeColor && renderStyle.strokeWidth) {
+        context.lineJoin = "round";
+        context.miterLimit = 2;
+        context.lineWidth = renderStyle.strokeWidth;
+        context.strokeStyle = renderStyle.strokeColor;
+        context.strokeText(line, x, y);
+      }
+      context.shadowColor = "transparent";
+      context.fillStyle = renderStyle.fillColor;
       context.fillText(line, x, y);
     }
 
