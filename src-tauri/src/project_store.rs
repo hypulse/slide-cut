@@ -177,6 +177,26 @@ fn is_copyable_asset_path(value: &str) -> bool {
         && !value.starts_with("asset:")
 }
 
+fn mime_type_for_path(path: &Path) -> &'static str {
+    match path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "apng" => "image/apng",
+        "avif" => "image/avif",
+        "bmp" => "image/bmp",
+        "gif" => "image/gif",
+        "jpg" | "jpeg" => "image/jpeg",
+        "png" => "image/png",
+        "svg" => "image/svg+xml",
+        "webp" => "image/webp",
+        _ => "application/octet-stream",
+    }
+}
+
 fn clean_asset_file_name(path: &Path) -> String {
     let file_name = path
         .file_name()
@@ -584,6 +604,42 @@ pub(crate) fn import_project_image_blob(
         width: dimensions.map(|(width, _)| width),
         height: dimensions.map(|(_, height)| height),
     })
+}
+
+#[tauri::command]
+pub(crate) fn read_asset_data_url(app: AppHandle, path: String) -> Result<String, String> {
+    let value = path.trim();
+    if value.is_empty() {
+        return Err("asset 경로가 비어 있습니다.".to_string());
+    }
+    if value.starts_with("data:") || value.starts_with("blob:") || value.starts_with("asset:") {
+        return Err("프로젝트 asset 파일 경로만 읽을 수 있습니다.".to_string());
+    }
+
+    let source_path = PathBuf::from(value);
+    if !source_path.is_absolute() {
+        return Err("프로젝트 asset 경로가 절대 경로가 아닙니다.".to_string());
+    }
+
+    let app_root = app_data_dir(&app)?;
+    fs::create_dir_all(&app_root).map_err(|error| error.to_string())?;
+    let app_root = app_root
+        .canonicalize()
+        .map_err(|error| format!("앱 데이터 폴더를 확인하지 못했습니다: {error}"))?;
+    let source_path = source_path
+        .canonicalize()
+        .map_err(|error| format!("프로젝트 asset 파일을 확인하지 못했습니다: {error}"))?;
+    if !source_path.starts_with(&app_root) {
+        return Err("앱 프로젝트 폴더 안의 asset만 export용으로 읽을 수 있습니다.".to_string());
+    }
+
+    let bytes = fs::read(&source_path)
+        .map_err(|error| format!("프로젝트 asset을 읽지 못했습니다: {error}"))?;
+    Ok(format!(
+        "data:{};base64,{}",
+        mime_type_for_path(&source_path),
+        general_purpose::STANDARD.encode(bytes)
+    ))
 }
 
 #[tauri::command]

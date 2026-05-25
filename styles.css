@@ -1859,6 +1859,31 @@ input[type="checkbox"] {
   touch-action: none;
 }
 
+.snap-guide {
+  position: absolute;
+  z-index: 60;
+  display: none;
+  pointer-events: none;
+  background: #00a6ff;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.92);
+}
+
+.snap-guide.is-visible {
+  display: block;
+}
+
+.snap-guide.vertical {
+  top: 0;
+  width: 1px;
+  transform: translateX(-0.5px);
+}
+
+.snap-guide.horizontal {
+  left: 0;
+  height: 1px;
+  transform: translateY(-0.5px);
+}
+
 .object img {
   display: block;
   width: 100%;

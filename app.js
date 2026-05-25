@@ -32,6 +32,7 @@ const nativeApi = {
   getDefaultExportDir: () => tauriInvoke("get_default_export_dir"),
   saveAppSettings: (settings) => tauriInvoke("save_app_settings", { settings }),
   importImageBlob: (payload) => tauriInvoke("import_project_image_blob", { payload }),
+  readAssetDataUrl: (path) => tauriInvoke("read_asset_data_url", { path }),
   exportProjectFile: async (suggestedName, data) => {
     const path = await tauriDialog.save({
       defaultPath: suggestedName,
@@ -396,6 +397,7 @@ const CANVAS_ALIGNMENT_LABELS = {
   bottom: "하단 중앙",
   "bottom-right": "우측 하단",
 };
+const MOVE_SNAP_SCREEN_THRESHOLD = 10;
 const SVG_NS = "http://www.w3.org/2000/svg";
 const PROJECT_FORMAT = "slide-cut-project";
 const PROJECT_VERSION = 2;
@@ -1069,6 +1071,14 @@ function getDisplayAssetUrl(value) {
   return nativeApi.toAssetUrl(path);
 }
 
+async function getRenderAssetUrl(value) {
+  const path = String(value || "");
+  if (!path || isExternalUrl(path)) {
+    return path;
+  }
+  return nativeApi.readAssetDataUrl(path);
+}
+
 function sanitizeSlideKind(value) {
   return SLIDE_KINDS.has(value) ? value : "canvas";
 }
@@ -1211,6 +1221,87 @@ function getState(element) {
     rotation: Number(element.dataset.rotation),
     flipX: normalizeFlipFlag(element.dataset.flipX),
     flipY: normalizeFlipFlag(element.dataset.flipY),
+  };
+}
+
+function getSnapGuideElements() {
+  let vertical = canvas.querySelector(".snap-guide.vertical");
+  let horizontal = canvas.querySelector(".snap-guide.horizontal");
+  if (!vertical) {
+    vertical = document.createElement("div");
+    vertical.className = "snap-guide vertical";
+    vertical.setAttribute("aria-hidden", "true");
+    canvas.append(vertical);
+  }
+  if (!horizontal) {
+    horizontal = document.createElement("div");
+    horizontal.className = "snap-guide horizontal";
+    horizontal.setAttribute("aria-hidden", "true");
+    canvas.append(horizontal);
+  }
+  return { vertical, horizontal };
+}
+
+function hideSnapGuides() {
+  for (const guide of canvas.querySelectorAll(".snap-guide")) {
+    guide.classList.remove("is-visible");
+  }
+}
+
+function updateSnapGuides(snap) {
+  const { vertical, horizontal } = getSnapGuideElements();
+  const canvasWidth = canvas.offsetWidth;
+  const canvasHeight = canvas.offsetHeight;
+
+  if (Number.isFinite(snap?.snapX)) {
+    vertical.style.left = `${snap.snapX}px`;
+    vertical.style.height = `${canvasHeight}px`;
+    vertical.classList.add("is-visible");
+  } else {
+    vertical.classList.remove("is-visible");
+  }
+
+  if (Number.isFinite(snap?.snapY)) {
+    horizontal.style.top = `${snap.snapY}px`;
+    horizontal.style.width = `${canvasWidth}px`;
+    horizontal.classList.add("is-visible");
+  } else {
+    horizontal.classList.remove("is-visible");
+  }
+}
+
+function findSnapDelta(markers, targets, threshold) {
+  let best = null;
+  for (const marker of markers) {
+    for (const target of targets) {
+      const distance = Math.abs(marker - target);
+      if (distance <= threshold && (!best || distance < best.distance)) {
+        best = {
+          distance,
+          delta: target - marker,
+          guide: target,
+        };
+      }
+    }
+  }
+  return best;
+}
+
+function getMoveSnapState(state) {
+  const canvasWidth = canvas.offsetWidth;
+  const canvasHeight = canvas.offsetHeight;
+  const threshold = MOVE_SNAP_SCREEN_THRESHOLD / Math.max(canvasViewScale, 0.05);
+  const xMarkers = [state.x, state.x + state.width / 2, state.x + state.width];
+  const yMarkers = [state.y, state.y + state.height / 2, state.y + state.height];
+  const xSnap = findSnapDelta(xMarkers, [0, canvasWidth / 2, canvasWidth], threshold);
+  const ySnap = findSnapDelta(yMarkers, [0, canvasHeight / 2, canvasHeight], threshold);
+
+  return {
+    ...state,
+    x: xSnap ? state.x + xSnap.delta : state.x,
+    y: ySnap ? state.y + ySnap.delta : state.y,
+    snapX: xSnap?.guide,
+    snapY: ySnap?.guide,
   };
 }
 
@@ -2194,6 +2285,7 @@ function startMove(element, event) {
 function startHandleDrag(element, handle, event) {
   event.preventDefault();
   event.stopPropagation();
+  hideSnapGuides();
   element.setPointerCapture(event.pointerId);
   const state = getState(element);
   const rect = element.getBoundingClientRect();
@@ -2226,15 +2318,19 @@ function handlePointerMove(event) {
   const dy = (event.clientY - activePointer.startY) / canvasViewScale;
 
   if (activePointer.type === "move") {
-    applyState(element, {
+    const nextState = {
       ...state,
       x: state.x + dx,
       y: state.y + dy,
-    });
+    };
+    const snappedState = event.altKey ? nextState : getMoveSnapState(nextState);
+    applyState(element, snappedState);
+    updateSnapGuides(event.altKey ? null : snappedState);
     return;
   }
 
   if (activePointer.type === "rotate") {
+    hideSnapGuides();
     const angle = Math.atan2(event.clientY - activePointer.centerY, event.clientX - activePointer.centerX);
     const deltaDegrees = ((angle - activePointer.startAngle) * 180) / Math.PI;
     applyState(element, {
@@ -2251,6 +2347,7 @@ function handlePointerMove(event) {
   const x = activePointer.handle.includes("w") ? state.x + (state.width - width) : state.x;
   const y = activePointer.handle.includes("n") ? state.y + (state.height - height) : state.y;
 
+  hideSnapGuides();
   applyState(element, {
     ...state,
     x,
@@ -2273,6 +2370,7 @@ function handlePointerEnd(event) {
   const changed = !statesEqual(pointer.state, getState(pointer.element));
   pointer.element.releasePointerCapture(event.pointerId);
   activePointer = null;
+  hideSnapGuides();
   if (changed) {
     renderSlideList();
     recordHistory();
@@ -3122,7 +3220,11 @@ function loadImageForRender(src) {
     const image = new Image();
     image.onload = () => resolve(image);
     image.onerror = () => reject(new Error("이미지를 렌더링하지 못했습니다."));
-    image.src = getDisplayAssetUrl(src);
+    getRenderAssetUrl(src)
+      .then((url) => {
+        image.src = url;
+      })
+      .catch(reject);
   });
 }
 
@@ -4879,7 +4981,9 @@ async function saveCanvasAsPng() {
     context.translate(-state.width / 2, -state.height / 2);
 
     if (object.dataset.type === "image") {
-      drawFlippedFittedImage(context, object.querySelector("img"), state.width, state.height, state);
+      const imageElement = object.querySelector("img");
+      const image = await loadImageForRender(imageElement?.dataset.src || imageElement?.src || "");
+      drawFlippedFittedImage(context, image, state.width, state.height, state);
     } else if (object.dataset.type === "text") {
       drawTextObject(context, object, state.width, state.height);
     } else if (object.dataset.type === "shape") {
