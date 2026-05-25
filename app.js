@@ -898,6 +898,7 @@ const { drawTextLines, drawGitTypingSlide, renderSlideToDataUrl } = createRender
   DEFAULT_TEXT_COLOR,
   getTextPreset,
   getTextRenderStyle,
+  getTextEffectOutset,
   sanitizeTextAlign,
   wrapTextLines,
   getGitTypingData,
@@ -1382,6 +1383,21 @@ function getTextRenderStyle(data = {}) {
     fontFamily: sanitizeTextFontFamily(data.fontFamily || preset.fontFamily),
     fontWeight: sanitizeTextFontWeight(data.fontWeight, preset.fontWeight || DEFAULT_TEXT_FONT_WEIGHT),
     fillColor: data.textColor || preset.fillColor || DEFAULT_TEXT_COLOR,
+  };
+}
+
+function getTextEffectOutset(renderStyle = {}) {
+  const strokeOutset = Math.max(
+    0,
+    numberOr(renderStyle.strokeWidth, 0) / 2,
+    numberOr(renderStyle.backgroundStrokeWidth, 0) / 2
+  );
+  const shadowBlur = Math.max(0, numberOr(renderStyle.shadowBlur, 0));
+  const shadowX = Math.abs(numberOr(renderStyle.shadowOffsetX, 0));
+  const shadowY = Math.abs(numberOr(renderStyle.shadowOffsetY, 0));
+  return {
+    x: Math.ceil(strokeOutset + shadowBlur + shadowX),
+    y: Math.ceil(strokeOutset + shadowBlur + shadowY),
   };
 }
 
@@ -2585,10 +2601,12 @@ function getTextContentHeight(element) {
     textEffect: element.dataset.textEffect,
     textColor: element.dataset.textColor,
   });
+  const outset = getTextEffectOutset(renderStyle);
   textMeasureContext.font = `${renderStyle.fontWeight} ${preset.fontSize}px ${quoteFontFamily(renderStyle.fontFamily)}`;
-  const lines = wrapTextLines(textMeasureContext, element.dataset.text || "", state.width);
+  const measureWidth = Math.max(1, state.width - outset.x * 2);
+  const lines = wrapTextLines(textMeasureContext, element.dataset.text || "", measureWidth);
   const backgroundPadding = renderStyle.backgroundColor ? (renderStyle.backgroundPaddingY || 6) * 2 : 0;
-  return Math.max(16, Math.ceil(lines.length * preset.lineHeight + TEXT_PADDING_Y * 2 + backgroundPadding));
+  return Math.max(16, Math.ceil(lines.length * preset.lineHeight + TEXT_PADDING_Y * 2 + backgroundPadding + outset.y * 2));
 }
 
 function fitTextBoxToContent(element) {

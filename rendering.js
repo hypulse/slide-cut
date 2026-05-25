@@ -5,6 +5,7 @@ export function createRenderer(deps) {
     DEFAULT_TEXT_COLOR,
     getTextPreset,
     getTextRenderStyle,
+    getTextEffectOutset,
     sanitizeTextAlign,
     wrapTextLines,
     getGitTypingData,
@@ -43,21 +44,28 @@ export function createRenderer(deps) {
     context.textAlign = safeAlign;
     context.font = `${renderStyle.fontWeight} ${preset.fontSize}px "${renderStyle.fontFamily}"`;
 
-    const lines = wrapTextLines(context, text, width).filter((_, index) => TEXT_PADDING_Y + index * preset.lineHeight < height);
+    const outset = getTextEffectOutset(renderStyle);
+    const contentX = outset.x;
+    const contentY = outset.y;
+    const contentWidth = Math.max(1, width - outset.x * 2);
+    const contentHeight = Math.max(1, height - outset.y * 2);
+    const lines = wrapTextLines(context, text, contentWidth).filter(
+      (_, index) => TEXT_PADDING_Y + index * preset.lineHeight < contentHeight
+    );
     const lineWidths = lines.map((line) => context.measureText(line).width);
     if (renderStyle.backgroundColor && lines.length) {
       const paddingX = renderStyle.backgroundPaddingX || 12;
       const paddingY = renderStyle.backgroundPaddingY || 6;
-      const blockWidth = Math.min(width - 2, Math.max(...lineWidths, 1) + paddingX * 2);
-      const blockHeight = Math.min(height - 2, lines.length * preset.lineHeight + paddingY * 2);
+      const blockWidth = Math.min(Math.max(1, contentWidth - 2), Math.max(...lineWidths, 1) + paddingX * 2);
+      const blockHeight = Math.min(Math.max(1, contentHeight - 2), lines.length * preset.lineHeight + paddingY * 2);
       const rawBlockX =
         safeAlign === "center"
-          ? (width - blockWidth) / 2
+          ? contentX + (contentWidth - blockWidth) / 2
           : safeAlign === "right"
-            ? width - TEXT_PADDING_X - blockWidth
-            : TEXT_PADDING_X - paddingX;
+            ? contentX + contentWidth - TEXT_PADDING_X - blockWidth
+            : contentX + TEXT_PADDING_X - paddingX;
       const blockX = clamp(rawBlockX, 1, Math.max(1, width - blockWidth - 1));
-      const blockY = Math.max(1, TEXT_PADDING_Y - paddingY * 0.65);
+      const blockY = Math.max(1, contentY + TEXT_PADDING_Y - paddingY * 0.65);
       context.save();
       if (renderStyle.shadowColor) {
         context.shadowColor = renderStyle.shadowColor;
@@ -84,13 +92,13 @@ export function createRenderer(deps) {
     }
 
     for (const [index, line] of lines.entries()) {
-      const y = TEXT_PADDING_Y + index * preset.lineHeight;
+      const y = contentY + TEXT_PADDING_Y + index * preset.lineHeight;
       const x =
         safeAlign === "center"
-          ? width / 2
+          ? contentX + contentWidth / 2
           : safeAlign === "right"
-            ? width - TEXT_PADDING_X
-            : TEXT_PADDING_X;
+            ? contentX + contentWidth - TEXT_PADDING_X
+            : contentX + TEXT_PADDING_X;
       if (renderStyle.shadowColor && !renderStyle.backgroundColor) {
         context.shadowColor = renderStyle.shadowColor;
         context.shadowBlur = renderStyle.shadowBlur || 0;
