@@ -259,6 +259,22 @@ fn command_name_runs(name: &str, version_arg: &str) -> bool {
         .unwrap_or(false)
 }
 
+fn command_supports_filter(command_path: &Path, filter_name: &str) -> bool {
+    let output = Command::new(command_path)
+        .args(["-hide_banner", "-filters"])
+        .output();
+    let Ok(output) = output else {
+        return false;
+    };
+    if !output.status.success() {
+        return false;
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    stdout
+        .lines()
+        .any(|line| line.split_whitespace().nth(1) == Some(filter_name))
+}
+
 fn find_tool(name: &str, env_name: &str, version_arg: &str) -> Result<PathBuf, String> {
     if let Ok(configured) = env::var(env_name) {
         let path = PathBuf::from(configured);
@@ -1545,6 +1561,7 @@ pub(crate) fn export_video(
         let width = even_dimension(payload.slides[0].width);
         let height = even_dimension(payload.slides[0].height);
         let fonts_dir = resolve_fonts_dir(&app);
+        let subtitles_filter_supported = command_supports_filter(&ffmpeg, "subtitles");
 
         let mut prepared_slides = Vec::new();
         for (index, slide) in payload.slides.iter().enumerate() {
@@ -1686,21 +1703,23 @@ pub(crate) fn export_video(
                 }
             }
             let gif_overlays = prepare_gif_overlays(&work_dir, index, slide.gif_overlays.as_ref())?;
-            let subtitle_filter =
-                if slide.subtitle_enabled.unwrap_or(false) && !subtitle_segments.is_empty() {
-                    let subtitle_path = work_dir.join(format!("subtitles-{index:04}.ass"));
-                    write_ass_subtitles(
-                        &subtitle_path,
-                        &subtitle_segments,
-                        width,
-                        height,
-                        slide.subtitle_size,
-                        slide.subtitle_y,
-                    )?;
-                    Some(build_subtitle_filter(&subtitle_path, fonts_dir.as_deref()))
-                } else {
-                    None
-                };
+            let subtitle_filter = if subtitles_filter_supported
+                && slide.subtitle_enabled.unwrap_or(false)
+                && !subtitle_segments.is_empty()
+            {
+                let subtitle_path = work_dir.join(format!("subtitles-{index:04}.ass"));
+                write_ass_subtitles(
+                    &subtitle_path,
+                    &subtitle_segments,
+                    width,
+                    height,
+                    slide.subtitle_size,
+                    slide.subtitle_y,
+                )?;
+                Some(build_subtitle_filter(&subtitle_path, fonts_dir.as_deref()))
+            } else {
+                None
+            };
             prepared_slides.push(PreparedSlide {
                 frame_path,
                 animation_frame_paths,
