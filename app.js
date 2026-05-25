@@ -211,7 +211,6 @@ const textStyleButtons = [...document.querySelectorAll("[data-text-style]")];
 const textAlignButtons = [...document.querySelectorAll("[data-text-align]")];
 const animationInButtons = [...document.querySelectorAll("[data-animation-in]")];
 const animationLoopButtons = [...document.querySelectorAll("[data-animation-loop]")];
-const animationOutButtons = [...document.querySelectorAll("[data-animation-out]")];
 const animationSpeedButtons = [...document.querySelectorAll("[data-animation-speed]")];
 const animationMoveButtons = [...document.querySelectorAll("[data-animation-move]")];
 const animationMoveEasingButtons = [...document.querySelectorAll("[data-animation-move-easing]")];
@@ -438,11 +437,6 @@ const ANIMATION_LOOP_PRESETS = {
   pulse: { label: "Pulse" },
   blink: { label: "Blink" },
   float: { label: "Float" },
-};
-const ANIMATION_OUT_PRESETS = {
-  none: { label: "None" },
-  fade: { label: "Fade" },
-  shrink: { label: "Shrink" },
 };
 const ANIMATION_SPEED_PRESETS = {
   slow: { label: "Slow" },
@@ -1130,8 +1124,8 @@ function sanitizeAnimationLoop(value) {
   return ANIMATION_LOOP_PRESETS[value] ? value : DEFAULT_ANIMATION_LOOP;
 }
 
-function sanitizeAnimationOut(value) {
-  return ANIMATION_OUT_PRESETS[value] ? value : DEFAULT_ANIMATION_OUT;
+function sanitizeAnimationOut() {
+  return DEFAULT_ANIMATION_OUT;
 }
 
 function sanitizeAnimationSpeed(value) {
@@ -1175,7 +1169,6 @@ function hasObjectAnimation(data = {}) {
   return (
     config.animationIn !== DEFAULT_ANIMATION_IN ||
     config.animationLoop !== DEFAULT_ANIMATION_LOOP ||
-    config.animationOut !== DEFAULT_ANIMATION_OUT ||
     config.animationMove !== DEFAULT_ANIMATION_MOVE
   );
 }
@@ -1204,7 +1197,7 @@ function setDefaultAnimationDataset(element) {
 function setAnimationDatasetFromData(element, data = {}) {
   element.dataset.animationIn = sanitizeAnimationIn(data.animationIn);
   element.dataset.animationLoop = sanitizeAnimationLoop(data.animationLoop);
-  element.dataset.animationOut = sanitizeAnimationOut(data.animationOut);
+  element.dataset.animationOut = DEFAULT_ANIMATION_OUT;
   element.dataset.animationSpeed = sanitizeAnimationSpeed(data.animationSpeed);
   element.dataset.animationMove = sanitizeAnimationMove(data.animationMove);
   element.dataset.animationMoveFromX = String(sanitizeAnimationMoveCoordinate(data.animationMoveFromX));
@@ -1505,29 +1498,20 @@ function getObjectAnimationState(object, timeSeconds = 0, durationSeconds = VIDE
         float: 2.4,
       }[config.animationLoop] * periodFactor;
     const phase = (time % period) / period;
-    const wave = Math.sin(phase * Math.PI * 2);
+    const angle = phase * Math.PI * 2;
+    const wave = Math.sin(angle);
+    const riseAndFall = (1 - Math.cos(angle)) / 2;
     if (config.animationLoop === "spin") {
       state.rotation += phase * 360;
     } else if (config.animationLoop === "shake") {
       state.x += wave * 5;
       state.rotation += wave * 1.5;
     } else if (config.animationLoop === "pulse") {
-      state.scale *= 1 + ((1 - Math.cos(phase * Math.PI * 2)) / 2) * 0.08;
+      state.scale *= 1 + riseAndFall * 0.08;
     } else if (config.animationLoop === "blink") {
-      state.opacity *= 0.625 + Math.cos(phase * Math.PI * 2) * 0.375;
+      state.opacity *= 1 - riseAndFall * 0.75;
     } else if (config.animationLoop === "float") {
       state.y += wave * 8;
-    }
-  }
-
-  const outDuration = 0.45;
-  if (time > duration - outDuration) {
-    const progress = clamp((time - (duration - outDuration)) / outDuration, 0, 1);
-    if (config.animationOut === "fade") {
-      state.opacity *= 1 - progress;
-    } else if (config.animationOut === "shrink") {
-      state.opacity *= 1 - progress;
-      state.scale *= 1 - progress * 0.15;
     }
   }
 
@@ -1867,7 +1851,7 @@ function syncSelectedInputs() {
   for (const button of textAlignButtons) {
     button.disabled = !hasTextSelection;
   }
-  for (const button of [...animationInButtons, ...animationLoopButtons, ...animationOutButtons, ...animationSpeedButtons]) {
+  for (const button of [...animationInButtons, ...animationLoopButtons, ...animationSpeedButtons]) {
     button.disabled = !hasAnimationSelection;
   }
   for (const button of [...animationMoveButtons, ...animationMoveEasingButtons, ...animationMovePointButtons]) {
@@ -1894,7 +1878,6 @@ function syncSelectedInputs() {
     syncAnimationButtons({
       animationIn: DEFAULT_ANIMATION_IN,
       animationLoop: DEFAULT_ANIMATION_LOOP,
-      animationOut: DEFAULT_ANIMATION_OUT,
       animationSpeed: DEFAULT_ANIMATION_SPEED,
       animationMove: DEFAULT_ANIMATION_MOVE,
       animationMoveEasing: DEFAULT_ANIMATION_MOVE_EASING,
@@ -1956,7 +1939,6 @@ function setActiveAnimationButtons(buttons, dataKey, value) {
 function syncAnimationButtons(config) {
   setActiveAnimationButtons(animationInButtons, "animationIn", sanitizeAnimationIn(config?.animationIn));
   setActiveAnimationButtons(animationLoopButtons, "animationLoop", sanitizeAnimationLoop(config?.animationLoop));
-  setActiveAnimationButtons(animationOutButtons, "animationOut", sanitizeAnimationOut(config?.animationOut));
   setActiveAnimationButtons(animationSpeedButtons, "animationSpeed", sanitizeAnimationSpeed(config?.animationSpeed));
   setActiveAnimationButtons(animationMoveButtons, "animationMove", sanitizeAnimationMove(config?.animationMove));
   setActiveAnimationButtons(
@@ -3047,18 +3029,11 @@ function drawSubtitleBox(context, text, width, height, options = {}) {
   context.restore();
 }
 
-function splitNotesForExport(notes) {
-  const cleanText = String(notes || "").replace(/\r\n/g, "\n").trim();
-  if (!cleanText) {
-    return [];
-  }
-  return cleanText
-    .split(/\n\s*\n+/)
-    .map((segment) => segment.trim())
-    .filter(Boolean);
+function getExportNotesText(notes) {
+  return String(notes || "").replace(/\r\n/g, "\n").trim();
 }
 
-function estimateNoteSegmentDuration(notes) {
+function estimateNoteFrameDuration(notes) {
   const text = String(notes || "").trim();
   if (!text) {
     return VIDEO_EXPORT_FALLBACK_DURATION;
@@ -3067,31 +3042,22 @@ function estimateNoteSegmentDuration(notes) {
   return clamp(characterCount / 7 + 1.2, VIDEO_EXPORT_FALLBACK_DURATION, DYNAMIC_MAX_DURATION);
 }
 
-function getSlideVisualTimelineDuration(slide) {
-  return Math.max(isDynamicSlide(slide) ? getDynamicSlideDuration(slide) : 0, getSlideObjectAnimationDuration(slide));
+function slideHasLoopAnimations(slide) {
+  return (slide?.objects || []).some(
+    (object) => canAnimateObjectData(object) && getObjectAnimationConfig(object).animationLoop !== DEFAULT_ANIMATION_LOOP
+  );
 }
 
-function getSlideExportTimelinePlan(slide, noteSegments) {
-  const segmentDurations = noteSegments.map(estimateNoteSegmentDuration);
-  const hasTtsNotes = noteSegments.some((segment) => Boolean(String(segment || "").trim()));
-  const visualDuration = getSlideVisualTimelineDuration(slide);
-  const shouldExtendToVisual = !hasTtsNotes || (isDynamicSlide(slide) && normalizeContinueAfterTts(slide.continueAfterTts));
-  const estimatedAudioDuration = segmentDurations.reduce((total, duration) => total + duration, 0);
-  if (segmentDurations.length > 0 && shouldExtendToVisual && estimatedAudioDuration < visualDuration) {
-    segmentDurations[segmentDurations.length - 1] += visualDuration - estimatedAudioDuration;
+function getSlideAnimationFrameDuration(slide, notes = "") {
+  const visualDuration = Math.max(
+    isDynamicSlide(slide) ? getDynamicSlideDuration(slide) : VIDEO_EXPORT_FALLBACK_DURATION,
+    getSlideObjectAnimationDuration(slide),
+    VIDEO_EXPORT_FALLBACK_DURATION
+  );
+  if (slideHasLoopAnimations(slide) && String(notes || "").trim()) {
+    return Math.max(visualDuration, estimateNoteFrameDuration(notes));
   }
-
-  let offset = 0;
-  const segmentOffsets = segmentDurations.map((duration) => {
-    const currentOffset = offset;
-    offset += duration;
-    return currentOffset;
-  });
-  return {
-    segmentDurations,
-    segmentOffsets,
-    duration: Math.max(VIDEO_EXPORT_FALLBACK_DURATION, offset, visualDuration),
-  };
+  return visualDuration;
 }
 
 function getSubtitleTextForRender(slide, options = {}) {
@@ -3596,7 +3562,7 @@ async function renderDynamicSlideToDataUrl(slide, timeSeconds, options = {}) {
     timeSeconds,
     durationSeconds: Math.max(
       defaultObjectTimelineDuration,
-      numberOr(options.objectTimelineDurationSeconds, defaultObjectTimelineDuration)
+      numberOr(options.durationSeconds, defaultObjectTimelineDuration)
     ),
   });
   if (options.subtitles) {
@@ -3607,9 +3573,7 @@ async function renderDynamicSlideToDataUrl(slide, timeSeconds, options = {}) {
 
 async function renderDynamicSlideFrames(slide, options = {}) {
   const defaultDuration = Math.max(getDynamicSlideDuration(slide), getSlideObjectAnimationDuration(slide));
-  const duration = Math.max(0.5, numberOr(options.segmentDurationSeconds, defaultDuration));
-  const timelineOffset = Math.max(0, numberOr(options.timelineOffsetSeconds, 0));
-  const objectTimelineDuration = Math.max(defaultDuration, timelineOffset + duration, numberOr(options.objectTimelineDurationSeconds, defaultDuration));
+  const duration = Math.max(0.5, numberOr(options.durationSeconds, defaultDuration));
   const frameRate = DYNAMIC_FRAME_RATE;
   const frameCount = Math.max(2, Math.ceil(duration * frameRate));
   const frames = [];
@@ -3619,20 +3583,20 @@ async function renderDynamicSlideFrames(slide, options = {}) {
     if (index % frameRate === 0) {
       await new Promise((resolve) => window.requestAnimationFrame(resolve));
     }
-    const timeSeconds = timelineOffset + Math.min(duration, index / frameRate);
+    const timeSeconds = Math.min(duration, index / frameRate);
     frames.push(
       await renderDynamicSlideToDataUrl(slide, timeSeconds, {
         ...options,
         imageCache,
-        objectTimelineDurationSeconds: objectTimelineDuration,
+        durationSeconds: duration,
       })
     );
   }
   frames.push(
-    await renderDynamicSlideToDataUrl(slide, timelineOffset + duration, {
+    await renderDynamicSlideToDataUrl(slide, duration, {
       ...options,
       imageCache,
-      objectTimelineDurationSeconds: objectTimelineDuration,
+      durationSeconds: duration,
     })
   );
   return {
@@ -3648,9 +3612,7 @@ function slideHasObjectAnimations(slide) {
 }
 
 async function renderCanvasSlideAnimationFrames(slide, options = {}) {
-  const duration = Math.max(0.5, numberOr(options.segmentDurationSeconds, numberOr(options.durationSeconds, VIDEO_EXPORT_FALLBACK_DURATION)));
-  const timelineOffset = Math.max(0, numberOr(options.timelineOffsetSeconds, 0));
-  const timelineDuration = Math.max(duration + timelineOffset, numberOr(options.durationSeconds, duration));
+  const duration = Math.max(0.5, numberOr(options.durationSeconds, VIDEO_EXPORT_FALLBACK_DURATION));
   const frameRate = VIDEO_EXPORT_FPS;
   const frameCount = Math.max(2, Math.ceil(duration * frameRate));
   const frames = [];
@@ -3660,13 +3622,13 @@ async function renderCanvasSlideAnimationFrames(slide, options = {}) {
     if (index % frameRate === 0) {
       await new Promise((resolve) => window.requestAnimationFrame(resolve));
     }
-    const timeSeconds = timelineOffset + Math.min(duration, index / frameRate);
+    const timeSeconds = Math.min(duration, index / frameRate);
     frames.push(
       await renderSlideToDataUrl(slide, {
         ...options,
         imageCache,
         timeSeconds,
-        durationSeconds: timelineDuration,
+        durationSeconds: duration,
       })
     );
   }
@@ -3674,8 +3636,8 @@ async function renderCanvasSlideAnimationFrames(slide, options = {}) {
     await renderSlideToDataUrl(slide, {
       ...options,
       imageCache,
-      timeSeconds: timelineOffset + duration,
-      durationSeconds: timelineDuration,
+      timeSeconds: duration,
+      durationSeconds: duration,
     })
   );
   return {
@@ -6277,9 +6239,8 @@ async function exportProjectAsMp4() {
       const video = normalizeSlideVideo(slide.video);
       const startSound = normalizeSlideStartSound(slide.startSound);
       setExportModalProgress("Rendering", `슬라이드 ${index + 1} / ${slides.length} 렌더링 중입니다.`, index, slides.length);
-      const noteSegments = splitNotesForExport(slide.notes);
-      const exportNoteSegments = noteSegments.length ? noteSegments : [""];
-      const timelinePlan = getSlideExportTimelinePlan(slide, exportNoteSegments);
+      const notes = getExportNotesText(slide.notes);
+      const hasTtsNotes = Boolean(notes);
       const gifOverlays = getAnimatedGifOverlays(slide);
       const baseSlidePayload = {
         index,
@@ -6290,76 +6251,60 @@ async function exportProjectAsMp4() {
       };
       if (isDynamicSlide(slide)) {
         setExportModalProgress("Rendering", `슬라이드 ${index + 1} / ${slides.length} 타이핑 프레임을 만들고 있습니다.`, index, slides.length);
-        const continueAfterTts = normalizeContinueAfterTts(slide.continueAfterTts);
-        for (const [segmentIndex, segmentNotes] of exportNoteSegments.entries()) {
-          const hasTtsNotes = Boolean(segmentNotes?.trim());
-          const animation = await renderDynamicSlideFrames(slide, {
-            excludeAnimatedGifs: gifOverlays.length > 0,
-            subtitles: projectSettingsState.subtitleEnabled,
-            subtitleText: segmentNotes,
-            subtitleSize: projectSettingsState.subtitleSize,
-            subtitleY: projectSettingsState.subtitleY,
-            segmentDurationSeconds: timelinePlan.segmentDurations[segmentIndex],
-            timelineOffsetSeconds: timelinePlan.segmentOffsets[segmentIndex],
-            objectTimelineDurationSeconds: timelinePlan.duration,
+        const animation = await renderDynamicSlideFrames(slide, {
+          excludeAnimatedGifs: gifOverlays.length > 0,
+          subtitles: projectSettingsState.subtitleEnabled,
+          subtitleText: notes,
+          subtitleSize: projectSettingsState.subtitleSize,
+          subtitleY: projectSettingsState.subtitleY,
+          durationSeconds: getSlideAnimationFrameDuration(slide, notes),
+        });
+        renderedSlides.push({
+          ...baseSlidePayload,
+          notes,
+          startSoundPath: startSound?.path || null,
+          fitAnimationToDuration: false,
+          framePng: animation.framePng,
+          animationFrames: animation.frames,
+          frameRate: animation.frameRate,
+          animationDurationSeconds: animation.duration,
+          animationAffectsDuration: !hasTtsNotes,
+          ...(gifOverlays.length ? { gifOverlays } : {}),
+        });
+      } else {
+        const renderOptions = {
+          transparentBackground: Boolean(video),
+          excludeAnimatedGifs: gifOverlays.length > 0,
+          subtitles: projectSettingsState.subtitleEnabled,
+          subtitleText: notes,
+          subtitleSize: projectSettingsState.subtitleSize,
+          subtitleY: projectSettingsState.subtitleY,
+        };
+        if (slideHasObjectAnimations(slide)) {
+          const animation = await renderCanvasSlideAnimationFrames(slide, {
+            ...renderOptions,
+            durationSeconds: getSlideAnimationFrameDuration(slide, notes),
           });
           renderedSlides.push({
             ...baseSlidePayload,
-            notes: segmentNotes,
-            startSoundPath: segmentIndex === 0 ? startSound?.path || null : null,
-            endOnTtsEnd: hasTtsNotes ? !continueAfterTts : false,
-            fitAnimationToDuration: false,
+            notes,
+            startSoundPath: startSound?.path || null,
+            ...(gifOverlays.length ? { gifOverlays } : {}),
             framePng: animation.framePng,
             animationFrames: animation.frames,
             frameRate: animation.frameRate,
             animationDurationSeconds: animation.duration,
-            ...(gifOverlays.length ? { gifOverlays } : {}),
+            fitAnimationToDuration: false,
+            animationAffectsDuration: !hasTtsNotes,
           });
-        }
-      } else {
-        for (const [segmentIndex, segmentNotes] of exportNoteSegments.entries()) {
-          const hasTtsNotes = Boolean(segmentNotes?.trim());
-          const renderOptions = {
-            transparentBackground: Boolean(video),
-            excludeAnimatedGifs: gifOverlays.length > 0,
-            subtitles: projectSettingsState.subtitleEnabled,
-            subtitleText: segmentNotes,
-            subtitleSize: projectSettingsState.subtitleSize,
-            subtitleY: projectSettingsState.subtitleY,
-          };
-          if (slideHasObjectAnimations(slide)) {
-            const animation = await renderCanvasSlideAnimationFrames(slide, {
-              ...renderOptions,
-              segmentDurationSeconds: timelinePlan.segmentDurations[segmentIndex],
-              timelineOffsetSeconds: timelinePlan.segmentOffsets[segmentIndex],
-              durationSeconds: timelinePlan.duration,
-            });
-            renderedSlides.push({
-              ...baseSlidePayload,
-              notes: segmentNotes,
-              startSoundPath: segmentIndex === 0 ? startSound?.path || null : null,
-              ...(gifOverlays.length ? { gifOverlays } : {}),
-              framePng: animation.framePng,
-              animationFrames: animation.frames,
-              frameRate: animation.frameRate,
-              animationDurationSeconds: animation.duration,
-              fitAnimationToDuration: false,
-              animationAffectsDuration: !hasTtsNotes,
-            });
-          } else {
-            renderedSlides.push({
-              ...baseSlidePayload,
-              notes: segmentNotes,
-              startSoundPath: segmentIndex === 0 ? startSound?.path || null : null,
-              ...(gifOverlays.length
-                ? {
-                    gifOverlays,
-                    animationAffectsDuration: false,
-                  }
-                : {}),
-              framePng: await renderSlideToDataUrl(slide, renderOptions),
-            });
-          }
+        } else {
+          renderedSlides.push({
+            ...baseSlidePayload,
+            notes,
+            startSoundPath: startSound?.path || null,
+            ...(gifOverlays.length ? { gifOverlays } : {}),
+            framePng: await renderSlideToDataUrl(slide, renderOptions),
+          });
         }
       }
     }
@@ -6507,7 +6452,6 @@ function applySelectedAnimationChange(kind, value) {
     {
       in: "animationIn",
       loop: "animationLoop",
-      out: "animationOut",
       speed: "animationSpeed",
       move: "animationMove",
       moveEasing: "animationMoveEasing",
@@ -6521,13 +6465,11 @@ function applySelectedAnimationChange(kind, value) {
       ? sanitizeAnimationIn(value)
       : field === "animationLoop"
         ? sanitizeAnimationLoop(value)
-        : field === "animationOut"
-          ? sanitizeAnimationOut(value)
-          : field === "animationMove"
-            ? sanitizeAnimationMove(value)
-            : field === "animationMoveEasing"
-              ? sanitizeAnimationMoveEasing(value)
-              : sanitizeAnimationSpeed(value);
+        : field === "animationMove"
+          ? sanitizeAnimationMove(value)
+          : field === "animationMoveEasing"
+            ? sanitizeAnimationMoveEasing(value)
+            : sanitizeAnimationSpeed(value);
   const targets = selectedObjects.filter(canAnimateElement);
   for (const object of targets.length ? targets : [selectedObject]) {
     if (field === "animationMove" && nextValue === "move" && sanitizeAnimationMove(object.dataset.animationMove) !== "move") {
@@ -6803,9 +6745,6 @@ for (const button of animationInButtons) {
 }
 for (const button of animationLoopButtons) {
   button.addEventListener("click", () => applySelectedAnimationChange("loop", button.dataset.animationLoop));
-}
-for (const button of animationOutButtons) {
-  button.addEventListener("click", () => applySelectedAnimationChange("out", button.dataset.animationOut));
 }
 for (const button of animationSpeedButtons) {
   button.addEventListener("click", () => applySelectedAnimationChange("speed", button.dataset.animationSpeed));

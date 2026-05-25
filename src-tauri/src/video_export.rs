@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashSet,
     env, fs,
     io::Read,
     path::{Path, PathBuf},
@@ -33,7 +33,6 @@ pub(crate) struct VideoExportPayload {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct VideoExportSlide {
-    index: Option<usize>,
     width: u32,
     height: u32,
     notes: String,
@@ -97,10 +96,8 @@ pub(crate) struct PreparedSlide {
     frame_rate: f64,
     audio_path: PathBuf,
     video_path: Option<PathBuf>,
-    video_duration_seconds: Option<f64>,
     gif_overlays: Vec<PreparedGifOverlay>,
     duration_seconds: f64,
-    media_start_seconds: f64,
     fit_animation_to_duration: bool,
 }
 
@@ -221,10 +218,6 @@ fn quote_curl_value(value: &str) -> String {
 
 fn format_seconds(value: f64) -> String {
     format!("{:.3}", value.max(0.1))
-}
-
-fn format_offset_seconds(value: f64) -> String {
-    format!("{:.3}", value.max(0.0))
 }
 
 fn even_dimension(value: u32) -> u32 {
@@ -710,31 +703,6 @@ fn probe_audio_duration(ffprobe: &Path, path: &Path, fallback: f64) -> Result<f6
     Ok(text.trim().parse::<f64>().unwrap_or(fallback).max(0.5))
 }
 
-fn probe_media_duration(ffprobe: &Path, path: &Path) -> Option<f64> {
-    let output = Command::new(ffprobe)
-        .args([
-            "-v",
-            "error",
-            "-show_entries",
-            "format=duration",
-            "-of",
-            "default=noprint_wrappers=1:nokey=1",
-        ])
-        .arg(path)
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    let text = String::from_utf8_lossy(&output.stdout);
-    let duration = text.trim().parse::<f64>().ok()?;
-    if duration.is_finite() && duration > 0.1 {
-        Some(duration)
-    } else {
-        None
-    }
-}
-
 fn format_filter_number(value: f64) -> String {
     format!("{:.3}", value)
 }
@@ -797,31 +765,12 @@ fn prepare_gif_overlays(
     Ok(prepared)
 }
 
-fn append_looped_media_input(command: &mut Command, path: &Path, media_start_seconds: f64) {
-    command.args(["-stream_loop", "-1"]);
-    if media_start_seconds > 0.01 {
-        command
-            .arg("-ss")
-            .arg(format_offset_seconds(media_start_seconds));
-    }
-    command.arg("-i").arg(path);
-}
-
-fn looped_start_seconds(media_start_seconds: f64, media_duration_seconds: Option<f64>) -> f64 {
-    if let Some(duration) = media_duration_seconds.filter(|duration| *duration > 0.1) {
-        media_start_seconds % duration
-    } else {
-        media_start_seconds
-    }
-}
-
-fn append_gif_inputs(
-    command: &mut Command,
-    overlays: &[PreparedGifOverlay],
-    media_start_seconds: f64,
-) {
+fn append_gif_inputs(command: &mut Command, overlays: &[PreparedGifOverlay]) {
     for overlay in overlays {
-        append_looped_media_input(command, &overlay.path, media_start_seconds);
+        command
+            .args(["-stream_loop", "-1"])
+            .arg("-i")
+            .arg(&overlay.path);
     }
 }
 
@@ -931,11 +880,7 @@ fn create_static_segment(
             .arg(&prepared.frame_path)
             .arg("-i")
             .arg(&prepared.audio_path);
-        append_gif_inputs(
-            &mut command,
-            &prepared.gif_overlays,
-            prepared.media_start_seconds,
-        );
+        append_gif_inputs(&mut command, &prepared.gif_overlays);
         command
             .arg("-t")
             .arg(format_seconds(prepared.duration_seconds))
@@ -985,14 +930,11 @@ fn create_video_segment(
     let filter = format!(
         "[0:v]scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},setsar=1[bg];[1:v]scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=black@0,format=rgba[fg];[bg][fg]overlay=0:0,format=yuv420p[v]"
     );
-    let video_start_seconds = looped_start_seconds(
-        prepared.media_start_seconds,
-        prepared.video_duration_seconds,
-    );
     let mut command = Command::new(ffmpeg);
-    command.arg("-y");
-    append_looped_media_input(&mut command, video_path, video_start_seconds);
     command
+        .args(["-y", "-stream_loop", "-1"])
+        .arg("-i")
+        .arg(video_path)
         .args(["-loop", "1"])
         .arg("-i")
         .arg(&prepared.frame_path)
@@ -1030,19 +972,16 @@ fn create_video_segment(
         filter.push_str(&format!("[{final_label}]format=yuv420p[v]"));
 
         let mut command = Command::new(ffmpeg);
-        command.arg("-y");
-        append_looped_media_input(&mut command, video_path, video_start_seconds);
         command
+            .args(["-y", "-stream_loop", "-1"])
+            .arg("-i")
+            .arg(video_path)
             .args(["-loop", "1"])
             .arg("-i")
             .arg(&prepared.frame_path)
             .arg("-i")
             .arg(&prepared.audio_path);
-        append_gif_inputs(
-            &mut command,
-            &prepared.gif_overlays,
-            prepared.media_start_seconds,
-        );
+        append_gif_inputs(&mut command, &prepared.gif_overlays);
         command
             .arg("-t")
             .arg(format_seconds(prepared.duration_seconds))
@@ -1109,10 +1048,6 @@ fn create_animation_segment(
         format_seconds(stop_duration)
     );
     if let Some(video_path) = prepared.video_path.as_ref() {
-        let video_start_seconds = looped_start_seconds(
-            prepared.media_start_seconds,
-            prepared.video_duration_seconds,
-        );
         let mut filter = format!(
             "[0:v]scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},setsar=1[bg];[1:v]scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=black@0,tpad=stop_mode=clone:stop_duration={},format=rgba[fg];[bg][fg]overlay=0:0:format=auto[base0];",
             format_seconds(stop_duration)
@@ -1125,20 +1060,17 @@ fn create_animation_segment(
         filter.push_str(&format!("[{final_label}]format=yuv420p[v]"));
 
         let mut command = Command::new(ffmpeg);
-        command.arg("-y");
-        append_looped_media_input(&mut command, video_path, video_start_seconds);
         command
+            .args(["-y", "-stream_loop", "-1"])
+            .arg("-i")
+            .arg(video_path)
             .args(["-framerate"])
             .arg(format_seconds(input_frame_rate))
             .arg("-i")
             .arg(first_frame)
             .arg("-i")
             .arg(&prepared.audio_path);
-        append_gif_inputs(
-            &mut command,
-            &prepared.gif_overlays,
-            prepared.media_start_seconds,
-        );
+        append_gif_inputs(&mut command, &prepared.gif_overlays);
         command
             .arg("-t")
             .arg(format_seconds(prepared.duration_seconds))
@@ -1188,11 +1120,7 @@ fn create_animation_segment(
             .arg(first_frame)
             .arg("-i")
             .arg(&prepared.audio_path);
-        append_gif_inputs(
-            &mut command,
-            &prepared.gif_overlays,
-            prepared.media_start_seconds,
-        );
+        append_gif_inputs(&mut command, &prepared.gif_overlays);
         command
             .arg("-t")
             .arg(format_seconds(prepared.duration_seconds))
@@ -1338,7 +1266,6 @@ pub(crate) fn export_video(
         let height = even_dimension(payload.slides[0].height);
 
         let mut prepared_slides = Vec::new();
-        let mut slide_media_offsets: HashMap<usize, f64> = HashMap::new();
         for (index, slide) in payload.slides.iter().enumerate() {
             check_export_cancelled(&export_id)?;
             emit_export_progress(
@@ -1457,23 +1384,15 @@ pub(crate) fn export_video(
                     ));
                 }
             }
-            let video_duration_seconds = video_path
-                .as_ref()
-                .and_then(|path| probe_media_duration(&ffprobe, path));
             let gif_overlays = prepare_gif_overlays(&work_dir, index, slide.gif_overlays.as_ref())?;
-            let slide_key = slide.index.unwrap_or(index);
-            let media_start_seconds = slide_media_offsets.get(&slide_key).copied().unwrap_or(0.0);
-            slide_media_offsets.insert(slide_key, media_start_seconds + duration);
             prepared_slides.push(PreparedSlide {
                 frame_path,
                 animation_frame_paths,
                 frame_rate,
                 audio_path,
                 video_path,
-                video_duration_seconds,
                 gif_overlays,
                 duration_seconds: duration,
-                media_start_seconds,
                 fit_animation_to_duration: slide.fit_animation_to_duration.unwrap_or(false),
             });
         }
