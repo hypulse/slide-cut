@@ -399,6 +399,34 @@ const CANVAS_ALIGNMENT_LABELS = {
   bottom: "하단 중앙",
   "bottom-right": "우측 하단",
 };
+const DEFAULT_ANIMATION_IN = "none";
+const DEFAULT_ANIMATION_LOOP = "none";
+const DEFAULT_ANIMATION_OUT = "none";
+const DEFAULT_ANIMATION_SPEED = "normal";
+const ANIMATION_IN_PRESETS = {
+  none: { label: "None" },
+  fade: { label: "Fade" },
+  pop: { label: "Pop" },
+  slideUp: { label: "Slide Up" },
+};
+const ANIMATION_LOOP_PRESETS = {
+  none: { label: "None" },
+  spin: { label: "Spin" },
+  shake: { label: "Shake" },
+  pulse: { label: "Pulse" },
+  blink: { label: "Blink" },
+  float: { label: "Float" },
+};
+const ANIMATION_OUT_PRESETS = {
+  none: { label: "None" },
+  fade: { label: "Fade" },
+  shrink: { label: "Shrink" },
+};
+const ANIMATION_SPEED_PRESETS = {
+  slow: { label: "Slow" },
+  normal: { label: "Normal" },
+  fast: { label: "Fast" },
+};
 const MOVE_SNAP_SCREEN_THRESHOLD = 10;
 const SVG_NS = "http://www.w3.org/2000/svg";
 const PROJECT_FORMAT = "slide-cut-project";
@@ -873,9 +901,14 @@ const { serializeObject, serializeCurrentSlide, cloneProjectValue, normalizeProj
   sanitizeTextFontFamily,
   sanitizeTextFontWeight,
   sanitizeTextEffect,
+  sanitizeAnimationIn,
+  sanitizeAnimationLoop,
+  sanitizeAnimationOut,
+  sanitizeAnimationSpeed,
   sanitizeColor,
   sanitizeNumber,
   normalizeFlipFlag,
+  isAnimatedGifSource,
   sanitizeSlideKind,
   isDynamicSlide,
   normalizeContinueAfterTts,
@@ -1037,6 +1070,22 @@ function sanitizeTextEffect(value) {
 
 function sanitizeTextFontWeight(value, fallback = DEFAULT_TEXT_FONT_WEIGHT) {
   return clamp(numberOr(value, fallback), 100, 900);
+}
+
+function sanitizeAnimationIn(value) {
+  return ANIMATION_IN_PRESETS[value] ? value : DEFAULT_ANIMATION_IN;
+}
+
+function sanitizeAnimationLoop(value) {
+  return ANIMATION_LOOP_PRESETS[value] ? value : DEFAULT_ANIMATION_LOOP;
+}
+
+function sanitizeAnimationOut(value) {
+  return ANIMATION_OUT_PRESETS[value] ? value : DEFAULT_ANIMATION_OUT;
+}
+
+function sanitizeAnimationSpeed(value) {
+  return ANIMATION_SPEED_PRESETS[value] ? value : DEFAULT_ANIMATION_SPEED;
 }
 
 function quoteFontFamily(value) {
@@ -1617,6 +1666,10 @@ function addImageObject(src, naturalWidth = 300, naturalHeight = 200) {
   const position = centerPosition(width, height);
 
   element.dataset.id = `object-${++objectSeed}`;
+  element.dataset.animationIn = DEFAULT_ANIMATION_IN;
+  element.dataset.animationLoop = DEFAULT_ANIMATION_LOOP;
+  element.dataset.animationOut = DEFAULT_ANIMATION_OUT;
+  element.dataset.animationSpeed = DEFAULT_ANIMATION_SPEED;
   canvas.append(element);
   attachObjectEvents(element);
   applyState(element, { ...position, width, height, rotation: 0 });
@@ -1773,6 +1826,10 @@ function addTextObject(text, statusMessage = "텍스트를 붙여넣었습니다
   element.dataset.fontFamily = DEFAULT_TEXT_FONT_FAMILY;
   element.dataset.fontWeight = String(DEFAULT_TEXT_FONT_WEIGHT);
   element.dataset.textEffect = DEFAULT_TEXT_EFFECT;
+  element.dataset.animationIn = DEFAULT_ANIMATION_IN;
+  element.dataset.animationLoop = DEFAULT_ANIMATION_LOOP;
+  element.dataset.animationOut = DEFAULT_ANIMATION_OUT;
+  element.dataset.animationSpeed = DEFAULT_ANIMATION_SPEED;
   canvas.append(element);
   attachObjectEvents(element);
   wireTextEditor(element);
@@ -3583,6 +3640,10 @@ function addImageObjectFromData(data) {
   const element = imageTemplate.content.firstElementChild.cloneNode(true);
   const image = element.querySelector("img");
   element.dataset.id = `object-${++objectSeed}`;
+  element.dataset.animationIn = sanitizeAnimationIn(data.animationIn);
+  element.dataset.animationLoop = sanitizeAnimationLoop(data.animationLoop);
+  element.dataset.animationOut = sanitizeAnimationOut(data.animationOut);
+  element.dataset.animationSpeed = sanitizeAnimationSpeed(data.animationSpeed);
   image.src = getDisplayAssetUrl(data.src);
   image.dataset.src = data.src;
   canvas.append(element);
@@ -3601,6 +3662,10 @@ function addTextObjectFromData(data) {
   element.dataset.fontFamily = sanitizeTextFontFamily(data.fontFamily);
   element.dataset.fontWeight = String(sanitizeTextFontWeight(data.fontWeight));
   element.dataset.textEffect = sanitizeTextEffect(data.textEffect);
+  element.dataset.animationIn = sanitizeAnimationIn(data.animationIn);
+  element.dataset.animationLoop = sanitizeAnimationLoop(data.animationLoop);
+  element.dataset.animationOut = sanitizeAnimationOut(data.animationOut);
+  element.dataset.animationSpeed = sanitizeAnimationSpeed(data.animationSpeed);
   canvas.append(element);
   attachObjectEvents(element);
   wireTextEditor(element);

@@ -25,9 +25,14 @@ export function createProjectModel(deps) {
     sanitizeTextFontFamily,
     sanitizeTextFontWeight,
     sanitizeTextEffect,
+    sanitizeAnimationIn,
+    sanitizeAnimationLoop,
+    sanitizeAnimationOut,
+    sanitizeAnimationSpeed,
     sanitizeColor,
     sanitizeNumber,
     normalizeFlipFlag,
+    isAnimatedGifSource,
     sanitizeSlideKind,
     isDynamicSlide,
     normalizeContinueAfterTts,
@@ -42,6 +47,24 @@ export function createProjectModel(deps) {
     normalizeProjectSettings,
   } = deps;
 
+  function serializeAnimationData(object) {
+    return {
+      animationIn: sanitizeAnimationIn(object.dataset.animationIn),
+      animationLoop: sanitizeAnimationLoop(object.dataset.animationLoop),
+      animationOut: sanitizeAnimationOut(object.dataset.animationOut),
+      animationSpeed: sanitizeAnimationSpeed(object.dataset.animationSpeed),
+    };
+  }
+
+  function normalizeAnimationData(object) {
+    return {
+      animationIn: sanitizeAnimationIn(object.animationIn),
+      animationLoop: sanitizeAnimationLoop(object.animationLoop),
+      animationOut: sanitizeAnimationOut(object.animationOut),
+      animationSpeed: sanitizeAnimationSpeed(object.animationSpeed),
+    };
+  }
+
   function serializeObject(object) {
     const state = getState(object);
     const base = {
@@ -55,11 +78,13 @@ export function createProjectModel(deps) {
 
     if (object.dataset.type === "image") {
       const image = object.querySelector("img");
+      const src = image.dataset.src || image.currentSrc || image.src;
       return {
         ...base,
-        src: image.dataset.src || image.currentSrc || image.src,
+        src,
         flipX: state.flipX,
         flipY: state.flipY,
+        ...(isAnimatedGifSource(src) ? {} : serializeAnimationData(object)),
       };
     }
 
@@ -84,6 +109,7 @@ export function createProjectModel(deps) {
       fontFamily: sanitizeTextFontFamily(object.dataset.fontFamily),
       fontWeight: sanitizeTextFontWeight(object.dataset.fontWeight),
       textEffect: sanitizeTextEffect(object.dataset.textEffect),
+      ...serializeAnimationData(object),
     };
   }
 
@@ -135,6 +161,7 @@ export function createProjectModel(deps) {
         src: object.src,
         flipX: normalizeFlipFlag(object.flipX),
         flipY: normalizeFlipFlag(object.flipY),
+        ...(isAnimatedGifSource(object.src) ? {} : normalizeAnimationData(object)),
       };
     }
 
@@ -166,6 +193,7 @@ export function createProjectModel(deps) {
       fontFamily: sanitizeTextFontFamily(object.fontFamily),
       fontWeight: sanitizeTextFontWeight(object.fontWeight),
       textEffect: sanitizeTextEffect(object.textEffect),
+      ...normalizeAnimationData(object),
     };
   }
 
