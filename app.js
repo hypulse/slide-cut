@@ -202,6 +202,10 @@ const canvasAlignButtons = [...document.querySelectorAll("[data-canvas-align]")]
 const textSizeButtons = [...document.querySelectorAll("[data-text-size]")];
 const textStyleButtons = [...document.querySelectorAll("[data-text-style]")];
 const textAlignButtons = [...document.querySelectorAll("[data-text-align]")];
+const animationInButtons = [...document.querySelectorAll("[data-animation-in]")];
+const animationLoopButtons = [...document.querySelectorAll("[data-animation-loop]")];
+const animationOutButtons = [...document.querySelectorAll("[data-animation-out]")];
+const animationSpeedButtons = [...document.querySelectorAll("[data-animation-speed]")];
 const selectedTextColor = document.querySelector("#selectedTextColor");
 const duplicateSelected = document.querySelector("#duplicateSelected");
 const editSelectedText = document.querySelector("#editSelectedText");
@@ -260,6 +264,8 @@ let appSettingsState = {
 };
 let isTranslatingSlide = false;
 let defaultProjectExportDir = "";
+let objectAnimationPreviewFrame = null;
+let objectAnimationPreviewStart = 0;
 let projectSettingsState = {
   canvasWidth: 1280,
   canvasHeight: 720,
@@ -426,6 +432,11 @@ const ANIMATION_SPEED_PRESETS = {
   slow: { label: "Slow" },
   normal: { label: "Normal" },
   fast: { label: "Fast" },
+};
+const ANIMATION_SPEED_PERIOD_FACTORS = {
+  slow: 1.5,
+  normal: 1,
+  fast: 0.65,
 };
 const MOVE_SNAP_SCREEN_THRESHOLD = 10;
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -1088,6 +1099,31 @@ function sanitizeAnimationSpeed(value) {
   return ANIMATION_SPEED_PRESETS[value] ? value : DEFAULT_ANIMATION_SPEED;
 }
 
+function getObjectAnimationConfig(data = {}) {
+  return {
+    animationIn: sanitizeAnimationIn(data.animationIn),
+    animationLoop: sanitizeAnimationLoop(data.animationLoop),
+    animationOut: sanitizeAnimationOut(data.animationOut),
+    animationSpeed: sanitizeAnimationSpeed(data.animationSpeed),
+  };
+}
+
+function hasObjectAnimation(data = {}) {
+  const config = getObjectAnimationConfig(data);
+  return (
+    config.animationIn !== DEFAULT_ANIMATION_IN ||
+    config.animationLoop !== DEFAULT_ANIMATION_LOOP ||
+    config.animationOut !== DEFAULT_ANIMATION_OUT
+  );
+}
+
+function canAnimateObjectData(data = {}) {
+  if (data.type === "text") {
+    return true;
+  }
+  return data.type === "image" && !isAnimatedGifSource(data.src);
+}
+
 function quoteFontFamily(value) {
   return `"${String(value || DEFAULT_TEXT_FONT_FAMILY).replace(/"/g, "")}"`;
 }
@@ -1275,6 +1311,112 @@ function getState(element) {
   };
 }
 
+function getElementAnimationData(element) {
+  const state = getState(element);
+  const image = element.dataset.type === "image" ? element.querySelector("img") : null;
+  return {
+    type: element.dataset.type,
+    src: image?.dataset.src || image?.currentSrc || image?.src || "",
+    x: state.x,
+    y: state.y,
+    width: state.width,
+    height: state.height,
+    rotation: state.rotation,
+    animationIn: element.dataset.animationIn,
+    animationLoop: element.dataset.animationLoop,
+    animationOut: element.dataset.animationOut,
+    animationSpeed: element.dataset.animationSpeed,
+  };
+}
+
+function canAnimateElement(element) {
+  return Boolean(element) && canAnimateObjectData(getElementAnimationData(element));
+}
+
+function easeOutCubic(value) {
+  return 1 - Math.pow(1 - clamp(value, 0, 1), 3);
+}
+
+function getObjectAnimationState(object, timeSeconds = 0, durationSeconds = VIDEO_EXPORT_FALLBACK_DURATION) {
+  const base = {
+    x: numberOr(object.x, 0),
+    y: numberOr(object.y, 0),
+    width: Math.max(1, numberOr(object.width, 1)),
+    height: Math.max(1, numberOr(object.height, 1)),
+    rotation: numberOr(object.rotation, 0),
+    opacity: 1,
+    scale: 1,
+  };
+  if (!canAnimateObjectData(object) || !hasObjectAnimation(object)) {
+    return base;
+  }
+
+  const config = getObjectAnimationConfig(object);
+  const duration = Math.max(0.5, numberOr(durationSeconds, VIDEO_EXPORT_FALLBACK_DURATION));
+  const time = clamp(numberOr(timeSeconds, 0), 0, duration);
+  const state = { ...base };
+
+  if (config.animationIn === "fade" && time < 0.45) {
+    state.opacity *= clamp(time / 0.45, 0, 1);
+  } else if (config.animationIn === "pop" && time < 0.45) {
+    const progress = clamp(time / 0.45, 0, 1);
+    if (progress < 0.72) {
+      state.scale *= 0.82 + easeOutCubic(progress / 0.72) * 0.24;
+    } else {
+      state.scale *= 1.06 - easeOutCubic((progress - 0.72) / 0.28) * 0.06;
+    }
+  } else if (config.animationIn === "slideUp" && time < 0.5) {
+    state.y += (1 - easeOutCubic(time / 0.5)) * 28;
+  }
+
+  const periodFactor = ANIMATION_SPEED_PERIOD_FACTORS[config.animationSpeed] || 1;
+  if (config.animationLoop !== "none") {
+    const period =
+      {
+        spin: 4,
+        shake: 0.36,
+        pulse: 1.2,
+        blink: 1,
+        float: 2.4,
+      }[config.animationLoop] * periodFactor;
+    const phase = (time % period) / period;
+    const wave = Math.sin(phase * Math.PI * 2);
+    if (config.animationLoop === "spin") {
+      state.rotation += phase * 360;
+    } else if (config.animationLoop === "shake") {
+      state.x += wave * 5;
+      state.rotation += wave * 1.5;
+    } else if (config.animationLoop === "pulse") {
+      state.scale *= 1 + ((1 - Math.cos(phase * Math.PI * 2)) / 2) * 0.08;
+    } else if (config.animationLoop === "blink") {
+      state.opacity *= 0.625 + Math.cos(phase * Math.PI * 2) * 0.375;
+    } else if (config.animationLoop === "float") {
+      state.y += wave * 8;
+    }
+  }
+
+  const outDuration = 0.45;
+  if (time > duration - outDuration) {
+    const progress = clamp((time - (duration - outDuration)) / outDuration, 0, 1);
+    if (config.animationOut === "fade") {
+      state.opacity *= 1 - progress;
+    } else if (config.animationOut === "shrink") {
+      state.opacity *= 1 - progress;
+      state.scale *= 1 - progress * 0.15;
+    }
+  }
+
+  state.opacity = clamp(state.opacity, 0, 1);
+  return state;
+}
+
+function getAnimatedObjectTransform(animatedState, baseState) {
+  const translateX = animatedState.x - baseState.x;
+  const translateY = animatedState.y - baseState.y;
+  const scale = numberOr(animatedState.scale, 1);
+  return `translate(${translateX}px, ${translateY}px) rotate(${animatedState.rotation}deg) scale(${scale})`;
+}
+
 function getSnapGuideElements() {
   let vertical = canvas.querySelector(".snap-guide.vertical");
   let horizontal = canvas.querySelector(".snap-guide.horizontal");
@@ -1420,6 +1562,67 @@ function applyState(element, nextState) {
   }
 }
 
+function resetObjectAnimationPreview(element) {
+  const state = getState(element);
+  element.style.transform = `rotate(${state.rotation}deg)`;
+  element.style.opacity = "";
+}
+
+function updateObjectAnimationPreview(timeSeconds, durationSeconds) {
+  for (const element of canvas.querySelectorAll(".object")) {
+    const data = getElementAnimationData(element);
+    if (!canAnimateObjectData(data) || !hasObjectAnimation(data)) {
+      resetObjectAnimationPreview(element);
+      continue;
+    }
+    const animatedState = getObjectAnimationState(data, timeSeconds, durationSeconds);
+    element.style.transform = getAnimatedObjectTransform(animatedState, data);
+    element.style.opacity = String(animatedState.opacity);
+  }
+}
+
+function canvasHasObjectAnimations() {
+  return [...canvas.querySelectorAll(".object")].some((element) => {
+    const data = getElementAnimationData(element);
+    return canAnimateObjectData(data) && hasObjectAnimation(data);
+  });
+}
+
+function stopObjectAnimationPreview() {
+  if (objectAnimationPreviewFrame) {
+    window.cancelAnimationFrame(objectAnimationPreviewFrame);
+  }
+  objectAnimationPreviewFrame = null;
+  objectAnimationPreviewStart = 0;
+  for (const element of canvas.querySelectorAll(".object")) {
+    resetObjectAnimationPreview(element);
+  }
+}
+
+function runObjectAnimationPreview(timestamp) {
+  if (!canvasHasObjectAnimations()) {
+    stopObjectAnimationPreview();
+    return;
+  }
+  if (!objectAnimationPreviewStart) {
+    objectAnimationPreviewStart = timestamp;
+  }
+  const duration = VIDEO_EXPORT_FALLBACK_DURATION;
+  const time = ((timestamp - objectAnimationPreviewStart) / 1000) % duration;
+  updateObjectAnimationPreview(time, duration);
+  objectAnimationPreviewFrame = window.requestAnimationFrame(runObjectAnimationPreview);
+}
+
+function syncObjectAnimationPreview() {
+  if (!canvasHasObjectAnimations()) {
+    stopObjectAnimationPreview();
+    return;
+  }
+  if (!objectAnimationPreviewFrame) {
+    objectAnimationPreviewFrame = window.requestAnimationFrame(runObjectAnimationPreview);
+  }
+}
+
 function syncTextEditorValue(element, options = {}) {
   if (!element || element.dataset.type !== "text" || !element.classList.contains("is-editing")) {
     return false;
@@ -1511,6 +1714,7 @@ function syncSelectedInputs() {
   const hasTextSelection = selectedObject?.dataset.type === "text";
   const selectedImageObjects = selectedObjects.filter((object) => object.dataset.type === "image");
   const hasImageSelection = selectedImageObjects.length > 0;
+  const hasAnimationSelection = canAnimateElement(selectedObject);
   selectedPanel.classList.toggle("is-empty", !hasSelection);
   for (const input of [selectedX, selectedY, selectedW, selectedH, selectedR]) {
     input.disabled = !hasSelection;
@@ -1538,6 +1742,9 @@ function syncSelectedInputs() {
   for (const button of textAlignButtons) {
     button.disabled = !hasTextSelection;
   }
+  for (const button of [...animationInButtons, ...animationLoopButtons, ...animationOutButtons, ...animationSpeedButtons]) {
+    button.disabled = !hasAnimationSelection;
+  }
   duplicateSelected.disabled = !hasSelection;
   selectedTextColor.disabled = !hasTextSelection;
   editSelectedText.disabled = !hasTextSelection;
@@ -1553,6 +1760,12 @@ function syncSelectedInputs() {
     setActiveTextSizeButton("h3");
     setActiveTextStyleButton(DEFAULT_TEXT_EFFECT);
     setActiveTextAlignButton("left");
+    syncAnimationButtons({
+      animationIn: DEFAULT_ANIMATION_IN,
+      animationLoop: DEFAULT_ANIMATION_LOOP,
+      animationOut: DEFAULT_ANIMATION_OUT,
+      animationSpeed: DEFAULT_ANIMATION_SPEED,
+    });
     selectedTextColor.value = defaultTextColor;
     updateStatusBar();
     return;
@@ -1567,6 +1780,7 @@ function syncSelectedInputs() {
   setActiveTextSizeButton(selectedObject.dataset.textSize || "h3");
   setActiveTextStyleButton(selectedObject.dataset.textEffect || DEFAULT_TEXT_EFFECT);
   setActiveTextAlignButton(selectedObject.dataset.textAlign || "left");
+  syncAnimationButtons(getElementAnimationData(selectedObject));
   selectedTextColor.value = selectedObject.dataset.textColor || defaultTextColor;
   if (selectedObject.dataset.type === "shape") {
     strokeColor.value = sanitizeColor(selectedObject.dataset.strokeColor, DEFAULT_STROKE_COLOR);
@@ -1586,6 +1800,19 @@ function setActiveTextStyleButton(effectKey) {
   for (const button of textStyleButtons) {
     button.classList.toggle("is-active", button.dataset.textStyle === safeEffect);
   }
+}
+
+function setActiveAnimationButtons(buttons, dataKey, value) {
+  for (const button of buttons) {
+    button.classList.toggle("is-active", button.dataset[dataKey] === value);
+  }
+}
+
+function syncAnimationButtons(config) {
+  setActiveAnimationButtons(animationInButtons, "animationIn", sanitizeAnimationIn(config?.animationIn));
+  setActiveAnimationButtons(animationLoopButtons, "animationLoop", sanitizeAnimationLoop(config?.animationLoop));
+  setActiveAnimationButtons(animationOutButtons, "animationOut", sanitizeAnimationOut(config?.animationOut));
+  setActiveAnimationButtons(animationSpeedButtons, "animationSpeed", sanitizeAnimationSpeed(config?.animationSpeed));
 }
 
 function setActiveTextAlignButton(align) {
@@ -3630,6 +3857,7 @@ function getCanvasState() {
 }
 
 function clearCanvasObjects() {
+  stopObjectAnimationPreview();
   selectObject(null);
   for (const object of canvas.querySelectorAll(".object")) {
     object.remove();
@@ -3733,6 +3961,7 @@ function loadSlide(index, shouldSaveCurrent = true) {
   selectObject(null);
   fitCanvasToWorkspace();
   renderSlideList();
+  syncObjectAnimationPreview();
 }
 
 function getSlidePreviewMetrics(slide) {
@@ -4121,6 +4350,7 @@ function duplicateSelectedObjects() {
 
   selectObjects(copies);
   renderSlideList();
+  syncObjectAnimationPreview();
   setStatus(`${copies.length}개 오브젝트를 복제했습니다.`);
   recordHistory();
   return true;
@@ -4311,6 +4541,7 @@ function deleteSelectedObjects() {
   selectedObject = null;
   selectedObjects = [];
   syncSelectedInputs();
+  syncObjectAnimationPreview();
   setStatus("선택한 오브젝트를 삭제했습니다.");
   renderSlideList();
   recordHistory();
@@ -5951,6 +6182,38 @@ function applySelectedTextAlignChange(align) {
   recordHistory();
 }
 
+function applySelectedAnimationChange(kind, value) {
+  const field =
+    {
+      in: "animationIn",
+      loop: "animationLoop",
+      out: "animationOut",
+      speed: "animationSpeed",
+    }[kind] || "";
+  if (!field || !canAnimateElement(selectedObject)) {
+    return;
+  }
+
+  const nextValue =
+    field === "animationIn"
+      ? sanitizeAnimationIn(value)
+      : field === "animationLoop"
+        ? sanitizeAnimationLoop(value)
+        : field === "animationOut"
+          ? sanitizeAnimationOut(value)
+          : sanitizeAnimationSpeed(value);
+  const targets = selectedObjects.filter(canAnimateElement);
+  for (const object of targets.length ? targets : [selectedObject]) {
+    object.dataset[field] = nextValue;
+  }
+
+  syncAnimationButtons(getElementAnimationData(selectedObject));
+  syncObjectAnimationPreview();
+  renderSlideList();
+  setStatus(`${targets.length || 1}개 오브젝트의 애니메이션을 변경했습니다.`);
+  recordHistory();
+}
+
 function applyColorPreset(presetKey) {
   const preset = COLOR_PRESETS[presetKey];
   if (!preset) {
@@ -6157,6 +6420,18 @@ for (const button of textStyleButtons) {
 }
 for (const button of textAlignButtons) {
   button.addEventListener("click", () => applySelectedTextAlignChange(button.dataset.textAlign));
+}
+for (const button of animationInButtons) {
+  button.addEventListener("click", () => applySelectedAnimationChange("in", button.dataset.animationIn));
+}
+for (const button of animationLoopButtons) {
+  button.addEventListener("click", () => applySelectedAnimationChange("loop", button.dataset.animationLoop));
+}
+for (const button of animationOutButtons) {
+  button.addEventListener("click", () => applySelectedAnimationChange("out", button.dataset.animationOut));
+}
+for (const button of animationSpeedButtons) {
+  button.addEventListener("click", () => applySelectedAnimationChange("speed", button.dataset.animationSpeed));
 }
 selectedTextColor.addEventListener("input", () => applySelectedTextColorChange());
 selectedTextColor.addEventListener("change", () => applySelectedTextColorChange(true));

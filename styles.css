@@ -1358,10 +1358,19 @@ select {
 
 .text-size-buttons,
 .text-style-buttons,
+.animation-buttons,
 .chat-size-buttons {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 2px;
+}
+
+.animation-buttons {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.animation-buttons.wide {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .text-style-buttons {
@@ -1381,6 +1390,7 @@ select {
 
 .text-size-buttons button,
 .text-style-buttons button,
+.animation-buttons button,
 .chat-size-buttons button {
   height: 24px;
   border-radius: 3px;
@@ -1400,6 +1410,7 @@ select {
 
 .text-size-buttons button.is-active,
 .text-style-buttons button.is-active,
+.animation-buttons button.is-active,
 .chat-size-buttons button.is-active {
   border-color: var(--accent);
   background: var(--accent-soft);
@@ -1415,6 +1426,7 @@ select {
 
 .text-size-buttons button:disabled,
 .text-style-buttons button:disabled,
+.animation-buttons button:disabled,
 .chat-size-buttons button:disabled,
 .text-align-buttons button:disabled,
 .image-flip-buttons button:disabled {
