@@ -435,6 +435,13 @@ const ANIMATION_LOOP_PRESETS = {
   blink: { label: "Blink" },
   float: { label: "Float" },
 };
+const ANIMATION_LOOP_PERIOD_SECONDS = {
+  spin: 4,
+  shake: 0.36,
+  pulse: 1.2,
+  blink: 1,
+  float: 2.4,
+};
 const ANIMATION_SPEED_PRESETS = {
   slow: { label: "Slow" },
   normal: { label: "Normal" },
@@ -1597,6 +1604,15 @@ function hasLoopAnimation(data = {}) {
   return getObjectAnimationConfig(data).animationLoop !== DEFAULT_ANIMATION_LOOP;
 }
 
+function getLoopAnimationPeriod(data = {}) {
+  const config = getObjectAnimationConfig(data);
+  const basePeriod = ANIMATION_LOOP_PERIOD_SECONDS[config.animationLoop] || 0;
+  if (!basePeriod) {
+    return 0;
+  }
+  return basePeriod * (ANIMATION_SPEED_PERIOD_FACTORS[config.animationSpeed] || 1);
+}
+
 function getObjectOneShotAnimationDuration(data = {}) {
   return Math.max(getAnimationInDuration(data), getMoveAnimationDuration(data));
 }
@@ -1610,6 +1626,18 @@ function getCanvasObjectAnimationDuration() {
     0,
     ...[...canvas.querySelectorAll(".object")].map((element) => getObjectOneShotAnimationDuration(getElementAnimationData(element)))
   );
+}
+
+function getSlideLoopAnimationFrameDuration(slide) {
+  const periods = (slide?.objects || [])
+    .filter((object) => canAnimateObjectData(object) && hasLoopAnimation(object))
+    .map(getLoopAnimationPeriod)
+    .filter((period) => period > 0);
+  return Math.max(0.5, ...periods);
+}
+
+function shouldLoopAnimationFrames(slide) {
+  return !isDynamicSlide(slide) && slideHasLoopAnimations(slide) && getSlideObjectAnimationDuration(slide) <= 0;
 }
 
 function getObjectAnimationState(object, timeSeconds = 0, durationSeconds = VIDEO_EXPORT_FALLBACK_DURATION) {
@@ -1659,14 +1687,7 @@ function getObjectAnimationState(object, timeSeconds = 0, durationSeconds = VIDE
 
   const periodFactor = ANIMATION_SPEED_PERIOD_FACTORS[config.animationSpeed] || 1;
   if (config.animationLoop !== "none") {
-    const period =
-      {
-        spin: 4,
-        shake: 0.36,
-        pulse: 1.2,
-        blink: 1,
-        float: 2.4,
-      }[config.animationLoop] * periodFactor;
+    const period = (ANIMATION_LOOP_PERIOD_SECONDS[config.animationLoop] || 1) * periodFactor;
     const phase = (time % period) / period;
     const angle = phase * Math.PI * 2;
     const wave = Math.sin(angle);
@@ -1679,7 +1700,7 @@ function getObjectAnimationState(object, timeSeconds = 0, durationSeconds = VIDE
     } else if (config.animationLoop === "pulse") {
       state.scale *= 1 + riseAndFall * 0.08;
     } else if (config.animationLoop === "blink") {
-      state.opacity *= 1 - riseAndFall * 0.75;
+      state.opacity *= 1 - riseAndFall * 0.92;
     } else if (config.animationLoop === "float") {
       state.y += wave * 8;
     }
@@ -3874,14 +3895,16 @@ async function renderCanvasSlideAnimationFrames(slide, options = {}) {
       })
     );
   }
-  frames.push(
-    await renderSlideToDataUrl(slide, {
-      ...options,
-      imageCache,
-      timeSeconds: duration,
-      durationSeconds: duration,
-    })
-  );
+  if (!options.loopFrames) {
+    frames.push(
+      await renderSlideToDataUrl(slide, {
+        ...options,
+        imageCache,
+        timeSeconds: duration,
+        durationSeconds: duration,
+      })
+    );
+  }
   return {
     frames,
     frameRate,
@@ -6503,9 +6526,13 @@ async function exportProjectAsMp4() {
           subtitleY: projectSettingsState.subtitleY,
         };
         if (slideHasObjectAnimations(slide)) {
+          const loopAnimationFrames = shouldLoopAnimationFrames(slide);
           const animation = await renderCanvasSlideAnimationFrames(slide, {
             ...renderOptions,
-            durationSeconds: getSlideAnimationFrameDuration(slide, notes),
+            durationSeconds: loopAnimationFrames
+              ? getSlideLoopAnimationFrameDuration(slide)
+              : getSlideAnimationFrameDuration(slide, notes),
+            loopFrames: loopAnimationFrames,
           });
           renderedSlides.push({
             ...baseSlidePayload,
@@ -6515,6 +6542,7 @@ async function exportProjectAsMp4() {
             animationFrames: animation.frames,
             frameRate: animation.frameRate,
             animationDurationSeconds: animation.duration,
+            loopAnimationFrames,
             fitAnimationToDuration: false,
             animationAffectsDuration: !hasTtsNotes,
           });

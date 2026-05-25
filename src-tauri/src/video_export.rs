@@ -44,6 +44,7 @@ pub(crate) struct VideoExportSlide {
     animation_frames: Option<Vec<String>>,
     frame_rate: Option<f64>,
     animation_duration_seconds: Option<f64>,
+    loop_animation_frames: Option<bool>,
     end_on_tts_end: Option<bool>,
     fit_animation_to_duration: Option<bool>,
     animation_affects_duration: Option<bool>,
@@ -108,6 +109,7 @@ pub(crate) struct PreparedSlide {
     subtitle_filter: Option<String>,
     duration_seconds: f64,
     fit_animation_to_duration: bool,
+    loop_animation_frames: bool,
 }
 
 #[derive(Debug)]
@@ -1107,6 +1109,22 @@ fn append_subtitle_image_inputs(command: &mut Command, overlays: &[PreparedSubti
     }
 }
 
+fn append_animation_frame_input(
+    command: &mut Command,
+    prepared: &PreparedSlide,
+    input_frame_rate: f64,
+    first_frame: &Path,
+) {
+    if prepared.loop_animation_frames {
+        command.args(["-stream_loop", "-1"]);
+    }
+    command
+        .args(["-framerate"])
+        .arg(format_seconds(input_frame_rate))
+        .arg("-i")
+        .arg(first_frame);
+}
+
 fn append_gif_overlay_filters(
     filter: &mut String,
     base_label: &str,
@@ -1424,8 +1442,16 @@ fn create_animation_segment(
     } else {
         prepared.frame_rate.max(1.0)
     };
-    let frame_duration = frame_paths.len() as f64 / input_frame_rate.max(0.1);
-    let stop_duration = (prepared.duration_seconds - frame_duration).max(0.0);
+    let frame_duration = if prepared.loop_animation_frames {
+        prepared.duration_seconds
+    } else {
+        frame_paths.len() as f64 / input_frame_rate.max(0.1)
+    };
+    let stop_duration = if prepared.loop_animation_frames {
+        0.0
+    } else {
+        (prepared.duration_seconds - frame_duration).max(0.0)
+    };
     let filter = simple_video_filter(
         format!(
             "scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=white,tpad=stop_mode=clone:stop_duration={}",
@@ -1456,13 +1482,9 @@ fn create_animation_segment(
         command
             .args(["-y", "-stream_loop", "-1"])
             .arg("-i")
-            .arg(video_path)
-            .args(["-framerate"])
-            .arg(format_seconds(input_frame_rate))
-            .arg("-i")
-            .arg(first_frame)
-            .arg("-i")
-            .arg(&prepared.audio_path);
+            .arg(video_path);
+        append_animation_frame_input(&mut command, prepared, input_frame_rate, &first_frame);
+        command.arg("-i").arg(&prepared.audio_path);
         append_gif_inputs(&mut command, &prepared.gif_overlays);
         append_subtitle_image_inputs(&mut command, &prepared.subtitle_image_overlays);
         command
@@ -1513,13 +1535,9 @@ fn create_animation_segment(
         append_final_video_filter(&mut filter, &subtitle_label, prepared);
 
         let mut command = Command::new(ffmpeg);
-        command
-            .args(["-y", "-framerate"])
-            .arg(format_seconds(input_frame_rate))
-            .arg("-i")
-            .arg(first_frame)
-            .arg("-i")
-            .arg(&prepared.audio_path);
+        command.args(["-y"]);
+        append_animation_frame_input(&mut command, prepared, input_frame_rate, &first_frame);
+        command.arg("-i").arg(&prepared.audio_path);
         append_gif_inputs(&mut command, &prepared.gif_overlays);
         append_subtitle_image_inputs(&mut command, &prepared.subtitle_image_overlays);
         command
@@ -1568,13 +1586,9 @@ fn create_animation_segment(
         append_final_video_filter(&mut filter, &subtitle_label, prepared);
 
         let mut command = Command::new(ffmpeg);
-        command
-            .args(["-y", "-framerate"])
-            .arg(format_seconds(input_frame_rate))
-            .arg("-i")
-            .arg(first_frame)
-            .arg("-i")
-            .arg(&prepared.audio_path);
+        command.args(["-y"]);
+        append_animation_frame_input(&mut command, prepared, input_frame_rate, &first_frame);
+        command.arg("-i").arg(&prepared.audio_path);
         append_subtitle_image_inputs(&mut command, &prepared.subtitle_image_overlays);
         command
             .arg("-t")
@@ -1605,11 +1619,9 @@ fn create_animation_segment(
         return run_command(command, "타이핑 슬라이드 세그먼트 생성", export_id);
     }
     let mut command = Command::new(ffmpeg);
+    command.args(["-y"]);
+    append_animation_frame_input(&mut command, prepared, input_frame_rate, &first_frame);
     command
-        .args(["-y", "-framerate"])
-        .arg(format_seconds(input_frame_rate))
-        .arg("-i")
-        .arg(first_frame)
         .arg("-i")
         .arg(&prepared.audio_path)
         .arg("-t")
@@ -1899,6 +1911,7 @@ pub(crate) fn export_video(
                 subtitle_filter,
                 duration_seconds: duration,
                 fit_animation_to_duration: slide.fit_animation_to_duration.unwrap_or(false),
+                loop_animation_frames: slide.loop_animation_frames.unwrap_or(false),
             });
         }
 
