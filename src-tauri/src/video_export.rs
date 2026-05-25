@@ -39,12 +39,16 @@ pub(crate) struct VideoExportSlide {
     video_path: Option<String>,
     start_sound_path: Option<String>,
     frame_png: String,
+    tts_segments: Option<Vec<String>>,
     animation_frames: Option<Vec<String>>,
     frame_rate: Option<f64>,
     animation_duration_seconds: Option<f64>,
     end_on_tts_end: Option<bool>,
     fit_animation_to_duration: Option<bool>,
     animation_affects_duration: Option<bool>,
+    subtitle_enabled: Option<bool>,
+    subtitle_size: Option<f64>,
+    subtitle_y: Option<f64>,
     gif_overlays: Option<Vec<GifOverlay>>,
 }
 
@@ -97,8 +101,16 @@ pub(crate) struct PreparedSlide {
     audio_path: PathBuf,
     video_path: Option<PathBuf>,
     gif_overlays: Vec<PreparedGifOverlay>,
+    subtitle_filter: Option<String>,
     duration_seconds: f64,
     fit_animation_to_duration: bool,
+}
+
+#[derive(Debug)]
+pub(crate) struct PreparedSubtitleSegment {
+    text: String,
+    start_seconds: f64,
+    end_seconds: f64,
 }
 
 #[derive(Debug)]
@@ -703,6 +715,242 @@ fn probe_audio_duration(ffprobe: &Path, path: &Path, fallback: f64) -> Result<f6
     Ok(text.trim().parse::<f64>().unwrap_or(fallback).max(0.5))
 }
 
+fn split_notes_for_tts(notes: &str) -> Vec<String> {
+    notes
+        .replace("\r\n", "\n")
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(ToString::to_string)
+        .collect()
+}
+
+fn get_slide_tts_segments(slide: &VideoExportSlide) -> Vec<String> {
+    let segments = slide
+        .tts_segments
+        .as_ref()
+        .map(|segments| {
+            segments
+                .iter()
+                .map(|segment| segment.trim())
+                .filter(|segment| !segment.is_empty())
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    if segments.is_empty() {
+        split_notes_for_tts(&slide.notes)
+    } else {
+        segments
+    }
+}
+
+fn concat_tts_audio_segments(
+    ffmpeg: &Path,
+    work_dir: &Path,
+    slide_index: usize,
+    paths: &[PathBuf],
+    export_id: &str,
+) -> Result<PathBuf, String> {
+    if paths.is_empty() {
+        return Err("연결할 TTS 오디오가 없습니다.".to_string());
+    }
+    if paths.len() == 1 {
+        return Ok(paths[0].clone());
+    }
+
+    let filelist_path = work_dir.join(format!("tts-segments-{slide_index:04}.txt"));
+    let output_path = work_dir.join(format!("tts-combined-{slide_index:04}.m4a"));
+    let mut filelist = String::new();
+    for path in paths {
+        let path = path.to_string_lossy().replace('\'', "'\\''");
+        filelist.push_str(&format!("file '{}'\n", path));
+    }
+    fs::write(&filelist_path, filelist).map_err(|error| error.to_string())?;
+
+    let mut command = Command::new(ffmpeg);
+    command
+        .args(["-y", "-f", "concat", "-safe", "0"])
+        .arg("-i")
+        .arg(&filelist_path)
+        .args([
+            "-vn",
+            "-ar",
+            EXPORT_AUDIO_SAMPLE_RATE,
+            "-ac",
+            EXPORT_AUDIO_CHANNELS,
+            "-c:a",
+            "aac",
+            "-b:a",
+            "192k",
+        ])
+        .arg(&output_path);
+    run_command(command, "TTS 오디오 조각 병합", export_id)?;
+    Ok(output_path)
+}
+
+fn ass_timestamp(seconds: f64) -> String {
+    let total_centiseconds = (seconds.max(0.0) * 100.0).round() as u64;
+    let centiseconds = total_centiseconds % 100;
+    let total_seconds = total_centiseconds / 100;
+    let seconds = total_seconds % 60;
+    let total_minutes = total_seconds / 60;
+    let minutes = total_minutes % 60;
+    let hours = total_minutes / 60;
+    format!("{hours}:{minutes:02}:{seconds:02}.{centiseconds:02}")
+}
+
+fn subtitle_font_size(width: u32, size_percent: Option<f64>) -> f64 {
+    let base = ((width as f64) * 0.032).round().clamp(22.0, 34.0);
+    let scale = size_percent.unwrap_or(100.0).clamp(40.0, 220.0) / 100.0;
+    (base * scale).round().clamp(14.0, 72.0)
+}
+
+fn subtitle_char_units(character: char) -> f64 {
+    if character.is_ascii_whitespace() {
+        0.35
+    } else if character.is_ascii() {
+        0.56
+    } else {
+        1.0
+    }
+}
+
+fn escape_ass_text(value: &str) -> String {
+    value
+        .replace('\\', "\\\\")
+        .replace('{', "\\{")
+        .replace('}', "\\}")
+}
+
+fn wrap_ass_subtitle_text(text: &str, width: u32, font_size: f64) -> String {
+    let max_units = ((width as f64) * 0.74 / font_size.max(1.0)).max(8.0);
+    let mut lines = Vec::new();
+    let mut current = String::new();
+    let mut current_units = 0.0;
+
+    for character in text.replace("\r\n", "\n").chars() {
+        if character == '\n' {
+            if !current.trim().is_empty() {
+                lines.push(current.trim().to_string());
+            }
+            current.clear();
+            current_units = 0.0;
+            continue;
+        }
+
+        let units = subtitle_char_units(character);
+        if current_units + units > max_units && !current.trim().is_empty() {
+            lines.push(current.trim().to_string());
+            current.clear();
+            current_units = 0.0;
+        }
+        current.push(character);
+        current_units += units;
+    }
+
+    if !current.trim().is_empty() {
+        lines.push(current.trim().to_string());
+    }
+    if lines.is_empty() {
+        lines.push(text.trim().to_string());
+    }
+    if lines.len() > 2 {
+        lines.truncate(2);
+        if let Some(last) = lines.last_mut() {
+            last.push_str("...");
+        }
+    }
+    lines
+        .into_iter()
+        .map(|line| escape_ass_text(&line))
+        .collect::<Vec<_>>()
+        .join("\\N")
+}
+
+fn write_ass_subtitles(
+    path: &Path,
+    segments: &[PreparedSubtitleSegment],
+    width: u32,
+    height: u32,
+    size_percent: Option<f64>,
+    y_percent: Option<f64>,
+) -> Result<(), String> {
+    let font_size = subtitle_font_size(width, size_percent);
+    let y = ((height as f64) * y_percent.unwrap_or(90.0).clamp(5.0, 95.0) / 100.0)
+        .round()
+        .clamp(1.0, height as f64);
+    let margin_lr = ((width as f64) * 0.11).round() as u32;
+    let mut ass = format!(
+        "[Script Info]\nScriptType: v4.00+\nPlayResX: {width}\nPlayResY: {height}\nWrapStyle: 0\nScaledBorderAndShadow: yes\n\n[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\nStyle: Default,Pretendard,{font_size:.0},&H00FFFFFF,&H000000FF,&H00000000,&H33000000,-1,0,0,0,100,100,0,0,3,0,0,5,{margin_lr},{margin_lr},0,1\n\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
+    );
+
+    for segment in segments {
+        if segment.text.trim().is_empty() || segment.end_seconds <= segment.start_seconds {
+            continue;
+        }
+        let text = wrap_ass_subtitle_text(&segment.text, width, font_size);
+        ass.push_str(&format!(
+            "Dialogue: 0,{},{},Default,,0,0,0,,{{\\an5\\pos({:.0},{y:.0})}}{text}\n",
+            ass_timestamp(segment.start_seconds),
+            ass_timestamp(segment.end_seconds),
+            (width as f64) / 2.0
+        ));
+    }
+
+    fs::write(path, ass).map_err(|error| error.to_string())
+}
+
+fn resolve_fonts_dir(app: &AppHandle) -> Option<PathBuf> {
+    let resource_fonts = app
+        .path()
+        .resource_dir()
+        .ok()
+        .map(|path| path.join("fonts"));
+    if let Some(path) = resource_fonts {
+        if path.exists() {
+            return Some(path);
+        }
+    }
+    let local_fonts = env::current_dir()
+        .ok()
+        .map(|path| path.join("tauri-dist/fonts"));
+    local_fonts.filter(|path| path.exists())
+}
+
+fn escape_filter_path(path: &Path) -> String {
+    path.to_string_lossy()
+        .replace('\\', "\\\\")
+        .replace(':', "\\:")
+        .replace('\'', "\\'")
+}
+
+fn build_subtitle_filter(subtitle_path: &Path, fonts_dir: Option<&Path>) -> String {
+    let mut filter = format!("subtitles=filename='{}'", escape_filter_path(subtitle_path));
+    if let Some(fonts_dir) = fonts_dir {
+        filter.push_str(&format!(":fontsdir='{}'", escape_filter_path(fonts_dir)));
+    }
+    filter
+}
+
+fn simple_video_filter(base_filter: String, prepared: &PreparedSlide) -> String {
+    if let Some(subtitle_filter) = prepared.subtitle_filter.as_ref() {
+        format!("{base_filter},{subtitle_filter},format=yuv420p")
+    } else {
+        format!("{base_filter},format=yuv420p")
+    }
+}
+
+fn append_final_video_filter(filter: &mut String, input_label: &str, prepared: &PreparedSlide) {
+    if let Some(subtitle_filter) = prepared.subtitle_filter.as_ref() {
+        filter.push_str(&format!(
+            "[{input_label}]{subtitle_filter}[subtitle0];[subtitle0]format=yuv420p[v]"
+        ));
+    } else {
+        filter.push_str(&format!("[{input_label}]format=yuv420p[v]"));
+    }
+}
+
 fn format_filter_number(value: f64) -> String {
     format!("{:.3}", value)
 }
@@ -832,8 +1080,11 @@ fn create_static_segment(
     fps: u32,
     export_id: &str,
 ) -> Result<(), String> {
-    let filter = format!(
-        "scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=white,format=yuv420p"
+    let filter = simple_video_filter(
+        format!(
+            "scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=white"
+        ),
+        prepared,
     );
     let mut command = Command::new(ffmpeg);
     command
@@ -871,7 +1122,7 @@ fn create_static_segment(
         );
         let final_label =
             append_gif_overlay_filters(&mut filter, "base0", 2, &prepared.gif_overlays, fps);
-        filter.push_str(&format!("[{final_label}]format=yuv420p[v]"));
+        append_final_video_filter(&mut filter, &final_label, prepared);
 
         let mut command = Command::new(ffmpeg);
         command
@@ -927,9 +1178,10 @@ fn create_video_segment(
         .video_path
         .as_ref()
         .ok_or_else(|| "영상 소스 경로가 없습니다.".to_string())?;
-    let filter = format!(
-        "[0:v]scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},setsar=1[bg];[1:v]scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=black@0,format=rgba[fg];[bg][fg]overlay=0:0,format=yuv420p[v]"
+    let mut filter = format!(
+        "[0:v]scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},setsar=1[bg];[1:v]scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=black@0,format=rgba[fg];[bg][fg]overlay=0:0:format=auto[base0];"
     );
+    append_final_video_filter(&mut filter, "base0", prepared);
     let mut command = Command::new(ffmpeg);
     command
         .args(["-y", "-stream_loop", "-1"])
@@ -969,7 +1221,7 @@ fn create_video_segment(
         );
         let final_label =
             append_gif_overlay_filters(&mut filter, "base0", 3, &prepared.gif_overlays, fps);
-        filter.push_str(&format!("[{final_label}]format=yuv420p[v]"));
+        append_final_video_filter(&mut filter, &final_label, prepared);
 
         let mut command = Command::new(ffmpeg);
         command
@@ -1043,9 +1295,12 @@ fn create_animation_segment(
     };
     let frame_duration = frame_paths.len() as f64 / input_frame_rate.max(0.1);
     let stop_duration = (prepared.duration_seconds - frame_duration).max(0.0);
-    let filter = format!(
-        "scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=white,tpad=stop_mode=clone:stop_duration={},format=yuv420p",
-        format_seconds(stop_duration)
+    let filter = simple_video_filter(
+        format!(
+            "scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=white,tpad=stop_mode=clone:stop_duration={}",
+            format_seconds(stop_duration)
+        ),
+        prepared,
     );
     if let Some(video_path) = prepared.video_path.as_ref() {
         let mut filter = format!(
@@ -1057,7 +1312,7 @@ fn create_animation_segment(
         } else {
             append_gif_overlay_filters(&mut filter, "base0", 3, &prepared.gif_overlays, fps)
         };
-        filter.push_str(&format!("[{final_label}]format=yuv420p[v]"));
+        append_final_video_filter(&mut filter, &final_label, prepared);
 
         let mut command = Command::new(ffmpeg);
         command
@@ -1110,7 +1365,7 @@ fn create_animation_segment(
         );
         let final_label =
             append_gif_overlay_filters(&mut filter, "base0", 2, &prepared.gif_overlays, fps);
-        filter.push_str(&format!("[{final_label}]format=yuv420p[v]"));
+        append_final_video_filter(&mut filter, &final_label, prepared);
 
         let mut command = Command::new(ffmpeg);
         command
@@ -1245,7 +1500,7 @@ pub(crate) fn export_video(
         let needs_tts = payload
             .slides
             .iter()
-            .any(|slide| !slide.notes.trim().is_empty());
+            .any(|slide| !get_slide_tts_segments(slide).is_empty());
         check_export_cancelled(&export_id)?;
         let curl = if needs_tts {
             Some(find_tool("curl", "SLIDE_CUT_CURL", "--version")?)
@@ -1264,6 +1519,7 @@ pub(crate) fn export_video(
             .clamp(1.0, 30.0);
         let width = even_dimension(payload.slides[0].width);
         let height = even_dimension(payload.slides[0].height);
+        let fonts_dir = resolve_fonts_dir(&app);
 
         let mut prepared_slides = Vec::new();
         for (index, slide) in payload.slides.iter().enumerate() {
@@ -1326,21 +1582,41 @@ pub(crate) fn export_video(
                         .as_ref()
                         .map(|frames| frames.len() as f64 / frame_rate)
                 });
-            let trimmed_notes = slide.notes.trim();
-            let tts_audio_path = if trimmed_notes.is_empty() {
-                None
-            } else {
-                Some(generate_tts_audio(
+            let tts_segments = get_slide_tts_segments(slide);
+            let mut tts_audio_paths = Vec::new();
+            let mut subtitle_segments = Vec::new();
+            let mut tts_duration = 0.0;
+            for segment in &tts_segments {
+                let path = generate_tts_audio(
                     &app,
                     curl.as_ref().unwrap(),
                     &work_dir,
                     &payload.tts,
-                    trimmed_notes,
+                    segment,
+                    &export_id,
+                )?;
+                let segment_duration = probe_audio_duration(&ffprobe, &path, fallback_duration)?;
+                subtitle_segments.push(PreparedSubtitleSegment {
+                    text: segment.clone(),
+                    start_seconds: tts_duration,
+                    end_seconds: tts_duration + segment_duration,
+                });
+                tts_duration += segment_duration;
+                tts_audio_paths.push(path);
+            }
+            let tts_audio_path = if tts_audio_paths.is_empty() {
+                None
+            } else {
+                Some(concat_tts_audio_segments(
+                    &ffmpeg,
+                    &work_dir,
+                    index,
+                    &tts_audio_paths,
                     &export_id,
                 )?)
             };
-            let base_audio_duration = if let Some(path) = tts_audio_path.as_ref() {
-                probe_audio_duration(&ffprobe, path, fallback_duration)?
+            let base_audio_duration = if tts_audio_path.is_some() {
+                tts_duration.max(0.5)
             } else {
                 fallback_duration
             };
@@ -1385,6 +1661,21 @@ pub(crate) fn export_video(
                 }
             }
             let gif_overlays = prepare_gif_overlays(&work_dir, index, slide.gif_overlays.as_ref())?;
+            let subtitle_filter =
+                if slide.subtitle_enabled.unwrap_or(false) && !subtitle_segments.is_empty() {
+                    let subtitle_path = work_dir.join(format!("subtitles-{index:04}.ass"));
+                    write_ass_subtitles(
+                        &subtitle_path,
+                        &subtitle_segments,
+                        width,
+                        height,
+                        slide.subtitle_size,
+                        slide.subtitle_y,
+                    )?;
+                    Some(build_subtitle_filter(&subtitle_path, fonts_dir.as_deref()))
+                } else {
+                    None
+                };
             prepared_slides.push(PreparedSlide {
                 frame_path,
                 animation_frame_paths,
@@ -1392,6 +1683,7 @@ pub(crate) fn export_video(
                 audio_path,
                 video_path,
                 gif_overlays,
+                subtitle_filter,
                 duration_seconds: duration,
                 fit_animation_to_duration: slide.fit_animation_to_duration.unwrap_or(false),
             });

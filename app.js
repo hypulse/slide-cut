@@ -3068,6 +3068,17 @@ function getExportNotesText(notes) {
   return String(notes || "").replace(/\r\n/g, "\n").trim();
 }
 
+function splitNotesForTtsSegments(notes) {
+  const cleanText = getExportNotesText(notes);
+  if (!cleanText) {
+    return [];
+  }
+  return cleanText
+    .split(/\n+/)
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+}
+
 function estimateNoteFrameDuration(notes) {
   const text = String(notes || "").trim();
   if (!text) {
@@ -3587,7 +3598,7 @@ async function renderDynamicSlideToDataUrl(slide, timeSeconds, options = {}) {
   drawDynamicSlide(context, slide, exportCanvas.width, exportCanvas.height, timeSeconds, {
     ...options,
     subtitles: false,
-    reserveSubtitles: options.subtitles,
+    reserveSubtitles: options.subtitles || options.reserveSubtitles,
   });
   const defaultObjectTimelineDuration = Math.max(getDynamicSlideDuration(slide), getSlideObjectAnimationDuration(slide));
   await drawSlideObjectsForExport(context, slide.objects || [], {
@@ -6273,7 +6284,8 @@ async function exportProjectAsMp4() {
       const startSound = normalizeSlideStartSound(slide.startSound);
       setExportModalProgress("Rendering", `슬라이드 ${index + 1} / ${slides.length} 렌더링 중입니다.`, index, slides.length);
       const notes = getExportNotesText(slide.notes);
-      const hasTtsNotes = Boolean(notes);
+      const ttsSegments = splitNotesForTtsSegments(slide.notes);
+      const hasTtsNotes = ttsSegments.length > 0;
       const gifOverlays = getAnimatedGifOverlays(slide);
       const baseSlidePayload = {
         index,
@@ -6281,12 +6293,18 @@ async function exportProjectAsMp4() {
         height: roundedCanvasSize(slide.height),
         color: sanitizeColor(slide.color, "#ffffff"),
         videoPath: video?.path || null,
+        notes,
+        ttsSegments,
+        subtitleEnabled: projectSettingsState.subtitleEnabled,
+        subtitleSize: projectSettingsState.subtitleSize,
+        subtitleY: projectSettingsState.subtitleY,
       };
       if (isDynamicSlide(slide)) {
         setExportModalProgress("Rendering", `슬라이드 ${index + 1} / ${slides.length} 타이핑 프레임을 만들고 있습니다.`, index, slides.length);
         const animation = await renderDynamicSlideFrames(slide, {
           excludeAnimatedGifs: gifOverlays.length > 0,
-          subtitles: projectSettingsState.subtitleEnabled,
+          subtitles: false,
+          reserveSubtitles: projectSettingsState.subtitleEnabled,
           subtitleText: notes,
           subtitleSize: projectSettingsState.subtitleSize,
           subtitleY: projectSettingsState.subtitleY,
@@ -6294,7 +6312,6 @@ async function exportProjectAsMp4() {
         });
         renderedSlides.push({
           ...baseSlidePayload,
-          notes,
           startSoundPath: startSound?.path || null,
           fitAnimationToDuration: false,
           framePng: animation.framePng,
@@ -6308,7 +6325,7 @@ async function exportProjectAsMp4() {
         const renderOptions = {
           transparentBackground: Boolean(video),
           excludeAnimatedGifs: gifOverlays.length > 0,
-          subtitles: projectSettingsState.subtitleEnabled,
+          subtitles: false,
           subtitleText: notes,
           subtitleSize: projectSettingsState.subtitleSize,
           subtitleY: projectSettingsState.subtitleY,
@@ -6320,7 +6337,6 @@ async function exportProjectAsMp4() {
           });
           renderedSlides.push({
             ...baseSlidePayload,
-            notes,
             startSoundPath: startSound?.path || null,
             ...(gifOverlays.length ? { gifOverlays } : {}),
             framePng: animation.framePng,
@@ -6333,7 +6349,6 @@ async function exportProjectAsMp4() {
         } else {
           renderedSlides.push({
             ...baseSlidePayload,
-            notes,
             startSoundPath: startSound?.path || null,
             ...(gifOverlays.length ? { gifOverlays } : {}),
             framePng: await renderSlideToDataUrl(slide, renderOptions),
