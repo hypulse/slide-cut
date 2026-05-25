@@ -261,6 +261,7 @@ let nativeProjects = [];
 let nativeSaveTimer = null;
 let nativeSavePromise = null;
 let nativeSaveQueued = false;
+let nativeDraftDirty = false;
 let isLoadingNativeProject = false;
 let lastSaveState = "Ready";
 let activeTextEditObject = null;
@@ -2148,7 +2149,7 @@ async function ensureActiveProjectForAsset() {
   if (activeProjectId) {
     return activeProjectId;
   }
-  const record = await saveActiveNativeProject();
+  const record = await saveActiveNativeProject({ forceCreate: true });
   if (!record?.meta?.id) {
     throw new Error("이미지를 저장할 프로젝트를 만들지 못했습니다.");
   }
@@ -4953,6 +4954,10 @@ function applyMaterializedAssetPaths(savedData) {
   }
 }
 
+function shouldPersistActiveNativeProject(options = {}) {
+  return Boolean(activeProjectId || nativeDraftDirty || options.forceCreate);
+}
+
 async function saveActiveNativeProject(options = {}) {
   if (isLoadingNativeProject) {
     return null;
@@ -4962,6 +4967,10 @@ async function saveActiveNativeProject(options = {}) {
   if (nativeSavePromise) {
     nativeSaveQueued = true;
     return nativeSavePromise;
+  }
+  if (!shouldPersistActiveNativeProject(options)) {
+    setSaveState("Ready");
+    return null;
   }
 
   const payload = {
@@ -4976,6 +4985,7 @@ async function saveActiveNativeProject(options = {}) {
     .then(async (result) => {
       const record = normalizeProjectSaveRecord(result, payload.data);
       setActiveProjectMeta(record.meta);
+      nativeDraftDirty = false;
       applyMaterializedAssetPaths(record.data);
       await refreshNativeProjectList();
       setSaveState("Saved");
@@ -5007,6 +5017,9 @@ function isInteractiveChangeInProgress() {
 function scheduleNativeProjectSave() {
   if (isLoadingNativeProject) {
     return;
+  }
+  if (!activeProjectId) {
+    nativeDraftDirty = true;
   }
   setSaveState("Saving...");
   window.clearTimeout(nativeSaveTimer);
@@ -5150,7 +5163,7 @@ function applyProjectState(project) {
 }
 
 async function createNewNativeProject(options = {}) {
-  if (activeProjectId) {
+  if (!options.skipCurrentSave && shouldPersistActiveNativeProject()) {
     await saveActiveNativeProject();
   }
   isLoadingNativeProject = true;
@@ -5158,8 +5171,13 @@ async function createNewNativeProject(options = {}) {
   activeProjectName = "Untitled";
   projectNameInput.value = activeProjectName;
   resetToBlankProject();
+  nativeDraftDirty = false;
   isLoadingNativeProject = false;
-  await saveActiveNativeProject({ showStatus: !options.silent });
+  if (options.deferSave) {
+    setSaveState("Ready");
+  } else {
+    await saveActiveNativeProject({ showStatus: !options.silent, forceCreate: true });
+  }
   if (!options.silent) {
     hideProjectLibrary();
   }
@@ -5175,6 +5193,7 @@ async function openNativeProject(projectId, options = {}) {
     const project = normalizeProjectData(record.data);
     setActiveProjectMeta(record.meta);
     applyProjectState(project);
+    nativeDraftDirty = false;
     hideProjectLibrary();
     setStatus(`${activeProjectName} 프로젝트를 열었습니다.`);
   } catch (error) {
@@ -5221,7 +5240,7 @@ async function deleteNativeProject(projectId) {
         await openNativeProject(nativeProjects[0].id, { skipSave: true });
         projectLibrary.hidden = false;
       } else {
-        await createNewNativeProject({ silent: true });
+        await createNewNativeProject({ silent: true, skipCurrentSave: true, deferSave: true });
       }
     }
     setStatus("프로젝트를 삭제했습니다.");
@@ -5235,7 +5254,7 @@ async function initializeNativeMode() {
   setButtonLabel(openProject, "Import Project");
   await refreshNativeProjectList();
   if (nativeProjects.length === 0) {
-    await createNewNativeProject({ silent: true });
+    await createNewNativeProject({ silent: true, skipCurrentSave: true, deferSave: true });
     return;
   }
   projectLibrary.hidden = false;
@@ -5367,7 +5386,7 @@ function isRedoShortcut(event) {
 }
 
 async function saveProjectInternally() {
-  await saveActiveNativeProject({ showStatus: true });
+  await saveActiveNativeProject({ showStatus: true, forceCreate: true });
 }
 
 async function exportProjectFile() {
@@ -5400,7 +5419,7 @@ async function importNativeProjectFile() {
     activeProjectName = record.meta?.name || "Imported Project";
     projectNameInput.value = activeProjectName;
     applyProjectState(project);
-    await saveActiveNativeProject({ showStatus: true });
+    await saveActiveNativeProject({ showStatus: true, forceCreate: true });
   } catch (error) {
     setStatus(error?.message || "프로젝트 파일을 가져오지 못했습니다.");
   }
@@ -5418,7 +5437,7 @@ async function chooseVideoForCurrentSlide() {
       return;
     }
     if (!activeProjectId) {
-      await saveActiveNativeProject();
+      await saveActiveNativeProject({ forceCreate: true });
     }
     const importedAsset = activeProjectId
       ? await nativeApi.importProjectAsset(activeProjectId, path)
@@ -5455,7 +5474,7 @@ async function chooseSoundForCurrentSlide() {
       return;
     }
     if (!activeProjectId) {
-      await saveActiveNativeProject();
+      await saveActiveNativeProject({ forceCreate: true });
     }
     const importedAsset = activeProjectId
       ? await nativeApi.importProjectAsset(activeProjectId, path)
@@ -5491,7 +5510,7 @@ async function chooseBackgroundMusicForProject() {
       return;
     }
     if (!activeProjectId) {
-      await saveActiveNativeProject();
+      await saveActiveNativeProject({ forceCreate: true });
     }
     const importedAsset = activeProjectId
       ? await nativeApi.importProjectAsset(activeProjectId, path)
