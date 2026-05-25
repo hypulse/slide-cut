@@ -345,6 +345,10 @@ const TEXT_EFFECT_PRESETS = {
     shadowBlur: 0,
     shadowOffsetX: 5,
     shadowOffsetY: 5,
+    shadowLayerColor: "#ffd83d",
+    shadowLayerStrokeWidth: 9,
+    shadowLayerOffsetX: 7,
+    shadowLayerOffsetY: 7,
   },
   candyLabel: {
     label: "Candy Label",
@@ -1370,11 +1374,18 @@ function getTextEffectOutset(renderStyle = {}) {
     numberOr(renderStyle.backgroundStrokeWidth, 0) / 2
   );
   const shadowBlur = Math.max(0, numberOr(renderStyle.shadowBlur, 0));
-  const shadowX = Math.abs(numberOr(renderStyle.shadowOffsetX, 0));
-  const shadowY = Math.abs(numberOr(renderStyle.shadowOffsetY, 0));
+  const shadowLayerOutset = Math.max(0, numberOr(renderStyle.shadowLayerStrokeWidth, 0) / 2);
+  const shadowX = Math.max(
+    Math.abs(numberOr(renderStyle.shadowOffsetX, 0)),
+    Math.abs(numberOr(renderStyle.shadowLayerOffsetX, renderStyle.shadowOffsetX || 0))
+  );
+  const shadowY = Math.max(
+    Math.abs(numberOr(renderStyle.shadowOffsetY, 0)),
+    Math.abs(numberOr(renderStyle.shadowLayerOffsetY, renderStyle.shadowOffsetY || 0))
+  );
   return {
-    x: Math.ceil(strokeOutset + shadowBlur + shadowX),
-    y: Math.ceil(strokeOutset + shadowBlur + shadowY),
+    x: Math.ceil(Math.max(strokeOutset, shadowLayerOutset) + shadowBlur + shadowX),
+    y: Math.ceil(Math.max(strokeOutset, shadowLayerOutset) + shadowBlur + shadowY),
   };
 }
 

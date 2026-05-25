@@ -99,7 +99,24 @@ export function createRenderer(deps) {
           : safeAlign === "right"
             ? contentX + contentWidth - TEXT_PADDING_X
             : contentX + TEXT_PADDING_X;
-      if (renderStyle.shadowColor && !renderStyle.backgroundColor) {
+      const shadowLayerColor = renderStyle.backgroundColor ? "" : renderStyle.shadowLayerColor;
+      if (shadowLayerColor) {
+        const shadowX = Number(renderStyle.shadowLayerOffsetX ?? renderStyle.shadowOffsetX ?? 0) || 0;
+        const shadowY = Number(renderStyle.shadowLayerOffsetY ?? renderStyle.shadowOffsetY ?? 0) || 0;
+        context.save();
+        context.shadowColor = "transparent";
+        context.lineJoin = "round";
+        context.miterLimit = 2;
+        context.strokeStyle = shadowLayerColor;
+        context.fillStyle = shadowLayerColor;
+        context.lineWidth = renderStyle.shadowLayerStrokeWidth || renderStyle.strokeWidth || 0;
+        if (context.lineWidth) {
+          context.strokeText(line, x + shadowX, y + shadowY);
+        }
+        context.fillText(line, x + shadowX, y + shadowY);
+        context.restore();
+      }
+      if (renderStyle.shadowColor && !renderStyle.backgroundColor && !shadowLayerColor) {
         context.shadowColor = renderStyle.shadowColor;
         context.shadowBlur = renderStyle.shadowBlur || 0;
         context.shadowOffsetX = renderStyle.shadowOffsetX || 0;
