@@ -310,6 +310,9 @@ const DEFAULT_TEXT_FONT_FAMILY = "Pretendard";
 const DEFAULT_TEXT_FONT_WEIGHT = 600;
 const DEFAULT_TEXT_EFFECT = "clean";
 const TEXT_FONT_FAMILIES = new Set(["Pretendard", "Gmarket Sans", "Jua", "Black Han Sans", "Do Hyeon", "Noto Sans KR"]);
+const FONT_LOAD_SAMPLE_TEXT = "가나다라마바사아자차카타파하 ABC xyz 123";
+const TEXT_FONT_LOAD_SIZE = 32;
+const textFontLoadPromises = new Map();
 const DEFAULT_VIDEO_FIT = "fill";
 const VIDEO_FIT_MODES = {
   fill: { label: "Fill", objectFit: "cover" },
@@ -895,6 +898,7 @@ const { drawTextLines, drawGitTypingSlide, renderSlideToDataUrl } = createRender
   getDynamicSlideDuration,
   roundedCanvasSize,
   sanitizeColor,
+  ensureSlideFontsReady,
   drawSlideObjectsForExport,
   drawSubtitleBox,
   getSubtitleTextForRender,
@@ -1387,6 +1391,140 @@ function getTextEffectOutset(renderStyle = {}) {
     x: Math.ceil(Math.max(strokeOutset, shadowLayerOutset) + shadowBlur + shadowX),
     y: Math.ceil(Math.max(strokeOutset, shadowLayerOutset) + shadowBlur + shadowY),
   };
+}
+
+function getTextRenderFontRequest(data = {}) {
+  const renderStyle = getTextRenderStyle(data);
+  return {
+    family: renderStyle.fontFamily,
+    weight: renderStyle.fontWeight,
+  };
+}
+
+function getFontLoadKey(fontRequest) {
+  return `${fontRequest.family}:${fontRequest.weight}`;
+}
+
+function getFontLoadSpec(fontRequest) {
+  return `${fontRequest.weight} ${TEXT_FONT_LOAD_SIZE}px ${quoteFontFamily(fontRequest.family)}`;
+}
+
+function isDocumentFontReady(fontRequest) {
+  if (!document.fonts) {
+    return true;
+  }
+  try {
+    return document.fonts.check(getFontLoadSpec(fontRequest), FONT_LOAD_SAMPLE_TEXT);
+  } catch {
+    return false;
+  }
+}
+
+async function loadDocumentFont(fontRequest) {
+  if (!document.fonts || isDocumentFontReady(fontRequest)) {
+    return true;
+  }
+
+  const key = getFontLoadKey(fontRequest);
+  if (!textFontLoadPromises.has(key)) {
+    const promise = document.fonts
+      .load(getFontLoadSpec(fontRequest), FONT_LOAD_SAMPLE_TEXT)
+      .then((faces) => faces.length > 0)
+      .catch(() => false);
+    textFontLoadPromises.set(key, promise);
+  }
+
+  const loaded = await textFontLoadPromises.get(key);
+  try {
+    await document.fonts.ready;
+  } catch {
+    // A failed optional font should not block rendering/export entirely.
+  }
+  return loaded && isDocumentFontReady(fontRequest);
+}
+
+async function ensureTextFontsReady(fontRequests = []) {
+  const uniqueRequests = new Map();
+  for (const request of fontRequests) {
+    if (!request?.family) {
+      continue;
+    }
+    uniqueRequests.set(getFontLoadKey(request), request);
+  }
+  await Promise.all([...uniqueRequests.values()].map(loadDocumentFont));
+}
+
+function getSubtitleFontRequest() {
+  return { family: "Pretendard", weight: 700 };
+}
+
+function getSlideFontRequests(slide, options = {}) {
+  const requests = [];
+  if (isDynamicSlide(slide)) {
+    requests.push({ family: "Pretendard", weight: 600 }, { family: "Pretendard", weight: 700 });
+  }
+  for (const object of slide?.objects || []) {
+    if (object.type === "text") {
+      requests.push(getTextRenderFontRequest(object));
+    }
+  }
+  const subtitleText = typeof options.subtitleText === "string" ? options.subtitleText : slide?.notes;
+  if ((options.subtitles || options.reserveSubtitles) && String(subtitleText || "").trim()) {
+    requests.push(getSubtitleFontRequest());
+  }
+  return requests;
+}
+
+async function ensureSlideFontsReady(slide, options = {}) {
+  await ensureTextFontsReady(getSlideFontRequests(slide, options));
+}
+
+function getCanvasFontRequests(options = {}) {
+  const requests = [...canvas.querySelectorAll(".text-object")].map((element) =>
+    getTextRenderFontRequest({
+      fontFamily: element.dataset.fontFamily,
+      fontWeight: element.dataset.fontWeight,
+      textEffect: element.dataset.textEffect,
+      textColor: element.dataset.textColor,
+    })
+  );
+  if (options.subtitles && String(options.subtitleText || "").trim()) {
+    requests.push(getSubtitleFontRequest());
+  }
+  return requests;
+}
+
+async function ensureCanvasFontsReady(options = {}) {
+  await ensureTextFontsReady(getCanvasFontRequests(options));
+}
+
+function scheduleTextFontRerender(element) {
+  if (!element || element.dataset.type !== "text" || !document.fonts) {
+    return;
+  }
+  const fontRequest = getTextRenderFontRequest({
+    fontFamily: element.dataset.fontFamily,
+    fontWeight: element.dataset.fontWeight,
+    textEffect: element.dataset.textEffect,
+    textColor: element.dataset.textColor,
+  });
+  if (isDocumentFontReady(fontRequest)) {
+    delete element.dataset.pendingFontRender;
+    return;
+  }
+
+  const key = getFontLoadKey(fontRequest);
+  if (element.dataset.pendingFontRender === key) {
+    return;
+  }
+  element.dataset.pendingFontRender = key;
+  loadDocumentFont(fontRequest).then((loaded) => {
+    if (!loaded || !element.isConnected || element.dataset.pendingFontRender !== key) {
+      return;
+    }
+    delete element.dataset.pendingFontRender;
+    renderTextObject(element);
+  });
 }
 
 function fitCanvasToWorkspace() {
@@ -2575,6 +2713,7 @@ function renderTextObject(element) {
     textColor: element.dataset.textColor,
   });
   delete context.__textColor;
+  scheduleTextFontRerender(element);
 }
 
 function getTextContentHeight(element) {
@@ -3143,9 +3282,7 @@ function getSubtitleTextForRender(slide, options = {}) {
 }
 
 async function renderSubtitleOverlayToDataUrl(slide, text, options = {}) {
-  if (document.fonts?.ready) {
-    await document.fonts.ready;
-  }
+  await ensureTextFontsReady([getSubtitleFontRequest()]);
   const exportCanvas = document.createElement("canvas");
   exportCanvas.width = Math.max(1, roundedCanvasSize(slide.width));
   exportCanvas.height = Math.max(1, roundedCanvasSize(slide.height));
@@ -3651,6 +3788,7 @@ async function drawSlideObjectsForExport(context, objects = [], options = {}) {
 }
 
 async function renderDynamicSlideToDataUrl(slide, timeSeconds, options = {}) {
+  await ensureSlideFontsReady(slide, options);
   const exportCanvas = document.createElement("canvas");
   exportCanvas.width = Math.max(1, roundedCanvasSize(slide.width));
   exportCanvas.height = Math.max(1, roundedCanvasSize(slide.height));
@@ -5573,12 +5711,14 @@ function clearBackgroundMusicForProject() {
 }
 
 async function saveCanvasAsPng() {
-  if (document.fonts?.ready) {
-    await document.fonts.ready;
-  }
   for (const object of canvas.querySelectorAll(".text-object.is-editing")) {
     syncTextEditorValue(object);
   }
+  const currentSlide = slides[activeSlideIndex];
+  await ensureCanvasFontsReady({
+    subtitles: projectSettingsState.subtitleEnabled,
+    subtitleText: currentSlide?.notes,
+  });
   await Promise.all([...canvas.querySelectorAll("img")].map(waitForImageLoad));
 
   const exportCanvas = document.createElement("canvas");
@@ -5619,7 +5759,6 @@ async function saveCanvasAsPng() {
     context.restore();
   }
 
-  const currentSlide = slides[activeSlideIndex];
   if (projectSettingsState.subtitleEnabled && currentSlide) {
     drawSubtitleBox(context, getSubtitleTextForRender(currentSlide, {}), exportCanvas.width, exportCanvas.height, {
       subtitleSize: projectSettingsState.subtitleSize,
@@ -6313,6 +6452,10 @@ async function exportProjectAsMp4() {
       const ttsSegments = splitNotesForTtsSegments(slide.notes);
       const hasTtsNotes = ttsSegments.length > 0;
       const gifOverlays = getAnimatedGifOverlays(slide);
+      await ensureSlideFontsReady(slide, {
+        reserveSubtitles: projectSettingsState.subtitleEnabled,
+        subtitleText: notes,
+      });
       const subtitleImages = await renderSubtitleImagesForSegments(slide, ttsSegments);
       const baseSlidePayload = {
         index,

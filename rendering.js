@@ -21,6 +21,7 @@ export function createRenderer(deps) {
     getDynamicSlideDuration,
     roundedCanvasSize,
     sanitizeColor,
+    ensureSlideFontsReady,
     drawSlideObjectsForExport,
     drawSubtitleBox,
     getSubtitleTextForRender,
@@ -248,6 +249,7 @@ export function createRenderer(deps) {
   }
 
   async function renderSlideToDataUrl(slide, options = {}) {
+    await ensureSlideFontsReady?.(slide, options);
     if (document.fonts?.ready) {
       await document.fonts.ready;
     }
