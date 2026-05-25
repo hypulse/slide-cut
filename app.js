@@ -430,6 +430,12 @@ const ANIMATION_IN_PRESETS = {
   pop: { label: "Pop" },
   slideUp: { label: "Slide Up" },
 };
+const ANIMATION_IN_DURATIONS = {
+  none: 0,
+  fade: 0.45,
+  pop: 0.45,
+  slideUp: 0.5,
+};
 const ANIMATION_LOOP_PRESETS = {
   none: { label: "None" },
   spin: { label: "Spin" },
@@ -1433,12 +1439,28 @@ function getMoveAnimationDuration(data = {}) {
   return config.animationMove === "move" ? config.animationMoveDuration : 0;
 }
 
+function getAnimationInDuration(data = {}) {
+  const config = getObjectAnimationConfig(data);
+  return ANIMATION_IN_DURATIONS[config.animationIn] || 0;
+}
+
+function hasLoopAnimation(data = {}) {
+  return getObjectAnimationConfig(data).animationLoop !== DEFAULT_ANIMATION_LOOP;
+}
+
+function getObjectOneShotAnimationDuration(data = {}) {
+  return Math.max(getAnimationInDuration(data), getMoveAnimationDuration(data));
+}
+
 function getSlideObjectAnimationDuration(slide) {
-  return Math.max(0, ...(slide?.objects || []).map(getMoveAnimationDuration));
+  return Math.max(0, ...(slide?.objects || []).map(getObjectOneShotAnimationDuration));
 }
 
 function getCanvasObjectAnimationDuration() {
-  return Math.max(0, ...[...canvas.querySelectorAll(".object")].map((element) => getMoveAnimationDuration(getElementAnimationData(element))));
+  return Math.max(
+    0,
+    ...[...canvas.querySelectorAll(".object")].map((element) => getObjectOneShotAnimationDuration(getElementAnimationData(element)))
+  );
 }
 
 function getObjectAnimationState(object, timeSeconds = 0, durationSeconds = VIDEO_EXPORT_FALLBACK_DURATION) {
@@ -1456,8 +1478,7 @@ function getObjectAnimationState(object, timeSeconds = 0, durationSeconds = VIDE
   }
 
   const config = getObjectAnimationConfig(object);
-  const duration = Math.max(0.5, numberOr(durationSeconds, VIDEO_EXPORT_FALLBACK_DURATION));
-  const time = clamp(numberOr(timeSeconds, 0), 0, duration);
+  const time = Math.max(0, numberOr(timeSeconds, 0));
   const state = { ...base };
 
   if (config.animationMove === "move") {
@@ -1697,6 +1718,13 @@ function canvasHasObjectAnimations() {
   });
 }
 
+function canvasHasLoopAnimations() {
+  return [...canvas.querySelectorAll(".object")].some((element) => {
+    const data = getElementAnimationData(element);
+    return canAnimateObjectData(data) && hasLoopAnimation(data);
+  });
+}
+
 function stopObjectAnimationPreview() {
   if (objectAnimationPreviewFrame) {
     window.cancelAnimationFrame(objectAnimationPreviewFrame);
@@ -1716,9 +1744,16 @@ function runObjectAnimationPreview(timestamp) {
   if (!objectAnimationPreviewStart) {
     objectAnimationPreviewStart = timestamp;
   }
-  const duration = Math.max(VIDEO_EXPORT_FALLBACK_DURATION, getCanvasObjectAnimationDuration());
-  const time = ((timestamp - objectAnimationPreviewStart) / 1000) % duration;
+  const oneShotDuration = getCanvasObjectAnimationDuration();
+  const hasLoop = canvasHasLoopAnimations();
+  const time = (timestamp - objectAnimationPreviewStart) / 1000;
+  const duration = Math.max(VIDEO_EXPORT_FALLBACK_DURATION, oneShotDuration);
   updateObjectAnimationPreview(time, duration);
+  if (!hasLoop && time >= Math.max(0.5, oneShotDuration)) {
+    objectAnimationPreviewFrame = null;
+    objectAnimationPreviewStart = 0;
+    return;
+  }
   objectAnimationPreviewFrame = window.requestAnimationFrame(runObjectAnimationPreview);
 }
 
@@ -3043,9 +3078,7 @@ function estimateNoteFrameDuration(notes) {
 }
 
 function slideHasLoopAnimations(slide) {
-  return (slide?.objects || []).some(
-    (object) => canAnimateObjectData(object) && getObjectAnimationConfig(object).animationLoop !== DEFAULT_ANIMATION_LOOP
-  );
+  return (slide?.objects || []).some((object) => canAnimateObjectData(object) && hasLoopAnimation(object));
 }
 
 function getSlideAnimationFrameDuration(slide, notes = "") {
