@@ -304,6 +304,10 @@ button.has-icon {
   gap: 6px;
 }
 
+button[hidden] {
+  display: none;
+}
+
 .button-icon {
   width: 12px;
   height: 12px;
