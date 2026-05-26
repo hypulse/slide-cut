@@ -157,6 +157,22 @@ export function createRenderer(deps) {
         context.fillText(line, x + shadowX, y + shadowY);
         context.restore();
       }
+      if (Array.isArray(renderStyle.glowLayers) && renderStyle.glowLayers.length && !renderStyle.backgroundColor) {
+        context.save();
+        context.lineJoin = "round";
+        context.miterLimit = 2;
+        for (const layer of renderStyle.glowLayers) {
+          if (!layer || !layer.color) continue;
+          const layerColor = colorWithOpacity(layer.color, renderOpacity);
+          context.shadowColor = layerColor;
+          context.shadowBlur = Math.max(0, Number(layer.blur) || 0);
+          context.shadowOffsetX = Number(layer.offsetX) || 0;
+          context.shadowOffsetY = Number(layer.offsetY) || 0;
+          context.fillStyle = layerColor;
+          context.fillText(line, x, y);
+        }
+        context.restore();
+      }
       if (renderStyle.shadowColor && !renderStyle.backgroundColor && !shadowLayerColor) {
         context.shadowColor = colorWithOpacity(renderStyle.shadowColor, renderOpacity);
         context.shadowBlur = renderStyle.shadowBlur || 0;
