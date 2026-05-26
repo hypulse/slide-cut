@@ -207,6 +207,8 @@ const selectedY = document.querySelector("#selectedY");
 const selectedW = document.querySelector("#selectedW");
 const selectedH = document.querySelector("#selectedH");
 const selectedR = document.querySelector("#selectedR");
+const selectedAspectLock = document.querySelector("#selectedAspectLock");
+let aspectRatioLocked = false;
 const selectedMoveFromX = document.querySelector("#selectedMoveFromX");
 const selectedMoveFromY = document.querySelector("#selectedMoveFromY");
 const selectedMoveToX = document.querySelector("#selectedMoveToX");
@@ -7291,19 +7293,52 @@ function handlePaste(event) {
   }
 }
 
-function applySelectedInputChange() {
+function applySelectedInputChange(changedField) {
   if (!selectedObject) {
     return;
   }
   const previousState = getState(selectedObject);
+  let width = numberOr(selectedW.value, 8);
+  let height = numberOr(selectedH.value, 8);
+  if (aspectRatioLocked && previousState.width > 0 && previousState.height > 0) {
+    const ratio = previousState.width / previousState.height;
+    if (changedField === "w") {
+      height = Math.max(8, Math.round(width / ratio));
+      selectedH.value = height;
+    } else if (changedField === "h") {
+      width = Math.max(8, Math.round(height * ratio));
+      selectedW.value = width;
+    }
+  }
   applyState(selectedObject, {
     x: numberOr(selectedX.value, 0),
     y: numberOr(selectedY.value, 0),
-    width: numberOr(selectedW.value, 8),
-    height: numberOr(selectedH.value, 8),
+    width,
+    height,
     rotation: numberOr(selectedR.value, 0),
   });
   fitTextBoxToContentAfterWidthChange(selectedObject, previousState.width);
+}
+
+function setAspectLockIcon() {
+  const oldIcon = selectedAspectLock.querySelector(".button-icon");
+  if (oldIcon) {
+    oldIcon.remove();
+  }
+  const iconName = aspectRatioLocked ? "lock" : "unlock";
+  selectedAspectLock.dataset.icon = iconName;
+  const svg = createLucideSvg(iconName);
+  if (svg) {
+    selectedAspectLock.prepend(svg);
+    selectedAspectLock.classList.add("has-icon");
+  }
+}
+
+function setAspectRatioLocked(locked) {
+  aspectRatioLocked = Boolean(locked);
+  selectedAspectLock.setAttribute("aria-pressed", aspectRatioLocked ? "true" : "false");
+  selectedAspectLock.title = aspectRatioLocked ? "Unlock aspect ratio" : "Lock aspect ratio";
+  setAspectLockIcon();
 }
 
 function applySelectedTextSizeChange(sizeKey) {
@@ -7697,15 +7732,26 @@ addSlide.addEventListener("click", addNewSlide);
 duplicateSlide.addEventListener("click", duplicateCurrentSlide);
 deleteSlide.addEventListener("click", deleteCurrentSlide);
 
-for (const input of [selectedX, selectedY, selectedW, selectedH, selectedR]) {
-  input.addEventListener("input", applySelectedInputChange);
+const selectedInputFieldMap = new Map([
+  [selectedX, "x"],
+  [selectedY, "y"],
+  [selectedW, "w"],
+  [selectedH, "h"],
+  [selectedR, "r"],
+]);
+for (const [input, field] of selectedInputFieldMap) {
+  input.addEventListener("input", () => applySelectedInputChange(field));
   input.addEventListener("change", () => {
-    applySelectedInputChange();
+    applySelectedInputChange(field);
     renderSlideList();
     recordHistory();
   });
   input.addEventListener("blur", recordHistory);
 }
+selectedAspectLock.addEventListener("click", () => {
+  setAspectRatioLocked(!aspectRatioLocked);
+});
+setAspectRatioLocked(false);
 for (const button of textSizeButtons) {
   button.addEventListener("click", () => applySelectedTextSizeChange(button.dataset.textSize));
 }

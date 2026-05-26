@@ -160,27 +160,39 @@
             </h2>
             <span id="selectionSummary" class="panel-summary">None</span>
           </div>
-          <div class="subgroup" data-label="Position" data-selection-section="position">
-            <label>
-              <span>X</span>
-              <input id="selectedX" type="number" step="1" />
-            </label>
-            <label>
-              <span>Y</span>
-              <input id="selectedY" type="number" step="1" />
-            </label>
-            <label>
-              <span>W</span>
-              <input id="selectedW" type="number" min="8" step="1" />
-            </label>
-            <label>
-              <span>H</span>
-              <input id="selectedH" type="number" min="8" step="1" />
-            </label>
-            <label>
-              <span>Rotation</span>
-              <input id="selectedR" type="number" step="1" />
-            </label>
+          <div class="subgroup position-subgroup" data-label="Position" data-selection-section="position">
+            <div class="position-grid">
+              <label class="position-field">
+                <span>X</span>
+                <input id="selectedX" type="number" step="1" />
+              </label>
+              <label class="position-field">
+                <span>Y</span>
+                <input id="selectedY" type="number" step="1" />
+              </label>
+              <label class="position-field">
+                <span>R</span>
+                <input id="selectedR" type="number" step="1" />
+              </label>
+            </div>
+            <div class="position-size-row">
+              <label class="position-field">
+                <span>W</span>
+                <input id="selectedW" type="number" min="8" step="1" />
+              </label>
+              <button
+                id="selectedAspectLock"
+                type="button"
+                class="aspect-lock-button"
+                data-icon="unlock"
+                aria-pressed="false"
+                title="Lock aspect ratio"
+              ></button>
+              <label class="position-field">
+                <span>H</span>
+                <input id="selectedH" type="number" min="8" step="1" />
+              </label>
+            </div>
           </div>
           <div class="subgroup" data-label="Transform" data-selection-section="image">
             <div class="field-row">
