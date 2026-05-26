@@ -1,4 +1,4 @@
-import { createRenderer } from "./rendering.js";
+import { createRenderer } from "./rendering.js?v=20260527-sticker-effects-2";
 import { createProjectModel } from "./project-model.js";
 
 const canvas = document.querySelector("#canvas");
@@ -337,12 +337,10 @@ const TEXT_FONT_FAMILIES = new Set([
   "Gaegu",
   "Gamja Flower",
   "Nanum Pen Script",
-  "Nanum Brush Script",
   "Mona12",
   "학교안심 봄방학",
   "Gowun Dodum",
   "Gowun Batang",
-  "Single Day",
   "Poor Story",
   "Bagel Fat One",
 ]);
@@ -391,28 +389,29 @@ const TEXT_EFFECT_PRESETS = {
     shadowLayerOffsetY: 9,
   },
   candyBubble: {
-    label: "Candy Bubble",
+    label: "Candy Sticker",
     fontFamily: "Pretendard",
-    fontWeight: 400,
-    fillColor: "#ff4fa3",
+    fontWeight: 700,
+    fillColor: "#ff5ca8",
+    fillGradient: {
+      direction: "vertical",
+      stops: [
+        { offset: 0, color: "#ff9fd0" },
+        { offset: 0.48, color: "#ff5ca8" },
+        { offset: 1, color: "#f42f96" },
+      ],
+    },
     strokeColor: "#ffffff",
     strokeWidth: 9,
     shadowLayerColor: "#6b1f8f",
     shadowLayerStrokeWidth: 11,
     shadowLayerOffsetX: 6,
     shadowLayerOffsetY: 7,
-  },
-  schoolSticker: {
-    label: "School Sticker",
-    fontFamily: "Pretendard",
-    fontWeight: 400,
-    fillColor: "#ff5ca8",
-    strokeColor: "#ffffff",
-    strokeWidth: 8,
-    shadowLayerColor: "#6124a8",
-    shadowLayerStrokeWidth: 10,
-    shadowLayerOffsetX: 5,
-    shadowLayerOffsetY: 6,
+    decorations: [
+      { type: "sparkle", phase: "front", count: 5, colors: ["#ffffff", "#ffd7f2"] },
+    ],
+    decorationOutsetX: 18,
+    decorationOutsetY: 18,
   },
   pixelBadge: {
     label: "Pixel Badge",
@@ -442,31 +441,26 @@ const TEXT_EFFECT_PRESETS = {
     shadowLayerOffsetX: 5,
     shadowLayerOffsetY: 6,
   },
-  softDiary: {
-    label: "Soft Diary",
+  postItNote: {
+    label: "Post-it Note",
     fontFamily: "Pretendard",
-    fontWeight: 400,
-    fillColor: "#33283d",
-    backgroundColor: "rgba(255, 250, 236, 0.9)",
-    backgroundStrokeColor: "#ead8bd",
+    fontWeight: 700,
+    fillColor: "#4b371b",
+    backgroundColor: "#ffea70",
+    backgroundStrokeColor: "#f1c847",
     backgroundStrokeWidth: 2,
-    backgroundPaddingX: 20,
-    backgroundPaddingY: 12,
-    backgroundRadius: 8,
-    shadowColor: "rgba(72, 58, 42, 0.2)",
-    shadowBlur: 10,
-    shadowOffsetX: 0,
-    shadowOffsetY: 5,
-  },
-  brushMood: {
-    label: "Brush Mood",
-    fontFamily: "Pretendard",
-    fontWeight: 400,
-    fillColor: "#15101e",
-    glowLayers: [
-      { color: "rgba(255, 248, 240, 0.95)", blur: 12 },
-      { color: "rgba(255, 248, 240, 0.85)", blur: 5 },
+    backgroundPaddingX: 24,
+    backgroundPaddingY: 15,
+    backgroundRadius: 3,
+    shadowColor: "rgba(92, 69, 22, 0.26)",
+    shadowBlur: 0,
+    shadowOffsetX: 6,
+    shadowOffsetY: 7,
+    decorations: [
+      { type: "stripe", phase: "overBackground", color: "rgba(255, 255, 255, 0.18)", stripeWidth: 8, spacing: 26 },
     ],
+    decorationOutsetX: 10,
+    decorationOutsetY: 12,
   },
   impactHeadline: {
     label: "Impact Headline",
@@ -493,21 +487,357 @@ const TEXT_EFFECT_PRESETS = {
     shadowLayerOffsetY: 7,
   },
   flowerPoem: {
-    label: "Flower Poem",
-    fontFamily: "Pretendard",
+    label: "Poetry Page",
+    fontFamily: "Gowun Batang",
     fontWeight: 400,
-    fillColor: "#4c4964",
-    backgroundColor: "rgba(251, 248, 255, 0.9)",
-    backgroundStrokeColor: "#d8ccef",
-    backgroundStrokeWidth: 2,
-    backgroundPaddingX: 22,
-    backgroundPaddingY: 13,
-    backgroundRadius: 10,
-    shadowColor: "rgba(76, 73, 100, 0.18)",
-    shadowBlur: 12,
+    fillColor: "#5d4a68",
+    backgroundColor: "rgba(255, 252, 246, 0.94)",
+    backgroundStrokeColor: "#e2d4e8",
+    backgroundStrokeWidth: 1.5,
+    backgroundPaddingX: 24,
+    backgroundPaddingY: 15,
+    backgroundRadius: 6,
+    shadowColor: "rgba(82, 65, 91, 0.14)",
+    shadowBlur: 14,
     shadowOffsetX: 0,
-    shadowOffsetY: 5,
+    shadowOffsetY: 6,
+    decorations: [
+      { type: "sparkle", phase: "front", count: 6, colors: ["#f5d7e8", "#d8ccef", "#ffffff"], spread: 18 },
+      { type: "confetti", phase: "front", count: 4, colors: ["#ead8ef", "#f7e0d1"], spread: 16 },
+    ],
+    decorationOutsetX: 22,
+    decorationOutsetY: 22,
   },
+  neonChromatic: {
+    label: "Neon Chromatic",
+    fontFamily: "Pretendard",
+    fontWeight: 700,
+    fillColor: "#ffffff",
+    fillGradient: {
+      direction: "horizontal",
+      stops: [
+        { offset: 0, color: "#ffffff" },
+        { offset: 0.48, color: "#fff1fb" },
+        { offset: 1, color: "#e9fdff" },
+      ],
+    },
+    strokeColor: "#101015",
+    strokeWidth: 5,
+    offsetLayers: [
+      { color: "#00d9ff", strokeWidth: 6, offsetX: -5, offsetY: 5 },
+      { color: "#ff2bbd", strokeWidth: 6, offsetX: 5, offsetY: -3 },
+      { color: "#ffe936", strokeWidth: 4, offsetX: 8, offsetY: 8 },
+    ],
+    glowLayers: [
+      { color: "rgba(255, 48, 198, 0.45)", blur: 8 },
+      { color: "rgba(0, 217, 255, 0.35)", blur: 10 },
+    ],
+    decorationOutsetX: 18,
+    decorationOutsetY: 18,
+  },
+  hotPinkNeon: {
+    label: "Hot Pink Neon",
+    fontFamily: "Pretendard",
+    fontWeight: 700,
+    fillColor: "#151018",
+    strokeColor: "#ffffff",
+    strokeWidth: 4,
+    shadowLayerColor: "#ff1ebd",
+    shadowLayerStrokeWidth: 13,
+    shadowLayerOffsetX: 0,
+    shadowLayerOffsetY: 0,
+    glowLayers: [
+      { color: "rgba(255, 30, 189, 0.7)", blur: 14 },
+      { color: "rgba(255, 30, 189, 0.42)", blur: 24 },
+    ],
+    decorationOutsetX: 24,
+    decorationOutsetY: 24,
+  },
+  sparklePop: {
+    label: "Sparkle Pop",
+    fontFamily: "Pretendard",
+    fontWeight: 700,
+    fillColor: "#ff70b6",
+    strokeColor: "#fff4f9",
+    strokeWidth: 8,
+    shadowLayerColor: "#7c2ce0",
+    shadowLayerStrokeWidth: 10,
+    shadowLayerOffsetX: 5,
+    shadowLayerOffsetY: 6,
+    decorations: [
+      { type: "sparkle", phase: "front", count: 14, colors: ["#ffffff", "#ffd7f2", "#fff35f"] },
+      { type: "confetti", phase: "front", count: 10, colors: ["#ff4fa3", "#ffffff", "#8de6ff"] },
+    ],
+    decorationOutsetX: 30,
+    decorationOutsetY: 30,
+  },
+  graffitiBurst: {
+    label: "Graffiti Burst",
+    fontFamily: "Pretendard",
+    fontWeight: 700,
+    fillColor: "#fff42c",
+    strokeColor: "#101015",
+    strokeWidth: 6,
+    shadowLayerColor: "#ff2dac",
+    shadowLayerStrokeWidth: 8,
+    shadowLayerOffsetX: 4,
+    shadowLayerOffsetY: 5,
+    decorations: [
+      { type: "paintBurst", count: 28, colors: ["#69ff35", "#ff39bf", "#9e4dff", "#00d8ff"] },
+    ],
+    decorationOutsetX: 34,
+    decorationOutsetY: 28,
+  },
+  goldGlow: {
+    label: "Gold Glow",
+    fontFamily: "Pretendard",
+    fontWeight: 700,
+    fillColor: "#ffd84d",
+    fillGradient: {
+      direction: "vertical",
+      stops: [
+        { offset: 0, color: "#fff7a8" },
+        { offset: 0.42, color: "#ffd241" },
+        { offset: 1, color: "#f07b19" },
+      ],
+    },
+    strokeColor: "#3f2500",
+    strokeWidth: 6,
+    glowLayers: [
+      { color: "rgba(255, 214, 55, 0.54)", blur: 12 },
+      { color: "rgba(255, 142, 24, 0.34)", blur: 22 },
+    ],
+    shadowColor: "rgba(0, 0, 0, 0.48)",
+    shadowBlur: 4,
+    shadowOffsetX: 3,
+    shadowOffsetY: 5,
+    decorationOutsetX: 24,
+    decorationOutsetY: 24,
+  },
+  retro3d: {
+    label: "Retro 3D",
+    fontFamily: "Pretendard",
+    fontWeight: 700,
+    fillColor: "#ff922d",
+    strokeColor: "#5a2a18",
+    strokeWidth: 5,
+    offsetLayers: [
+      { color: "#7b3b25", strokeWidth: 7, offsetX: 5, offsetY: 6 },
+      { color: "#193c78", strokeWidth: 5, offsetX: 9, offsetY: 11 },
+    ],
+    shadowColor: "rgba(0, 0, 0, 0.32)",
+    shadowBlur: 4,
+    shadowOffsetX: 2,
+    shadowOffsetY: 3,
+    decorationOutsetX: 24,
+    decorationOutsetY: 28,
+  },
+  iceGlow: {
+    label: "Ice Glow",
+    fontFamily: "Pretendard",
+    fontWeight: 700,
+    fillColor: "#84eaff",
+    fillGradient: {
+      direction: "vertical",
+      stops: [
+        { offset: 0, color: "#f0feff" },
+        { offset: 0.55, color: "#72dfff" },
+        { offset: 1, color: "#2882ff" },
+      ],
+    },
+    strokeColor: "#ffffff",
+    strokeWidth: 5,
+    shadowLayerColor: "#1358d8",
+    shadowLayerStrokeWidth: 8,
+    shadowLayerOffsetX: 4,
+    shadowLayerOffsetY: 6,
+    glowLayers: [
+      { color: "rgba(90, 230, 255, 0.52)", blur: 12 },
+      { color: "rgba(36, 125, 255, 0.32)", blur: 20 },
+    ],
+    decorationOutsetX: 24,
+    decorationOutsetY: 26,
+  },
+  tapePatch: {
+    label: "Tape Patch",
+    fontFamily: "Pretendard",
+    fontWeight: 700,
+    fillColor: "#ffffff",
+    strokeColor: "#71315d",
+    strokeWidth: 3,
+    shadowColor: "rgba(68, 28, 52, 0.2)",
+    shadowBlur: 3,
+    shadowOffsetX: 0,
+    shadowOffsetY: 2,
+    decorations: [
+      { type: "tape", colors: ["rgba(255, 128, 186, 0.92)", "rgba(255, 236, 167, 0.9)"], rotate: -5 },
+      { type: "stripe", phase: "overBackground", color: "rgba(255, 255, 255, 0.28)", stripeWidth: 7 },
+    ],
+    decorationOutsetX: 22,
+    decorationOutsetY: 18,
+  },
+  warningBadge: {
+    label: "Warning Badge",
+    fontFamily: "Pretendard",
+    fontWeight: 700,
+    fillColor: "#111015",
+    backgroundColor: "#ffde35",
+    backgroundStrokeColor: "#111015",
+    backgroundStrokeWidth: 4,
+    backgroundPaddingX: 20,
+    backgroundPaddingY: 12,
+    backgroundRadius: 4,
+    shadowColor: "rgba(0, 0, 0, 0.42)",
+    shadowBlur: 0,
+    shadowOffsetX: 5,
+    shadowOffsetY: 6,
+    decorations: [
+      { type: "stripe", phase: "overBackground", color: "rgba(17, 16, 21, 0.14)", stripeWidth: 10, spacing: 24 },
+    ],
+    decorationOutsetX: 10,
+    decorationOutsetY: 12,
+  },
+  sunsetGradient: {
+    label: "Sunset Gradient",
+    fontFamily: "Pretendard",
+    fontWeight: 700,
+    fillColor: "#ff8d3d",
+    fillGradient: {
+      direction: "horizontal",
+      stops: [
+        { offset: 0, color: "#fff06a" },
+        { offset: 0.45, color: "#ff8b3d" },
+        { offset: 1, color: "#ff3fa6" },
+      ],
+    },
+    strokeColor: "#fff6e5",
+    strokeWidth: 6,
+    shadowLayerColor: "#5f238a",
+    shadowLayerStrokeWidth: 9,
+    shadowLayerOffsetX: 5,
+    shadowLayerOffsetY: 7,
+    decorationOutsetX: 20,
+    decorationOutsetY: 22,
+  },
+  aquaGradient: {
+    label: "Aqua Gradient",
+    fontFamily: "Pretendard",
+    fontWeight: 700,
+    fillColor: "#50e3d4",
+    fillGradient: {
+      direction: "horizontal",
+      stops: [
+        { offset: 0, color: "#e3fff8" },
+        { offset: 0.5, color: "#55e7d4" },
+        { offset: 1, color: "#42a5ff" },
+      ],
+    },
+    strokeColor: "#ffffff",
+    strokeWidth: 5,
+    shadowLayerColor: "#0d6a80",
+    shadowLayerStrokeWidth: 8,
+    shadowLayerOffsetX: 4,
+    shadowLayerOffsetY: 6,
+    decorationOutsetX: 20,
+    decorationOutsetY: 22,
+  },
+  blueNeon: {
+    label: "Blue Neon",
+    fontFamily: "Pretendard",
+    fontWeight: 700,
+    fillColor: "#eaffff",
+    strokeColor: "#0d1638",
+    strokeWidth: 4,
+    shadowLayerColor: "#2388ff",
+    shadowLayerStrokeWidth: 9,
+    shadowLayerOffsetX: 0,
+    shadowLayerOffsetY: 0,
+    glowLayers: [
+      { color: "rgba(54, 186, 255, 0.68)", blur: 12 },
+      { color: "rgba(29, 92, 255, 0.42)", blur: 24 },
+    ],
+    decorationOutsetX: 24,
+    decorationOutsetY: 24,
+  },
+  limeNeon: {
+    label: "Lime Neon",
+    fontFamily: "Pretendard",
+    fontWeight: 700,
+    fillColor: "#dcff3f",
+    strokeColor: "#061307",
+    strokeWidth: 4,
+    shadowLayerColor: "#24ff6b",
+    shadowLayerStrokeWidth: 9,
+    shadowLayerOffsetX: 0,
+    shadowLayerOffsetY: 0,
+    glowLayers: [
+      { color: "rgba(73, 255, 96, 0.66)", blur: 12 },
+      { color: "rgba(190, 255, 35, 0.36)", blur: 22 },
+    ],
+    decorationOutsetX: 24,
+    decorationOutsetY: 24,
+  },
+  auroraNeon: {
+    label: "Aurora Neon",
+    fontFamily: "Pretendard",
+    fontWeight: 700,
+    fillColor: "#9bfffb",
+    fillGradient: {
+      direction: "horizontal",
+      stops: [
+        { offset: 0, color: "#8ffcff" },
+        { offset: 0.42, color: "#ff8cff" },
+        { offset: 1, color: "#fff66d" },
+      ],
+    },
+    strokeColor: "#111015",
+    strokeWidth: 5,
+    offsetLayers: [
+      { color: "#00d7ff", strokeWidth: 7, offsetX: -4, offsetY: 5 },
+      { color: "#ff2bd6", strokeWidth: 7, offsetX: 5, offsetY: -4 },
+    ],
+    glowLayers: [
+      { color: "rgba(0, 226, 255, 0.48)", blur: 14 },
+      { color: "rgba(255, 43, 214, 0.38)", blur: 22 },
+    ],
+    decorationOutsetX: 28,
+    decorationOutsetY: 28,
+  },
+  prismNeon: {
+    label: "Prism Neon",
+    fontFamily: "Pretendard",
+    fontWeight: 700,
+    fillColor: "#ffffff",
+    fillGradient: {
+      direction: "horizontal",
+      stops: [
+        { offset: 0, color: "#ff315f" },
+        { offset: 0.28, color: "#ffd23a" },
+        { offset: 0.55, color: "#35ff89" },
+        { offset: 0.78, color: "#2fd9ff" },
+        { offset: 1, color: "#b65cff" },
+      ],
+    },
+    strokeColor: "#ffffff",
+    strokeWidth: 5,
+    shadowLayerColor: "#151043",
+    shadowLayerStrokeWidth: 9,
+    shadowLayerOffsetX: 5,
+    shadowLayerOffsetY: 7,
+    glowLayers: [
+      { color: "rgba(47, 217, 255, 0.38)", blur: 12 },
+      { color: "rgba(255, 49, 95, 0.28)", blur: 18 },
+    ],
+    decorations: [
+      { type: "sparkle", phase: "front", count: 8, colors: ["#ffffff", "#fff35f", "#8de6ff"], spread: 18 },
+    ],
+    decorationOutsetX: 26,
+    decorationOutsetY: 26,
+  },
+};
+const TEXT_EFFECT_ALIASES = {
+  schoolSticker: "candyBubble",
+  softDiary: "postItNote",
 };
 const TEXT_EFFECT_OPTIONS = Object.keys(TEXT_EFFECT_PRESETS);
 
@@ -1279,7 +1609,8 @@ function sanitizeTextFontFamily(value) {
 }
 
 function sanitizeTextEffect(value) {
-  return TEXT_EFFECT_PRESETS[value] ? value : DEFAULT_TEXT_EFFECT;
+  const effectKey = TEXT_EFFECT_ALIASES[value] || value;
+  return TEXT_EFFECT_PRESETS[effectKey] ? effectKey : DEFAULT_TEXT_EFFECT;
 }
 
 function sanitizeTextFontWeight(value, fallback = DEFAULT_TEXT_FONT_WEIGHT) {
@@ -1569,9 +1900,39 @@ function getTextEffectOutset(renderStyle = {}) {
       glowY = Math.max(glowY, Math.abs(numberOr(layer.offsetY, 0)));
     }
   }
+  let offsetLayerX = 0;
+  let offsetLayerY = 0;
+  if (Array.isArray(renderStyle.offsetLayers)) {
+    for (const layer of renderStyle.offsetLayers) {
+      if (!layer) continue;
+      const layerStroke = Math.max(0, numberOr(layer.strokeWidth, 0) / 2);
+      offsetLayerX = Math.max(offsetLayerX, Math.abs(numberOr(layer.offsetX, 0)) + layerStroke);
+      offsetLayerY = Math.max(offsetLayerY, Math.abs(numberOr(layer.offsetY, 0)) + layerStroke);
+    }
+  }
+  let decorationX = Math.max(0, numberOr(renderStyle.decorationOutsetX, 0));
+  let decorationY = Math.max(0, numberOr(renderStyle.decorationOutsetY, 0));
+  if (Array.isArray(renderStyle.decorations)) {
+    const defaultOutsets = {
+      sparkle: 24,
+      confetti: 18,
+      paintBurst: 30,
+      drip: 26,
+      tape: 18,
+      stripe: 4,
+    };
+    for (const decoration of renderStyle.decorations) {
+      if (!decoration) continue;
+      const fallbackOutset = defaultOutsets[decoration.type] || 0;
+      decorationX = Math.max(decorationX, numberOr(decoration.outsetX, fallbackOutset));
+      decorationY = Math.max(decorationY, numberOr(decoration.outsetY, fallbackOutset));
+    }
+  }
+  const existingX = Math.max(strokeOutset, shadowLayerOutset) + Math.max(shadowBlur + shadowX, glowBlur + glowX);
+  const existingY = Math.max(strokeOutset, shadowLayerOutset) + Math.max(shadowBlur + shadowY, glowBlur + glowY);
   return {
-    x: Math.ceil(Math.max(strokeOutset, shadowLayerOutset) + Math.max(shadowBlur + shadowX, glowBlur + glowX)),
-    y: Math.ceil(Math.max(strokeOutset, shadowLayerOutset) + Math.max(shadowBlur + shadowY, glowBlur + glowY)),
+    x: Math.ceil(Math.max(existingX, offsetLayerX, decorationX)),
+    y: Math.ceil(Math.max(existingY, offsetLayerY, decorationY)),
   };
 }
 

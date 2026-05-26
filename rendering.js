@@ -65,6 +65,331 @@ export function createRenderer(deps) {
     return value;
   }
 
+  function hashString(value) {
+    let hash = 2166136261;
+    const text = String(value || "");
+    for (let index = 0; index < text.length; index += 1) {
+      hash ^= text.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+    return hash >>> 0;
+  }
+
+  function createSeededRandom(seed) {
+    let state = hashString(seed);
+    return () => {
+      state = (state + 0x6d2b79f5) >>> 0;
+      let value = state;
+      value = Math.imul(value ^ (value >>> 15), value | 1);
+      value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+      return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function getLineLeft(anchorX, lineWidth, align) {
+    if (align === "center") {
+      return anchorX - lineWidth / 2;
+    }
+    if (align === "right") {
+      return anchorX - lineWidth;
+    }
+    return anchorX;
+  }
+
+  function getTextBlockBounds(renderStyle, safeAlign, contentX, contentY, contentWidth, contentHeight, lines, lineWidths, lineHeight) {
+    const paddingX = renderStyle.backgroundColor
+      ? renderStyle.backgroundPaddingX || 12
+      : renderStyle.decorationPaddingX || 14;
+    const paddingY = renderStyle.backgroundColor
+      ? renderStyle.backgroundPaddingY || 6
+      : renderStyle.decorationPaddingY || 8;
+    const widestLine = Math.max(...lineWidths, 1);
+    const blockWidth = Math.min(Math.max(1, contentWidth - 2), widestLine + paddingX * 2);
+    const blockHeight = Math.min(Math.max(1, contentHeight - 2), Math.max(1, lines.length) * lineHeight + paddingY * 2);
+    const rawBlockX =
+      safeAlign === "center"
+        ? contentX + (contentWidth - blockWidth) / 2
+        : safeAlign === "right"
+          ? contentX + contentWidth - TEXT_PADDING_X - blockWidth
+          : contentX + TEXT_PADDING_X - paddingX;
+    const blockX = clamp(rawBlockX, 1, Math.max(1, contentX + contentWidth - blockWidth - 1));
+    const blockY = Math.max(1, contentY + TEXT_PADDING_Y - paddingY * 0.65);
+    return {
+      x: blockX,
+      y: blockY,
+      width: blockWidth,
+      height: blockHeight,
+      centerX: blockX + blockWidth / 2,
+      centerY: blockY + blockHeight / 2,
+    };
+  }
+
+  function drawStar(context, x, y, outerRadius, color, opacity, rotation = 0) {
+    const innerRadius = outerRadius * 0.38;
+    context.save();
+    context.translate(x, y);
+    context.rotate(rotation);
+    context.beginPath();
+    for (let index = 0; index < 8; index += 1) {
+      const radius = index % 2 === 0 ? outerRadius : innerRadius;
+      const angle = -Math.PI / 2 + (index * Math.PI) / 4;
+      const pointX = Math.cos(angle) * radius;
+      const pointY = Math.sin(angle) * radius;
+      if (index === 0) {
+        context.moveTo(pointX, pointY);
+      } else {
+        context.lineTo(pointX, pointY);
+      }
+    }
+    context.closePath();
+    context.fillStyle = colorWithOpacity(color, opacity);
+    context.fill();
+    context.restore();
+  }
+
+  function getDecorationPoint(block, random, spread) {
+    const side = Math.floor(random() * 4);
+    if (side === 0) {
+      return {
+        x: block.x - spread + random() * (block.width + spread * 2),
+        y: block.y - spread + random() * spread,
+      };
+    }
+    if (side === 1) {
+      return {
+        x: block.x + block.width + random() * spread,
+        y: block.y - spread * 0.35 + random() * (block.height + spread * 0.7),
+      };
+    }
+    if (side === 2) {
+      return {
+        x: block.x - spread + random() * (block.width + spread * 2),
+        y: block.y + block.height + random() * spread,
+      };
+    }
+    return {
+      x: block.x - random() * spread,
+      y: block.y - spread * 0.35 + random() * (block.height + spread * 0.7),
+    };
+  }
+
+  function drawSparkleDecoration(context, decoration, block, random, opacity) {
+    const colors = decoration.colors?.length ? decoration.colors : ["#ffffff", "#fff45f"];
+    const count = Math.max(1, Math.round(Number(decoration.count) || 10));
+    const spread = Number(decoration.spread) || 22;
+    for (let index = 0; index < count; index += 1) {
+      const point = getDecorationPoint(block, random, spread);
+      const color = colors[index % colors.length];
+      const size = 3 + random() * 7;
+      if (random() < 0.72) {
+        drawStar(context, point.x, point.y, size, color, opacity, random() * Math.PI);
+      } else {
+        context.beginPath();
+        context.fillStyle = colorWithOpacity(color, opacity);
+        context.arc(point.x, point.y, size * 0.52, 0, Math.PI * 2);
+        context.fill();
+      }
+    }
+  }
+
+  function drawConfettiDecoration(context, decoration, block, random, opacity) {
+    const colors = decoration.colors?.length ? decoration.colors : ["#ff4fa3", "#ffffff", "#8de6ff"];
+    const count = Math.max(1, Math.round(Number(decoration.count) || 12));
+    const spread = Number(decoration.spread) || 18;
+    for (let index = 0; index < count; index += 1) {
+      const point = getDecorationPoint(block, random, spread);
+      const size = 3 + random() * 6;
+      context.save();
+      context.translate(point.x, point.y);
+      context.rotate(random() * Math.PI);
+      context.fillStyle = colorWithOpacity(colors[index % colors.length], opacity);
+      if (random() < 0.5) {
+        context.fillRect(-size * 0.5, -size * 0.28, size, size * 0.56);
+      } else {
+        context.beginPath();
+        context.moveTo(0, -size * 0.65);
+        context.lineTo(size * 0.65, 0);
+        context.lineTo(0, size * 0.65);
+        context.lineTo(-size * 0.65, 0);
+        context.closePath();
+        context.fill();
+      }
+      context.restore();
+    }
+  }
+
+  function drawPaintBurstDecoration(context, decoration, block, random, opacity) {
+    const colors = decoration.colors?.length ? decoration.colors : ["#69ff35", "#ff39bf", "#9e4dff"];
+    const count = Math.max(1, Math.round(Number(decoration.count) || 22));
+    const spread = Number(decoration.spread) || 26;
+    for (let index = 0; index < count; index += 1) {
+      const angle = random() * Math.PI * 2;
+      const radiusX = block.width / 2 + random() * spread;
+      const radiusY = block.height / 2 + random() * spread;
+      const x = block.centerX + Math.cos(angle) * radiusX;
+      const y = block.centerY + Math.sin(angle) * radiusY;
+      const size = 5 + random() * 15;
+      const points = 5 + Math.floor(random() * 4);
+      context.beginPath();
+      for (let pointIndex = 0; pointIndex < points; pointIndex += 1) {
+        const pointAngle = (pointIndex / points) * Math.PI * 2;
+        const pointRadius = size * (0.55 + random() * 0.65);
+        const pointX = x + Math.cos(pointAngle) * pointRadius;
+        const pointY = y + Math.sin(pointAngle) * pointRadius;
+        if (pointIndex === 0) {
+          context.moveTo(pointX, pointY);
+        } else {
+          context.lineTo(pointX, pointY);
+        }
+      }
+      context.closePath();
+      context.fillStyle = colorWithOpacity(colors[index % colors.length], opacity * 0.9);
+      context.fill();
+    }
+  }
+
+  function drawDripDecoration(context, decoration, block, random, opacity) {
+    const colors = decoration.colors?.length ? decoration.colors : ["#48e568", "#2fcf59"];
+    const count = Math.max(1, Math.round(Number(decoration.count) || 7));
+    const strokeColor = decoration.strokeColor || "";
+    const anchorInset = Number(decoration.anchorInset) || Math.min(22, block.height * 0.24);
+    for (let index = 0; index < count; index += 1) {
+      const width = 5 + random() * 9;
+      const height = 10 + random() * 24;
+      const x = block.x + block.width * (0.08 + random() * 0.84);
+      const y = block.y + block.height - anchorInset + random() * 4;
+      context.beginPath();
+      context.moveTo(x - width / 2, y);
+      context.quadraticCurveTo(x - width * 0.55, y + height * 0.35, x - width * 0.12, y + height);
+      context.quadraticCurveTo(x, y + height + width * 0.45, x + width * 0.12, y + height);
+      context.quadraticCurveTo(x + width * 0.55, y + height * 0.35, x + width / 2, y);
+      context.closePath();
+      context.fillStyle = colorWithOpacity(colors[index % colors.length], opacity);
+      context.fill();
+      if (strokeColor) {
+        context.lineWidth = 2;
+        context.strokeStyle = colorWithOpacity(strokeColor, opacity);
+        context.stroke();
+      }
+    }
+  }
+
+  function drawTapeDecoration(context, decoration, block, opacity) {
+    const colors = decoration.colors?.length ? decoration.colors : ["rgba(255, 128, 186, 0.92)"];
+    const width = block.width + (Number(decoration.paddingX) || 24);
+    const height = block.height + (Number(decoration.paddingY) || 16);
+    const rotation = ((Number(decoration.rotate) || -4) * Math.PI) / 180;
+    for (const [index, color] of colors.entries()) {
+      context.save();
+      context.translate(block.centerX, block.centerY + index * 4);
+      context.rotate(rotation + index * 0.035);
+      context.fillStyle = colorWithOpacity(color, opacity);
+      fillRoundedRect(context, -width / 2, -height / 2, width, height, 8);
+      context.restore();
+    }
+  }
+
+  function drawStripeDecoration(context, decoration, block, opacity) {
+    const color = decoration.color || "rgba(17, 16, 21, 0.14)";
+    const stripeWidth = Number(decoration.stripeWidth) || 9;
+    const spacing = Number(decoration.spacing) || stripeWidth * 2.5;
+    context.save();
+    traceRoundedRect(context, block.x, block.y, block.width, block.height, 6);
+    context.clip();
+    context.fillStyle = colorWithOpacity(color, opacity);
+    for (let x = block.x - block.height; x < block.x + block.width + block.height; x += spacing) {
+      context.beginPath();
+      context.moveTo(x, block.y + block.height);
+      context.lineTo(x + stripeWidth, block.y + block.height);
+      context.lineTo(x + block.height + stripeWidth, block.y);
+      context.lineTo(x + block.height, block.y);
+      context.closePath();
+      context.fill();
+    }
+    context.restore();
+  }
+
+  function drawTextDecorations(context, renderStyle, phase, block, seed, opacity) {
+    if (!Array.isArray(renderStyle.decorations) || !renderStyle.decorations.length) {
+      return;
+    }
+    for (const [index, decoration] of renderStyle.decorations.entries()) {
+      if (!decoration || (decoration.phase || "behind") !== phase) {
+        continue;
+      }
+      const random = createSeededRandom(`${seed}:${phase}:${index}:${decoration.type}`);
+      context.save();
+      switch (decoration.type) {
+        case "sparkle":
+          drawSparkleDecoration(context, decoration, block, random, opacity);
+          break;
+        case "confetti":
+          drawConfettiDecoration(context, decoration, block, random, opacity);
+          break;
+        case "paintBurst":
+          drawPaintBurstDecoration(context, decoration, block, random, opacity);
+          break;
+        case "drip":
+          drawDripDecoration(context, decoration, block, random, opacity);
+          break;
+        case "tape":
+          drawTapeDecoration(context, decoration, block, opacity);
+          break;
+        case "stripe":
+          drawStripeDecoration(context, decoration, block, opacity);
+          break;
+      }
+      context.restore();
+    }
+  }
+
+  function getTextFillStyle(context, renderStyle, lineLeft, y, lineWidth, fontSize, opacity) {
+    const gradientConfig = renderStyle.fillGradient;
+    if (!gradientConfig || !Array.isArray(gradientConfig.stops) || gradientConfig.stops.length === 0) {
+      return colorWithOpacity(renderStyle.fillColor, opacity);
+    }
+    const direction = gradientConfig.direction || "horizontal";
+    const gradient =
+      direction === "vertical"
+        ? context.createLinearGradient(lineLeft, y, lineLeft, y + fontSize)
+        : context.createLinearGradient(lineLeft, y, lineLeft + Math.max(1, lineWidth), y);
+    for (const stop of gradientConfig.stops) {
+      gradient.addColorStop(clamp(Number(stop.offset) || 0, 0, 1), colorWithOpacity(stop.color || renderStyle.fillColor, opacity));
+    }
+    return gradient;
+  }
+
+  function drawOffsetTextLayer(context, line, x, y, layer, opacity) {
+    if (!layer) {
+      return;
+    }
+    const offsetX = Number(layer.offsetX) || 0;
+    const offsetY = Number(layer.offsetY) || 0;
+    const layerOpacity = normalizeOpacity(layer.opacity, 1) * opacity;
+    const layerColor = layer.color || layer.fillColor || layer.strokeColor;
+    context.save();
+    context.lineJoin = "round";
+    context.miterLimit = 2;
+    if (layer.shadowColor) {
+      context.shadowColor = colorWithOpacity(layer.shadowColor, layerOpacity);
+      context.shadowBlur = Number(layer.shadowBlur) || 0;
+      context.shadowOffsetX = Number(layer.shadowOffsetX) || 0;
+      context.shadowOffsetY = Number(layer.shadowOffsetY) || 0;
+    } else {
+      context.shadowColor = "transparent";
+    }
+    if (layer.strokeWidth) {
+      context.lineWidth = Number(layer.strokeWidth) || 0;
+      context.strokeStyle = colorWithOpacity(layer.strokeColor || layerColor, layerOpacity);
+      context.strokeText(line, x + offsetX, y + offsetY);
+    }
+    if (layer.fill !== false) {
+      context.fillStyle = colorWithOpacity(layer.fillColor || layerColor, layerOpacity);
+      context.fillText(line, x + offsetX, y + offsetY);
+    }
+    context.restore();
+  }
+
   function drawTextLines(context, text, width, height, shouldClear = false, textSizeKey = "h3", textAlign = "left", textStyle = {}) {
     const basePreset = getTextPreset(textSizeKey);
     const customFontSize = Number(textStyle.fontSize);
@@ -99,19 +424,24 @@ export function createRenderer(deps) {
       (_, index) => TEXT_PADDING_Y + index * preset.lineHeight < contentHeight
     );
     const lineWidths = lines.map((line) => context.measureText(line).width);
+    if (!lines.length) {
+      context.restore();
+      return;
+    }
+    const textBlock = getTextBlockBounds(
+      renderStyle,
+      safeAlign,
+      contentX,
+      contentY,
+      contentWidth,
+      contentHeight,
+      lines,
+      lineWidths,
+      preset.lineHeight
+    );
+    const decorationSeed = `${renderStyle.effectKey || ""}:${text}:${Math.round(width)}x${Math.round(height)}`;
+    drawTextDecorations(context, renderStyle, "behind", textBlock, decorationSeed, renderOpacity);
     if (renderStyle.backgroundColor && lines.length) {
-      const paddingX = renderStyle.backgroundPaddingX || 12;
-      const paddingY = renderStyle.backgroundPaddingY || 6;
-      const blockWidth = Math.min(Math.max(1, contentWidth - 2), Math.max(...lineWidths, 1) + paddingX * 2);
-      const blockHeight = Math.min(Math.max(1, contentHeight - 2), lines.length * preset.lineHeight + paddingY * 2);
-      const rawBlockX =
-        safeAlign === "center"
-          ? contentX + (contentWidth - blockWidth) / 2
-          : safeAlign === "right"
-            ? contentX + contentWidth - TEXT_PADDING_X - blockWidth
-            : contentX + TEXT_PADDING_X - paddingX;
-      const blockX = clamp(rawBlockX, 1, Math.max(1, width - blockWidth - 1));
-      const blockY = Math.max(1, contentY + TEXT_PADDING_Y - paddingY * 0.65);
       context.save();
       if (renderStyle.shadowColor) {
         context.shadowColor = colorWithOpacity(renderStyle.shadowColor, renderOpacity);
@@ -120,22 +450,23 @@ export function createRenderer(deps) {
         context.shadowOffsetY = renderStyle.shadowOffsetY || 0;
       }
       context.fillStyle = colorWithOpacity(renderStyle.backgroundColor, renderOpacity);
-      fillRoundedRect(context, blockX, blockY, blockWidth, blockHeight, renderStyle.backgroundRadius || 8);
+      fillRoundedRect(context, textBlock.x, textBlock.y, textBlock.width, textBlock.height, renderStyle.backgroundRadius || 8);
       if (renderStyle.backgroundStrokeColor && renderStyle.backgroundStrokeWidth) {
         context.shadowColor = "transparent";
         context.lineWidth = renderStyle.backgroundStrokeWidth;
         context.strokeStyle = colorWithOpacity(renderStyle.backgroundStrokeColor, renderOpacity);
         strokeRoundedRect(
           context,
-          blockX + renderStyle.backgroundStrokeWidth / 2,
-          blockY + renderStyle.backgroundStrokeWidth / 2,
-          blockWidth - renderStyle.backgroundStrokeWidth,
-          blockHeight - renderStyle.backgroundStrokeWidth,
+          textBlock.x + renderStyle.backgroundStrokeWidth / 2,
+          textBlock.y + renderStyle.backgroundStrokeWidth / 2,
+          textBlock.width - renderStyle.backgroundStrokeWidth,
+          textBlock.height - renderStyle.backgroundStrokeWidth,
           renderStyle.backgroundRadius || 8
         );
       }
       context.restore();
     }
+    drawTextDecorations(context, renderStyle, "overBackground", textBlock, decorationSeed, renderOpacity);
 
     for (const [index, line] of lines.entries()) {
       const y = contentY + TEXT_PADDING_Y + index * preset.lineHeight;
@@ -145,6 +476,11 @@ export function createRenderer(deps) {
           : safeAlign === "right"
             ? contentX + contentWidth - TEXT_PADDING_X
             : contentX + TEXT_PADDING_X;
+      if (Array.isArray(renderStyle.offsetLayers)) {
+        for (const layer of renderStyle.offsetLayers) {
+          drawOffsetTextLayer(context, line, x, y, layer, renderOpacity);
+        }
+      }
       const shadowLayerColor = renderStyle.backgroundColor ? "" : renderStyle.shadowLayerColor;
       if (shadowLayerColor) {
         const shadowColor = colorWithOpacity(shadowLayerColor, renderOpacity);
@@ -195,9 +531,18 @@ export function createRenderer(deps) {
         context.strokeText(line, x, y);
       }
       context.shadowColor = "transparent";
-      context.fillStyle = colorWithOpacity(renderStyle.fillColor, renderOpacity);
+      context.fillStyle = getTextFillStyle(
+        context,
+        renderStyle,
+        getLineLeft(x, lineWidths[index] || 1, safeAlign),
+        y,
+        lineWidths[index] || 1,
+        preset.fontSize,
+        renderOpacity
+      );
       context.fillText(line, x, y);
     }
+    drawTextDecorations(context, renderStyle, "front", textBlock, decorationSeed, renderOpacity);
 
     context.restore();
   }

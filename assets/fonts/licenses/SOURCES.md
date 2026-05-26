@@ -7,12 +7,10 @@
 - Gaegu: https://fonts.google.com/specimen/Gaegu
 - Gamja Flower: https://fonts.google.com/specimen/Gamja+Flower
 - Nanum Pen Script: https://fonts.google.com/specimen/Nanum+Pen+Script
-- Nanum Brush Script: https://fonts.google.com/specimen/Nanum+Brush+Script
 - Mona12: https://monadabxy.com/fonts/mona/
 - Hakgyoansim Bombanghak: https://fonts.taedonn.com/post/Hakgyoansim%2BBombanghak
 - Gowun Dodum: https://fonts.google.com/specimen/Gowun+Dodum
 - Gowun Batang: https://fonts.google.com/specimen/Gowun+Batang
-- Single Day: https://fonts.google.com/specimen/Single+Day
 - Poor Story: https://fonts.google.com/specimen/Poor+Story
 - Bagel Fat One: https://fonts.google.com/specimen/Bagel+Fat+One
 
