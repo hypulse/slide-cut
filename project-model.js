@@ -26,6 +26,7 @@ export function createProjectModel(deps) {
     sanitizeTextFontWeight,
     sanitizeTextEffect,
     sanitizeAnimationIn,
+    sanitizeAnimationInDelay,
     sanitizeAnimationLoop,
     sanitizeAnimationOut,
     sanitizeAnimationSpeed,
@@ -54,6 +55,7 @@ export function createProjectModel(deps) {
   function serializeAnimationData(object) {
     return {
       animationIn: sanitizeAnimationIn(object.dataset.animationIn),
+      animationInDelay: sanitizeAnimationInDelay(object.dataset.animationInDelay),
       animationLoop: sanitizeAnimationLoop(object.dataset.animationLoop),
       animationOut: sanitizeAnimationOut(object.dataset.animationOut),
       animationSpeed: sanitizeAnimationSpeed(object.dataset.animationSpeed),
@@ -70,6 +72,7 @@ export function createProjectModel(deps) {
   function normalizeAnimationData(object) {
     return {
       animationIn: sanitizeAnimationIn(object.animationIn),
+      animationInDelay: sanitizeAnimationInDelay(object.animationInDelay),
       animationLoop: sanitizeAnimationLoop(object.animationLoop),
       animationOut: sanitizeAnimationOut(object.animationOut),
       animationSpeed: sanitizeAnimationSpeed(object.animationSpeed),

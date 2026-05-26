@@ -216,6 +216,7 @@ const selectedMoveFromY = document.querySelector("#selectedMoveFromY");
 const selectedMoveToX = document.querySelector("#selectedMoveToX");
 const selectedMoveToY = document.querySelector("#selectedMoveToY");
 const selectedMoveDuration = document.querySelector("#selectedMoveDuration");
+const selectedAnimationInDelay = document.querySelector("#selectedAnimationInDelay");
 const selectedTextSize = document.querySelector("#selectedTextSize");
 const imageFlipButtons = [...document.querySelectorAll("[data-image-flip]")];
 const textSizeButtons = [...document.querySelectorAll("[data-text-size]")];
@@ -1030,6 +1031,7 @@ const DEFAULT_ANIMATION_SPEED = "normal";
 const DEFAULT_ANIMATION_MOVE = "none";
 const DEFAULT_ANIMATION_MOVE_EASING = "linear";
 const DEFAULT_ANIMATION_MOVE_DURATION = 2;
+const DEFAULT_ANIMATION_IN_DELAY = 0;
 const ANIMATION_IN_PRESETS = {
   none: { label: "None" },
   fade: { label: "Fade" },
@@ -1558,6 +1560,7 @@ const { serializeObject, serializeCurrentSlide, cloneProjectValue, normalizeProj
   sanitizeTextFontWeight,
   sanitizeTextEffect,
   sanitizeAnimationIn,
+  sanitizeAnimationInDelay,
   sanitizeAnimationLoop,
   sanitizeAnimationOut,
   sanitizeAnimationSpeed,
@@ -1761,6 +1764,10 @@ function sanitizeAnimationIn(value) {
   return ANIMATION_IN_PRESETS[value] ? value : DEFAULT_ANIMATION_IN;
 }
 
+function sanitizeAnimationInDelay(value) {
+  return sanitizeNumber(value, DEFAULT_ANIMATION_IN_DELAY, 0, 60);
+}
+
 function sanitizeAnimationLoop(value) {
   return ANIMATION_LOOP_PRESETS[value] ? value : DEFAULT_ANIMATION_LOOP;
 }
@@ -1792,6 +1799,7 @@ function sanitizeAnimationMoveDuration(value) {
 function getObjectAnimationConfig(data = {}) {
   return {
     animationIn: sanitizeAnimationIn(data.animationIn),
+    animationInDelay: sanitizeAnimationInDelay(data.animationInDelay),
     animationLoop: sanitizeAnimationLoop(data.animationLoop),
     animationOut: sanitizeAnimationOut(data.animationOut),
     animationSpeed: sanitizeAnimationSpeed(data.animationSpeed),
@@ -1809,6 +1817,7 @@ function hasObjectAnimation(data = {}) {
   const config = getObjectAnimationConfig(data);
   return (
     config.animationIn !== DEFAULT_ANIMATION_IN ||
+    config.animationInDelay > DEFAULT_ANIMATION_IN_DELAY ||
     config.animationLoop !== DEFAULT_ANIMATION_LOOP ||
     config.animationMove !== DEFAULT_ANIMATION_MOVE
   );
@@ -1823,6 +1832,7 @@ function canAnimateObjectData(data = {}) {
 
 function setDefaultAnimationDataset(element) {
   element.dataset.animationIn = DEFAULT_ANIMATION_IN;
+  element.dataset.animationInDelay = String(DEFAULT_ANIMATION_IN_DELAY);
   element.dataset.animationLoop = DEFAULT_ANIMATION_LOOP;
   element.dataset.animationOut = DEFAULT_ANIMATION_OUT;
   element.dataset.animationSpeed = DEFAULT_ANIMATION_SPEED;
@@ -1837,6 +1847,7 @@ function setDefaultAnimationDataset(element) {
 
 function setAnimationDatasetFromData(element, data = {}) {
   element.dataset.animationIn = sanitizeAnimationIn(data.animationIn);
+  element.dataset.animationInDelay = String(sanitizeAnimationInDelay(data.animationInDelay));
   element.dataset.animationLoop = sanitizeAnimationLoop(data.animationLoop);
   element.dataset.animationOut = DEFAULT_ANIMATION_OUT;
   element.dataset.animationSpeed = sanitizeAnimationSpeed(data.animationSpeed);
@@ -2261,6 +2272,7 @@ function getElementAnimationData(element) {
     height: state.height,
     rotation: state.rotation,
     animationIn: element.dataset.animationIn,
+    animationInDelay: element.dataset.animationInDelay,
     animationLoop: element.dataset.animationLoop,
     animationOut: element.dataset.animationOut,
     animationSpeed: element.dataset.animationSpeed,
@@ -2289,7 +2301,7 @@ function getMoveAnimationDuration(data = {}) {
 
 function getAnimationInDuration(data = {}) {
   const config = getObjectAnimationConfig(data);
-  return ANIMATION_IN_DURATIONS[config.animationIn] || 0;
+  return config.animationInDelay + (ANIMATION_IN_DURATIONS[config.animationIn] || 0);
 }
 
 function hasLoopAnimation(data = {}) {
@@ -2335,6 +2347,7 @@ function getObjectAnimationState(object, timeSeconds = 0, durationSeconds = VIDE
 
   const config = getObjectAnimationConfig(object);
   const time = Math.max(0, numberOr(timeSeconds, 0));
+  const entranceTime = time - config.animationInDelay;
   const state = { ...base };
 
   if (config.animationMove === "move") {
@@ -2351,17 +2364,19 @@ function getObjectAnimationState(object, timeSeconds = 0, durationSeconds = VIDE
     state.y = config.animationMoveFromY + (config.animationMoveToY - config.animationMoveFromY) * easedMoveProgress;
   }
 
-  if (config.animationIn === "fade" && time < 0.45) {
-    state.opacity *= clamp(time / 0.45, 0, 1);
-  } else if (config.animationIn === "pop" && time < 0.45) {
-    const progress = clamp(time / 0.45, 0, 1);
+  if (config.animationInDelay > 0 && entranceTime < 0) {
+    state.opacity = 0;
+  } else if (config.animationIn === "fade" && entranceTime < 0.45) {
+    state.opacity *= clamp(entranceTime / 0.45, 0, 1);
+  } else if (config.animationIn === "pop" && entranceTime < 0.45) {
+    const progress = clamp(entranceTime / 0.45, 0, 1);
     if (progress < 0.72) {
       state.scale *= 0.82 + easeOutCubic(progress / 0.72) * 0.24;
     } else {
       state.scale *= 1.06 - easeOutCubic((progress - 0.72) / 0.28) * 0.06;
     }
-  } else if (config.animationIn === "slideUp" && time < 0.5) {
-    state.y += (1 - easeOutCubic(time / 0.5)) * 28;
+  } else if (config.animationIn === "slideUp" && entranceTime < 0.5) {
+    state.y += (1 - easeOutCubic(entranceTime / 0.5)) * 28;
   }
 
   const periodFactor = ANIMATION_SPEED_PERIOD_FACTORS[config.animationSpeed] || 1;
@@ -2756,7 +2771,7 @@ function syncSelectedInputs() {
   for (const button of [...animationMoveButtons, ...animationMoveEasingButtons, ...animationMovePointButtons]) {
     button.disabled = !hasAnimationSelection;
   }
-  for (const input of [selectedMoveFromX, selectedMoveFromY, selectedMoveToX, selectedMoveToY, selectedMoveDuration]) {
+  for (const input of [selectedAnimationInDelay, selectedMoveFromX, selectedMoveFromY, selectedMoveToX, selectedMoveToY, selectedMoveDuration]) {
     input.disabled = !hasAnimationSelection;
   }
   duplicateSelected.disabled = !hasSelection;
@@ -2780,6 +2795,7 @@ function syncSelectedInputs() {
     setActiveTextAlignButton("left");
     syncAnimationButtons({
       animationIn: DEFAULT_ANIMATION_IN,
+      animationInDelay: DEFAULT_ANIMATION_IN_DELAY,
       animationLoop: DEFAULT_ANIMATION_LOOP,
       animationSpeed: DEFAULT_ANIMATION_SPEED,
       animationMove: DEFAULT_ANIMATION_MOVE,
@@ -2790,6 +2806,7 @@ function syncSelectedInputs() {
     selectedMoveToX.value = "";
     selectedMoveToY.value = "";
     selectedMoveDuration.value = "";
+    selectedAnimationInDelay.value = "";
     selectedTextColor.value = defaultTextColor;
     updateStatusBar();
     return;
@@ -2809,6 +2826,7 @@ function syncSelectedInputs() {
   const animationData = getElementAnimationData(selectedObject);
   const hasMoveAnimation = sanitizeAnimationMove(animationData.animationMove) === "move";
   syncAnimationButtons(animationData);
+  selectedAnimationInDelay.value = String(sanitizeAnimationInDelay(animationData.animationInDelay));
   selectedMoveFromX.value = Math.round(hasMoveAnimation ? sanitizeAnimationMoveCoordinate(animationData.animationMoveFromX) : state.x);
   selectedMoveFromY.value = Math.round(hasMoveAnimation ? sanitizeAnimationMoveCoordinate(animationData.animationMoveFromY) : state.y);
   selectedMoveToX.value = Math.round(hasMoveAnimation ? sanitizeAnimationMoveCoordinate(animationData.animationMoveToX) : state.x);
@@ -7744,6 +7762,24 @@ function applySelectedMoveInputChange(shouldRecord = false) {
   }
 }
 
+function applySelectedAnimationInDelayInputChange(shouldRecord = false) {
+  if (!canAnimateElement(selectedObject)) {
+    return;
+  }
+  const nextDelay = sanitizeAnimationInDelay(selectedAnimationInDelay.value);
+  const targets = selectedObjects.filter(canAnimateElement);
+  for (const object of targets.length ? targets : [selectedObject]) {
+    object.dataset.animationInDelay = String(nextDelay);
+  }
+  syncObjectAnimationPreview();
+  renderSlideList();
+  if (shouldRecord) {
+    selectedAnimationInDelay.value = String(nextDelay);
+    setStatus(`In animation delay set to ${nextDelay}s.`);
+    recordHistory();
+  }
+}
+
 function setSelectedMovePoint(point) {
   if (!canAnimateElement(selectedObject)) {
     return;
@@ -8024,6 +8060,8 @@ for (const button of animationMoveEasingButtons) {
 for (const button of animationMovePointButtons) {
   button.addEventListener("click", () => setSelectedMovePoint(button.dataset.animationMovePoint));
 }
+selectedAnimationInDelay.addEventListener("input", () => applySelectedAnimationInDelayInputChange());
+selectedAnimationInDelay.addEventListener("change", () => applySelectedAnimationInDelayInputChange(true));
 for (const input of [selectedMoveFromX, selectedMoveFromY, selectedMoveToX, selectedMoveToY, selectedMoveDuration]) {
   input.addEventListener("input", () => applySelectedMoveInputChange());
   input.addEventListener("change", () => applySelectedMoveInputChange(true));
