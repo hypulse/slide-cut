@@ -1312,6 +1312,10 @@ button.danger:hover {
   gap: 8px;
 }
 
+.subgroup[hidden] {
+  display: none;
+}
+
 .subgroup + .subgroup {
   margin-top: 4px;
   padding-top: 10px;
