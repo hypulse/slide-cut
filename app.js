@@ -370,7 +370,7 @@ const TEXT_EFFECT_PRESETS = {
   },
   boldCaption: {
     label: "Bold Caption",
-    fontFamily: "Pretendard",
+    fontFamily: "Noto Sans KR",
     fontWeight: 700,
     fillColor: "#ffffff",
     strokeColor: "#09090d",
@@ -382,20 +382,20 @@ const TEXT_EFFECT_PRESETS = {
   },
   popPunch: {
     label: "Pop Punch",
-    fontFamily: "Pretendard",
-    fontWeight: 400,
+    fontFamily: "Gmarket Sans",
+    fontWeight: 700,
     fillColor: "#ffffff",
     strokeColor: "#101015",
-    strokeWidth: 8,
+    strokeWidth: 5,
     shadowLayerColor: "#ffd83d",
-    shadowLayerStrokeWidth: 10,
-    shadowLayerOffsetX: 8,
-    shadowLayerOffsetY: 9,
+    shadowLayerStrokeWidth: 7,
+    shadowLayerOffsetX: 5,
+    shadowLayerOffsetY: 6,
   },
   candyBubble: {
     label: "Candy Sticker",
-    fontFamily: "Pretendard",
-    fontWeight: 700,
+    fontFamily: "Bagel Fat One",
+    fontWeight: 400,
     fillColor: "#ff5ca8",
     fillGradient: {
       direction: "vertical",
@@ -406,9 +406,9 @@ const TEXT_EFFECT_PRESETS = {
       ],
     },
     strokeColor: "#ffffff",
-    strokeWidth: 9,
+    strokeWidth: 6,
     shadowLayerColor: "#6b1f8f",
-    shadowLayerStrokeWidth: 11,
+    shadowLayerStrokeWidth: 8,
     shadowLayerOffsetX: 6,
     shadowLayerOffsetY: 7,
     decorations: [
@@ -419,7 +419,7 @@ const TEXT_EFFECT_PRESETS = {
   },
   pixelBadge: {
     label: "Pixel Badge",
-    fontFamily: "Pretendard",
+    fontFamily: "Mona12",
     fontWeight: 700,
     fillColor: "#f8fff4",
     backgroundColor: "#172033",
@@ -439,16 +439,16 @@ const TEXT_EFFECT_PRESETS = {
     fontWeight: 700,
     fillColor: "#ffffff",
     strokeColor: "#1c1c24",
-    strokeWidth: 4,
+    strokeWidth: 3,
     shadowLayerColor: "#ff7aa8",
-    shadowLayerStrokeWidth: 6,
-    shadowLayerOffsetX: 4,
-    shadowLayerOffsetY: 5,
+    shadowLayerStrokeWidth: 4.5,
+    shadowLayerOffsetX: 3,
+    shadowLayerOffsetY: 4,
   },
   postItNote: {
     label: "Post-it Note",
-    fontFamily: "Pretendard",
-    fontWeight: 700,
+    fontFamily: "Gowun Dodum",
+    fontWeight: 400,
     fillColor: "#4b371b",
     backgroundColor: "#ffea70",
     backgroundStrokeColor: "#f1c847",
@@ -468,15 +468,15 @@ const TEXT_EFFECT_PRESETS = {
   },
   impactHeadline: {
     label: "Impact Headline",
-    fontFamily: "Pretendard",
+    fontFamily: "Black Han Sans",
     fontWeight: 400,
     fillColor: "#fff32e",
     strokeColor: "#111015",
-    strokeWidth: 8,
+    strokeWidth: 4,
     shadowLayerColor: "#ff3f3f",
-    shadowLayerStrokeWidth: 10,
-    shadowLayerOffsetX: 7,
-    shadowLayerOffsetY: 7,
+    shadowLayerStrokeWidth: 6,
+    shadowLayerOffsetX: 5,
+    shadowLayerOffsetY: 6,
   },
   bubbleBounce: {
     label: "Bubble Bounce",
@@ -484,9 +484,9 @@ const TEXT_EFFECT_PRESETS = {
     fontWeight: 400,
     fillColor: "#ffffff",
     strokeColor: "#1f74df",
-    strokeWidth: 8,
-    shadowLayerColor: "#9ce8ff",
-    shadowLayerStrokeWidth: 10,
+    strokeWidth: 6,
+    shadowLayerColor: "#56b5ff",
+    shadowLayerStrokeWidth: 8,
     shadowLayerOffsetX: 4,
     shadowLayerOffsetY: 6,
   },
@@ -513,7 +513,7 @@ const TEXT_EFFECT_PRESETS = {
   },
   neonChromatic: {
     label: "Neon Chromatic",
-    fontFamily: "Pretendard",
+    fontFamily: "Gmarket Sans",
     fontWeight: 700,
     fillColor: "#ffffff",
     strokeColor: "#101015",
@@ -531,8 +531,8 @@ const TEXT_EFFECT_PRESETS = {
   },
   hotPinkNeon: {
     label: "Hot Pink Neon",
-    fontFamily: "Pretendard",
-    fontWeight: 700,
+    fontFamily: "Black Han Sans",
+    fontWeight: 400,
     fillColor: "#151018",
     strokeColor: "#ffffff",
     strokeWidth: 4,
@@ -549,20 +549,20 @@ const TEXT_EFFECT_PRESETS = {
   },
   sparklePop: {
     label: "Sparkle Pop",
-    fontFamily: "Pretendard",
-    fontWeight: 700,
+    fontFamily: "학교안심 봄방학",
+    fontWeight: 400,
     fillColor: "#ff70b6",
     strokeColor: "#fff4f9",
-    strokeWidth: 8,
+    strokeWidth: 6,
     shadowLayerColor: "#7c2ce0",
     shadowLayerStrokeWidth: 10,
     shadowLayerOffsetX: 5,
     shadowLayerOffsetY: 6,
     decorations: [
-      { type: "sparkle", phase: "front", count: 6, colors: ["#ffffff", "#ffd7f2", "#fff35f"], spread: 26 },
+      { type: "sparkle", phase: "front", count: 5, colors: ["#ffffff", "#ffd7f2", "#fff35f"], spread: 22, heroSize: 10, satelliteSize: 4 },
     ],
-    decorationOutsetX: 26,
-    decorationOutsetY: 26,
+    decorationOutsetX: 28,
+    decorationOutsetY: 28,
   },
   graffitiBurst: {
     label: "Graffiti Burst",
@@ -576,14 +576,25 @@ const TEXT_EFFECT_PRESETS = {
     shadowLayerOffsetX: 4,
     shadowLayerOffsetY: 5,
     decorations: [
-      { type: "drip", phase: "front", count: 5, colors: ["#fff42c", "#ff2dac"], strokeColor: "#101015" },
+      {
+        type: "burst",
+        phase: "front",
+        rayCount: 5,
+        rayLength: 38,
+        fanSpread: 1.85,
+        colors: ["#fff42c", "#ff2dac", "#ffffff"],
+        strokeColor: "#101015",
+        strokeWidth: 1.4,
+        confettiCount: 8,
+        spread: 22,
+      },
     ],
-    decorationOutsetX: 20,
-    decorationOutsetY: 28,
+    decorationOutsetX: 36,
+    decorationOutsetY: 36,
   },
   goldGlow: {
     label: "Gold Glow",
-    fontFamily: "Pretendard",
+    fontFamily: "Gmarket Sans",
     fontWeight: 700,
     fillColor: "#ffd84d",
     fillGradient: {
@@ -609,25 +620,25 @@ const TEXT_EFFECT_PRESETS = {
   },
   retro3d: {
     label: "Retro 3D",
-    fontFamily: "Pretendard",
+    fontFamily: "Gmarket Sans",
     fontWeight: 700,
     fillColor: "#ff922d",
-    strokeColor: "#5a2a18",
+    strokeColor: "#3a1a0c",
     strokeWidth: 5,
     offsetLayers: [
-      { color: "#7b3b25", strokeWidth: 7, offsetX: 5, offsetY: 6 },
-      { color: "#193c78", strokeWidth: 5, offsetX: 9, offsetY: 11 },
+      { color: "#b85a2e", strokeWidth: 6, offsetX: 4, offsetY: 5 },
+      { color: "#2a1107", strokeWidth: 5, offsetX: 8, offsetY: 9 },
     ],
     shadowColor: "rgba(0, 0, 0, 0.32)",
     shadowBlur: 4,
     shadowOffsetX: 2,
     shadowOffsetY: 3,
-    decorationOutsetX: 24,
-    decorationOutsetY: 28,
+    decorationOutsetX: 22,
+    decorationOutsetY: 24,
   },
   iceGlow: {
     label: "Ice Glow",
-    fontFamily: "Pretendard",
+    fontFamily: "Noto Sans KR",
     fontWeight: 700,
     fillColor: "#84eaff",
     fillGradient: {
@@ -653,11 +664,11 @@ const TEXT_EFFECT_PRESETS = {
   },
   tapePatch: {
     label: "Tape Patch",
-    fontFamily: "Pretendard",
-    fontWeight: 700,
-    fillColor: "#ffffff",
+    fontFamily: "Nanum Pen Script",
+    fontWeight: 400,
+    fillColor: "#3a1530",
     strokeColor: "#71315d",
-    strokeWidth: 3,
+    strokeWidth: 1.5,
     shadowColor: "rgba(68, 28, 52, 0.22)",
     shadowBlur: 4,
     shadowOffsetX: 0,
@@ -670,8 +681,8 @@ const TEXT_EFFECT_PRESETS = {
   },
   warningBadge: {
     label: "Warning Badge",
-    fontFamily: "Pretendard",
-    fontWeight: 700,
+    fontFamily: "Black Han Sans",
+    fontWeight: 400,
     fillColor: "#111015",
     backgroundColor: "#ffde35",
     backgroundStrokeColor: "#111015",
@@ -691,8 +702,8 @@ const TEXT_EFFECT_PRESETS = {
   },
   sunsetGradient: {
     label: "Sunset Gradient",
-    fontFamily: "Pretendard",
-    fontWeight: 700,
+    fontFamily: "Bagel Fat One",
+    fontWeight: 400,
     fillColor: "#ff8d3d",
     fillGradient: {
       direction: "horizontal",
@@ -713,8 +724,8 @@ const TEXT_EFFECT_PRESETS = {
   },
   aquaGradient: {
     label: "Aqua Gradient",
-    fontFamily: "Pretendard",
-    fontWeight: 700,
+    fontFamily: "Jua",
+    fontWeight: 400,
     fillColor: "#50e3d4",
     fillGradient: {
       direction: "horizontal",
@@ -735,7 +746,7 @@ const TEXT_EFFECT_PRESETS = {
   },
   blueNeon: {
     label: "Blue Neon",
-    fontFamily: "Pretendard",
+    fontFamily: "Gmarket Sans",
     fontWeight: 700,
     fillColor: "#eaffff",
     strokeColor: "#0d1638",
@@ -753,7 +764,7 @@ const TEXT_EFFECT_PRESETS = {
   },
   limeNeon: {
     label: "Lime Neon",
-    fontFamily: "Pretendard",
+    fontFamily: "Mona12",
     fontWeight: 700,
     fillColor: "#dcff3f",
     strokeColor: "#061307",
@@ -771,7 +782,7 @@ const TEXT_EFFECT_PRESETS = {
   },
   auroraNeon: {
     label: "Aurora Neon",
-    fontFamily: "Pretendard",
+    fontFamily: "Gmarket Sans",
     fontWeight: 700,
     fillColor: "#9bfffb",
     fillGradient: {
@@ -797,8 +808,8 @@ const TEXT_EFFECT_PRESETS = {
   },
   prismNeon: {
     label: "Prism Neon",
-    fontFamily: "Pretendard",
-    fontWeight: 700,
+    fontFamily: "Bagel Fat One",
+    fontWeight: 400,
     fillColor: "#ffffff",
     fillGradient: {
       direction: "horizontal",
@@ -1960,6 +1971,7 @@ function getTextEffectOutset(renderStyle = {}) {
       sparkle: 24,
       confetti: 18,
       paintBurst: 30,
+      burst: 36,
       drip: 26,
       tape: 18,
       stripe: 4,
@@ -2718,13 +2730,37 @@ function setActiveTextSizeButton(sizeKey) {
   }
 }
 
-function setActiveTextFontButton(fontFamily, fontWeight) {
+function getClosestTextFontButton(fontFamily, fontWeight) {
   const safeFamily = sanitizeTextFontFamily(fontFamily);
   const safeWeight = sanitizeTextFontWeight(fontWeight);
+  let closestButton = null;
+  let closestWeightDistance = Infinity;
+
   for (const button of textFontButtons) {
     const buttonFamily = sanitizeTextFontFamily(button.dataset.textFont);
+    if (buttonFamily !== safeFamily) {
+      continue;
+    }
+
     const buttonWeight = sanitizeTextFontWeight(button.dataset.textFontWeight);
-    button.classList.toggle("is-active", buttonFamily === safeFamily && buttonWeight === safeWeight);
+    if (buttonWeight === safeWeight) {
+      return button;
+    }
+
+    const weightDistance = Math.abs(buttonWeight - safeWeight);
+    if (weightDistance < closestWeightDistance) {
+      closestButton = button;
+      closestWeightDistance = weightDistance;
+    }
+  }
+
+  return closestButton;
+}
+
+function setActiveTextFontButton(fontFamily, fontWeight) {
+  const activeButton = getClosestTextFontButton(fontFamily, fontWeight);
+  for (const button of textFontButtons) {
+    button.classList.toggle("is-active", button === activeButton);
   }
 }
 
