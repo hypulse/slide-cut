@@ -605,38 +605,6 @@ const TEXT_EFFECT_PRESETS = {
     shadowOffsetY: 5,
   },
 };
-const TEXT_EFFECT_ALIASES = {
-  clean: "cleanCaption",
-  cleanReel: "cleanCaption",
-  popSticker: "popPunch",
-  popStickerMint: "popPunch",
-  popStickerSky: "popPunch",
-  candyLabel: "candyBubble",
-  candyBlue: "candyBubble",
-  comicTag: "effectTag",
-  comicBubble: "effectTag",
-  comicPink: "effectTag",
-  comicCyan: "effectTag",
-  gugiTag: "effectTag",
-  dongleBounce: "bubbleBounce",
-  neonPop: "popPunch",
-  doodlePop: "doodleNote",
-  glassChip: "warmDodum",
-  rainGlass: "warmDodum",
-  rainCaption: "warmDodum",
-  paperLabel: "classicBatang",
-  diaryNote: "softDiary",
-  poemNote: "classicBatang",
-  letterPaper: "classicBatang",
-  softPen: "brushMood",
-  warmGlow: "brushMood",
-  cozyLabel: "schoolSticker",
-  cozyLavender: "schoolSticker",
-  filmSoft: "classicBatang",
-  filmCaption: "classicBatang",
-  mintTag: "boldCaption",
-  onyxChip: "warmDodum",
-};
 const TEXT_EFFECT_OPTIONS = Object.keys(TEXT_EFFECT_PRESETS);
 
 function createTextEffectButton(effectKey, datasetKey) {
@@ -1407,9 +1375,7 @@ function sanitizeTextFontFamily(value) {
 }
 
 function sanitizeTextEffect(value) {
-  const alias = TEXT_EFFECT_ALIASES[value];
-  const key = alias || value;
-  return TEXT_EFFECT_PRESETS[key] ? key : DEFAULT_TEXT_EFFECT;
+  return TEXT_EFFECT_PRESETS[value] ? value : DEFAULT_TEXT_EFFECT;
 }
 
 function sanitizeTextFontWeight(value, fallback = DEFAULT_TEXT_FONT_WEIGHT) {
