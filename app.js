@@ -191,7 +191,7 @@ const settingsSubtitleSize = document.querySelector("#settingsSubtitleSize");
 const settingsSubtitleY = document.querySelector("#settingsSubtitleY");
 const settingsSubtitleStyleButtons = [...document.querySelectorAll("[data-subtitle-style-mode]")];
 const settingsSubtitleFontButtons = [...document.querySelectorAll("[data-subtitle-font]")];
-const settingsSubtitleStickerButtons = [...document.querySelectorAll("[data-subtitle-text-effect]")];
+let settingsSubtitleStickerButtons = [...document.querySelectorAll("[data-subtitle-text-effect]")];
 const settingsSubtitleFontLabel = document.querySelector(".settings-subtitle-font-label");
 const settingsSubtitleStickerLabel = document.querySelector(".settings-subtitle-sticker-label");
 const settingsExportDir = document.querySelector("#settingsExportDir");
@@ -216,7 +216,7 @@ const selectedTextSize = document.querySelector("#selectedTextSize");
 const imageFlipButtons = [...document.querySelectorAll("[data-image-flip]")];
 const textSizeButtons = [...document.querySelectorAll("[data-text-size]")];
 const textFontButtons = [...document.querySelectorAll("[data-text-font]")];
-const textStyleButtons = [...document.querySelectorAll("[data-text-style]")];
+let textStyleButtons = [...document.querySelectorAll("[data-text-style]")];
 const textAlignButtons = [...document.querySelectorAll("[data-text-align]")];
 const animationInButtons = [...document.querySelectorAll("[data-animation-in]")];
 const animationLoopButtons = [...document.querySelectorAll("[data-animation-loop]")];
@@ -302,7 +302,7 @@ let projectSettingsState = {
   subtitleStyleMode: "standard",
   subtitleFontFamily: "Pretendard",
   subtitleFontWeight: 700,
-  subtitleTextEffect: "popSticker",
+  subtitleTextEffect: "boldCaption",
   exportDir: "",
   backgroundMusic: null,
 };
@@ -322,11 +322,11 @@ const TEXT_ALIGNMENTS = new Set(["left", "center", "right"]);
 const DEFAULT_TEXT_COLOR = "#000000";
 const DEFAULT_TEXT_FONT_FAMILY = "Pretendard";
 const DEFAULT_TEXT_FONT_WEIGHT = 600;
-const DEFAULT_TEXT_EFFECT = "clean";
+const DEFAULT_TEXT_EFFECT = "boldCaption";
 const DEFAULT_SUBTITLE_FONT_FAMILY = "Pretendard";
 const DEFAULT_SUBTITLE_FONT_WEIGHT = 700;
 const DEFAULT_SUBTITLE_STYLE_MODE = "standard";
-const DEFAULT_SUBTITLE_TEXT_EFFECT = "popSticker";
+const DEFAULT_SUBTITLE_TEXT_EFFECT = "boldCaption";
 const SUBTITLE_STYLE_MODES = new Set(["standard", "sticker"]);
 const TEXT_FONT_FAMILIES = new Set([
   "Pretendard",
@@ -340,6 +340,8 @@ const TEXT_FONT_FAMILIES = new Set([
   "Gamja Flower",
   "Nanum Pen Script",
   "Nanum Brush Script",
+  "Mona12",
+  "학교안심 봄방학",
 ]);
 const FONT_LOAD_SAMPLE_TEXT = "가나다라마바사아자차카타파하 ABC xyz 123";
 const TEXT_FONT_LOAD_SIZE = 32;
@@ -351,29 +353,30 @@ const VIDEO_FIT_MODES = {
   stretch: { label: "Stretch", objectFit: "fill" },
 };
 const TEXT_EFFECT_PRESETS = {
-  clean: {
-    label: "Clean",
+  cleanCaption: {
+    label: "Clean Caption",
     fontFamily: "Pretendard",
     fontWeight: 700,
-    shadowColor: "rgba(8, 12, 22, 0.45)",
+    fillColor: "#ffffff",
+    shadowColor: "rgba(8, 12, 22, 0.42)",
     shadowBlur: 5,
     shadowOffsetX: 0,
     shadowOffsetY: 2,
   },
-  cleanReel: {
-    label: "Clean Reel",
-    fontFamily: "Noto Sans KR",
+  boldCaption: {
+    label: "Bold Caption",
+    fontFamily: "Gmarket Sans",
     fontWeight: 700,
     fillColor: "#ffffff",
-    strokeColor: "#050505",
+    strokeColor: "#09090d",
     strokeWidth: 7,
-    shadowColor: "rgba(0, 0, 0, 0.32)",
-    shadowBlur: 3,
+    shadowColor: "rgba(0, 0, 0, 0.34)",
+    shadowBlur: 4,
     shadowOffsetX: 2,
     shadowOffsetY: 3,
   },
-  popSticker: {
-    label: "Pop Sticker",
+  popPunch: {
+    label: "Pop Punch",
     fontFamily: "Gmarket Sans",
     fontWeight: 700,
     fillColor: "#ffffff",
@@ -384,32 +387,8 @@ const TEXT_EFFECT_PRESETS = {
     shadowLayerOffsetX: 8,
     shadowLayerOffsetY: 9,
   },
-  popStickerMint: {
-    label: "Pop Mint",
-    fontFamily: "Gmarket Sans",
-    fontWeight: 700,
-    fillColor: "#ffffff",
-    strokeColor: "#101015",
-    strokeWidth: 9,
-    shadowLayerColor: "#4dd9b3",
-    shadowLayerStrokeWidth: 11,
-    shadowLayerOffsetX: 8,
-    shadowLayerOffsetY: 9,
-  },
-  popStickerSky: {
-    label: "Pop Sky",
-    fontFamily: "Gmarket Sans",
-    fontWeight: 700,
-    fillColor: "#ffffff",
-    strokeColor: "#101015",
-    strokeWidth: 9,
-    shadowLayerColor: "#5cb6ff",
-    shadowLayerStrokeWidth: 11,
-    shadowLayerOffsetX: 8,
-    shadowLayerOffsetY: 9,
-  },
-  candyLabel: {
-    label: "Candy Label",
+  candyBubble: {
+    label: "Candy Bubble",
     fontFamily: "Jua",
     fontWeight: 400,
     fillColor: "#ff4fa3",
@@ -420,80 +399,52 @@ const TEXT_EFFECT_PRESETS = {
     shadowLayerOffsetX: 6,
     shadowLayerOffsetY: 7,
   },
-  candyBlue: {
-    label: "Candy Blue",
-    fontFamily: "Jua",
+  schoolSticker: {
+    label: "School Sticker",
+    fontFamily: "학교안심 봄방학",
     fontWeight: 400,
-    fillColor: "#3079ff",
+    fillColor: "#ff5ca8",
     strokeColor: "#ffffff",
-    strokeWidth: 9,
-    shadowLayerColor: "#1a3aa3",
-    shadowLayerStrokeWidth: 11,
-    shadowLayerOffsetX: 6,
-    shadowLayerOffsetY: 7,
+    strokeWidth: 8,
+    shadowLayerColor: "#6124a8",
+    shadowLayerStrokeWidth: 10,
+    shadowLayerOffsetX: 5,
+    shadowLayerOffsetY: 6,
   },
-  comicBubble: {
-    label: "Comic Bubble",
-    fontFamily: "Black Han Sans",
-    fontWeight: 400,
-    fillColor: "#0f0f14",
+  pixelBadge: {
+    label: "Pixel Badge",
+    fontFamily: "Mona12",
+    fontWeight: 700,
+    fillColor: "#f8fff4",
+    backgroundColor: "#172033",
+    backgroundStrokeColor: "#f5f3c3",
+    backgroundStrokeWidth: 3,
+    backgroundPaddingX: 18,
+    backgroundPaddingY: 10,
+    backgroundRadius: 2,
+    shadowColor: "rgba(0, 0, 0, 0.92)",
+    shadowBlur: 0,
+    shadowOffsetX: 6,
+    shadowOffsetY: 6,
+  },
+  comicTag: {
+    label: "Comic Tag",
+    fontFamily: "Gmarket Sans",
+    fontWeight: 700,
+    fillColor: "#111015",
     backgroundColor: "#ffe14a",
-    backgroundStrokeColor: "#0f0f14",
+    backgroundStrokeColor: "#111015",
     backgroundStrokeWidth: 5,
     backgroundPaddingX: 20,
     backgroundPaddingY: 12,
     backgroundRadius: 14,
-    shadowColor: "rgba(15, 15, 20, 0.32)",
+    shadowColor: "rgba(17, 16, 21, 0.32)",
     shadowBlur: 0,
     shadowOffsetX: 7,
     shadowOffsetY: 8,
   },
-  comicPink: {
-    label: "Comic Pink",
-    fontFamily: "Black Han Sans",
-    fontWeight: 400,
-    fillColor: "#1d0f12",
-    backgroundColor: "#ffb1c9",
-    backgroundStrokeColor: "#1d0f12",
-    backgroundStrokeWidth: 5,
-    backgroundPaddingX: 20,
-    backgroundPaddingY: 12,
-    backgroundRadius: 14,
-    shadowColor: "rgba(29, 15, 18, 0.3)",
-    shadowBlur: 0,
-    shadowOffsetX: 7,
-    shadowOffsetY: 8,
-  },
-  comicCyan: {
-    label: "Comic Cyan",
-    fontFamily: "Black Han Sans",
-    fontWeight: 400,
-    fillColor: "#0b1a26",
-    backgroundColor: "#a7ecff",
-    backgroundStrokeColor: "#0b1a26",
-    backgroundStrokeWidth: 5,
-    backgroundPaddingX: 20,
-    backgroundPaddingY: 12,
-    backgroundRadius: 14,
-    shadowColor: "rgba(11, 26, 38, 0.3)",
-    shadowBlur: 0,
-    shadowOffsetX: 7,
-    shadowOffsetY: 8,
-  },
-  neonPop: {
-    label: "Neon",
-    fontFamily: "Black Han Sans",
-    fontWeight: 400,
-    fillColor: "#ffffff",
-    glowLayers: [
-      { color: "#ff2bd6", blur: 28 },
-      { color: "#ff2bd6", blur: 14 },
-      { color: "#ffb8ef", blur: 6 },
-      { color: "#ffffff", blur: 2 },
-    ],
-  },
-  doodlePop: {
-    label: "Doodle Pop",
+  doodleNote: {
+    label: "Doodle Note",
     fontFamily: "Gaegu",
     fontWeight: 700,
     fillColor: "#ffffff",
@@ -504,126 +455,20 @@ const TEXT_EFFECT_PRESETS = {
     shadowLayerOffsetX: 5,
     shadowLayerOffsetY: 6,
   },
-  glassChip: {
-    label: "Glass Chip",
-    fontFamily: "Pretendard",
-    fontWeight: 700,
-    fillColor: "#0c121d",
-    backgroundColor: "rgba(255, 255, 255, 0.7)",
-    backgroundStrokeColor: "rgba(255, 255, 255, 0.85)",
-    backgroundStrokeWidth: 2,
-    backgroundPaddingX: 20,
-    backgroundPaddingY: 12,
-    backgroundRadius: 999,
-    shadowColor: "rgba(12, 18, 29, 0.2)",
-    shadowBlur: 16,
-    shadowOffsetX: 0,
-    shadowOffsetY: 6,
-  },
-  paperLabel: {
-    label: "Paper Label",
-    fontFamily: "Pretendard",
-    fontWeight: 600,
-    fillColor: "#1a1818",
-    backgroundColor: "#faf6ee",
-    backgroundStrokeColor: "#1a1818",
-    backgroundStrokeWidth: 2,
-    backgroundPaddingX: 20,
-    backgroundPaddingY: 10,
-    backgroundRadius: 4,
-    shadowColor: "rgba(20, 18, 14, 0.18)",
-    shadowBlur: 8,
-    shadowOffsetX: 0,
-    shadowOffsetY: 4,
-  },
-  mintTag: {
-    label: "Mint Tag",
-    fontFamily: "Pretendard",
-    fontWeight: 700,
-    fillColor: "#ffffff",
-    backgroundColor: "#1fc4a4",
-    backgroundPaddingX: 18,
-    backgroundPaddingY: 9,
-    backgroundRadius: 999,
-    shadowColor: "rgba(15, 90, 76, 0.3)",
-    shadowBlur: 10,
-    shadowOffsetX: 0,
-    shadowOffsetY: 4,
-  },
-  onyxChip: {
-    label: "Onyx Chip",
-    fontFamily: "Pretendard",
-    fontWeight: 700,
-    fillColor: "#ffffff",
-    backgroundColor: "#0d0d12",
-    backgroundStrokeColor: "rgba(255, 255, 255, 0.16)",
-    backgroundStrokeWidth: 1.5,
-    backgroundPaddingX: 20,
-    backgroundPaddingY: 11,
-    backgroundRadius: 999,
-    shadowColor: "rgba(8, 8, 12, 0.32)",
-    shadowBlur: 12,
-    shadowOffsetX: 0,
-    shadowOffsetY: 5,
-  },
-  diaryNote: {
-    label: "Diary Note",
-    fontFamily: "Hi Melody",
-    fontWeight: 400,
-    fillColor: "#3c2a1f",
-    backgroundColor: "#fff5d8",
-    backgroundStrokeColor: "#e3cf9c",
-    backgroundStrokeWidth: 2,
-    backgroundPaddingX: 18,
-    backgroundPaddingY: 12,
-    backgroundRadius: 4,
-    shadowColor: "rgba(80, 55, 28, 0.24)",
-    shadowBlur: 6,
-    shadowOffsetX: 2,
-    shadowOffsetY: 6,
-  },
-  softPen: {
-    label: "Soft Pen",
+  softDiary: {
+    label: "Soft Diary",
     fontFamily: "Nanum Pen Script",
     fontWeight: 400,
-    fillColor: "#1e2747",
-    strokeColor: "rgba(255, 255, 255, 0.95)",
-    strokeWidth: 2,
-    shadowColor: "rgba(18, 28, 60, 0.32)",
-    shadowBlur: 4,
-    shadowOffsetX: 1,
-    shadowOffsetY: 2,
-  },
-  cozyLabel: {
-    label: "Cozy Label",
-    fontFamily: "Gamja Flower",
-    fontWeight: 400,
-    fillColor: "#5f3a4e",
-    backgroundColor: "#fff3f6",
-    backgroundStrokeColor: "#f2a8c6",
-    backgroundStrokeWidth: 3,
-    backgroundPaddingX: 18,
-    backgroundPaddingY: 11,
-    backgroundRadius: 14,
-    shadowColor: "rgba(95, 58, 78, 0.22)",
-    shadowBlur: 0,
-    shadowOffsetX: 4,
-    shadowOffsetY: 5,
-  },
-  cozyLavender: {
-    label: "Cozy Lavender",
-    fontFamily: "Gamja Flower",
-    fontWeight: 400,
-    fillColor: "#3e2e63",
-    backgroundColor: "#f3eaff",
-    backgroundStrokeColor: "#c4abe6",
-    backgroundStrokeWidth: 3,
-    backgroundPaddingX: 18,
-    backgroundPaddingY: 11,
-    backgroundRadius: 14,
-    shadowColor: "rgba(62, 46, 99, 0.22)",
-    shadowBlur: 0,
-    shadowOffsetX: 4,
+    fillColor: "#33283d",
+    backgroundColor: "rgba(255, 250, 236, 0.9)",
+    backgroundStrokeColor: "#ead8bd",
+    backgroundStrokeWidth: 2,
+    backgroundPaddingX: 20,
+    backgroundPaddingY: 12,
+    backgroundRadius: 8,
+    shadowColor: "rgba(72, 58, 42, 0.2)",
+    shadowBlur: 10,
+    shadowOffsetX: 0,
     shadowOffsetY: 5,
   },
   brushMood: {
@@ -636,9 +481,9 @@ const TEXT_EFFECT_PRESETS = {
       { color: "rgba(255, 248, 240, 0.85)", blur: 5 },
     ],
   },
-  filmCaption: {
-    label: "Film Caption",
-    fontFamily: "Noto Sans KR",
+  filmSoft: {
+    label: "Film Soft",
+    fontFamily: "Pretendard",
     fontWeight: 700,
     fillColor: "#fff8ef",
     backgroundColor: "rgba(17, 18, 20, 0.72)",
@@ -646,42 +491,14 @@ const TEXT_EFFECT_PRESETS = {
     backgroundStrokeWidth: 1,
     backgroundPaddingX: 22,
     backgroundPaddingY: 10,
-    backgroundRadius: 6,
+    backgroundRadius: 999,
     shadowColor: "rgba(0, 0, 0, 0.28)",
     shadowBlur: 18,
     shadowOffsetX: 0,
     shadowOffsetY: 8,
   },
-  poemNote: {
-    label: "Poem Note",
-    fontFamily: "Nanum Pen Script",
-    fontWeight: 400,
-    fillColor: "#2e2631",
-    backgroundColor: "rgba(255, 251, 242, 0.88)",
-    backgroundStrokeColor: "#ead8bd",
-    backgroundStrokeWidth: 2,
-    backgroundPaddingX: 20,
-    backgroundPaddingY: 12,
-    backgroundRadius: 8,
-    shadowColor: "rgba(72, 58, 42, 0.2)",
-    shadowBlur: 10,
-    shadowOffsetX: 0,
-    shadowOffsetY: 5,
-  },
-  warmGlow: {
-    label: "Warm Glow",
-    fontFamily: "Hi Melody",
-    fontWeight: 400,
-    fillColor: "#fff4d6",
-    strokeColor: "rgba(94, 52, 28, 0.42)",
-    strokeWidth: 2,
-    glowLayers: [
-      { color: "rgba(255, 187, 105, 0.68)", blur: 20 },
-      { color: "rgba(255, 236, 184, 0.82)", blur: 8 },
-    ],
-  },
-  rainCaption: {
-    label: "Rain Caption",
+  rainGlass: {
+    label: "Rain Glass",
     fontFamily: "Pretendard",
     fontWeight: 600,
     fillColor: "#eaf6ff",
@@ -696,23 +513,67 @@ const TEXT_EFFECT_PRESETS = {
     shadowOffsetX: 0,
     shadowOffsetY: 6,
   },
-  letterPaper: {
-    label: "Letter Paper",
-    fontFamily: "Gamja Flower",
-    fontWeight: 400,
-    fillColor: "#44372f",
-    backgroundColor: "#fff8ec",
-    backgroundStrokeColor: "#d8b989",
-    backgroundStrokeWidth: 2,
-    backgroundPaddingX: 22,
-    backgroundPaddingY: 13,
-    backgroundRadius: 3,
-    shadowColor: "rgba(87, 62, 38, 0.22)",
-    shadowBlur: 8,
-    shadowOffsetX: 3,
-    shadowOffsetY: 5,
-  },
 };
+const TEXT_EFFECT_ALIASES = {
+  clean: "cleanCaption",
+  cleanReel: "cleanCaption",
+  popSticker: "popPunch",
+  popStickerMint: "popPunch",
+  popStickerSky: "popPunch",
+  candyLabel: "candyBubble",
+  candyBlue: "candyBubble",
+  comicBubble: "comicTag",
+  comicPink: "comicTag",
+  comicCyan: "comicTag",
+  neonPop: "popPunch",
+  doodlePop: "doodleNote",
+  glassChip: "rainGlass",
+  rainCaption: "rainGlass",
+  paperLabel: "softDiary",
+  diaryNote: "softDiary",
+  poemNote: "softDiary",
+  letterPaper: "softDiary",
+  softPen: "brushMood",
+  warmGlow: "brushMood",
+  cozyLabel: "schoolSticker",
+  cozyLavender: "schoolSticker",
+  filmCaption: "filmSoft",
+  mintTag: "boldCaption",
+  onyxChip: "filmSoft",
+};
+const TEXT_EFFECT_OPTIONS = Object.keys(TEXT_EFFECT_PRESETS);
+
+function createTextEffectButton(effectKey, datasetKey) {
+  const preset = TEXT_EFFECT_PRESETS[effectKey] || TEXT_EFFECT_PRESETS[DEFAULT_TEXT_EFFECT];
+  const button = document.createElement("button");
+  button.type = "button";
+  button.dataset[datasetKey] = effectKey;
+  button.textContent = preset.label || effectKey;
+  return button;
+}
+
+function renderTextEffectButtons() {
+  const textStyleContainer = document.querySelector("#selectedTextStyle");
+  const subtitleStickerContainer = document.querySelector("#settingsSubtitleSticker");
+
+  if (textStyleContainer) {
+    textStyleContainer.replaceChildren(
+      ...TEXT_EFFECT_OPTIONS.map((effectKey) => createTextEffectButton(effectKey, "textStyle"))
+    );
+    textStyleButtons = [...textStyleContainer.querySelectorAll("[data-text-style]")];
+  }
+
+  if (subtitleStickerContainer) {
+    subtitleStickerContainer.replaceChildren(
+      ...TEXT_EFFECT_OPTIONS.map((effectKey) => createTextEffectButton(effectKey, "subtitleTextEffect"))
+    );
+    settingsSubtitleStickerButtons = [
+      ...subtitleStickerContainer.querySelectorAll("[data-subtitle-text-effect]"),
+    ];
+  }
+}
+
+renderTextEffectButtons();
 const DEFAULT_CANVAS_WIDTH = 1280;
 const DEFAULT_CANVAS_HEIGHT = 720;
 const DEFAULT_CANVAS_COLOR = "#ffffff";
@@ -1450,7 +1311,9 @@ function sanitizeTextFontFamily(value) {
 }
 
 function sanitizeTextEffect(value) {
-  return TEXT_EFFECT_PRESETS[value] ? value : DEFAULT_TEXT_EFFECT;
+  const alias = TEXT_EFFECT_ALIASES[value];
+  const key = alias || value;
+  return TEXT_EFFECT_PRESETS[key] ? key : DEFAULT_TEXT_EFFECT;
 }
 
 function sanitizeTextFontWeight(value, fallback = DEFAULT_TEXT_FONT_WEIGHT) {
@@ -1703,7 +1566,7 @@ function getTextPreset(elementOrKey) {
 
 function getTextRenderStyle(data = {}) {
   const effectKey = sanitizeTextEffect(data.textEffect);
-  const preset = TEXT_EFFECT_PRESETS[effectKey] || TEXT_EFFECT_PRESETS.clean;
+  const preset = TEXT_EFFECT_PRESETS[effectKey] || TEXT_EFFECT_PRESETS[DEFAULT_TEXT_EFFECT];
   return {
     ...preset,
     effectKey,
@@ -7161,7 +7024,7 @@ function applySelectedTextStyleChange(effectKey) {
     return;
   }
   const safeEffect = sanitizeTextEffect(effectKey);
-  const preset = TEXT_EFFECT_PRESETS[safeEffect] || TEXT_EFFECT_PRESETS.clean;
+  const preset = TEXT_EFFECT_PRESETS[safeEffect] || TEXT_EFFECT_PRESETS[DEFAULT_TEXT_EFFECT];
   selectedObject.dataset.textEffect = safeEffect;
   selectedObject.dataset.fontFamily = sanitizeTextFontFamily(preset.fontFamily);
   selectedObject.dataset.fontWeight = String(sanitizeTextFontWeight(preset.fontWeight));

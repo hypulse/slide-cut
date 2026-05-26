@@ -10,5 +10,7 @@
 - Gamja Flower: https://fonts.google.com/specimen/Gamja+Flower
 - Nanum Pen Script: https://fonts.google.com/specimen/Nanum+Pen+Script
 - Nanum Brush Script: https://fonts.google.com/specimen/Nanum+Brush+Script
+- Mona12: https://monadabxy.com/fonts/mona/
+- Hakgyoansim Bombanghak: https://fonts.taedonn.com/post/Hakgyoansim%2BBombanghak
 
 The bundled fonts are used to render user-authored text in Slide Cut exports. They are not sold as standalone font files.

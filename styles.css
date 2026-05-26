@@ -190,6 +190,30 @@
   font-display: block;
 }
 
+@font-face {
+  font-family: "Mona12";
+  src: url("./fonts/mona12-korean-400-normal.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Mona12";
+  src: url("./fonts/mona12-korean-700-normal.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 700;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "학교안심 봄방학";
+  src: url("./fonts/hakgyoansim-bombanghak-korean-400-normal.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+}
+
 :root {
   color-scheme: light;
 
