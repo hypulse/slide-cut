@@ -681,6 +681,27 @@ button.danger:hover {
   align-items: start;
 }
 
+.settings-subtitle-font-label {
+  align-items: start;
+  min-height: 62px;
+}
+
+.settings-subtitle-font-label > span:first-child {
+  padding-top: 6px;
+}
+
+.settings-subtitle-font-label .subtitle-font-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-self: start;
+  gap: 4px;
+}
+
+.settings-subtitle-font-label .subtitle-font-buttons button {
+  flex: 1 1 94px;
+  min-width: 0;
+}
+
 .settings-path-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 82px 104px;
