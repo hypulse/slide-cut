@@ -342,6 +342,15 @@ const TEXT_FONT_FAMILIES = new Set([
   "Nanum Brush Script",
   "Mona12",
   "학교안심 봄방학",
+  "Gowun Dodum",
+  "Gowun Batang",
+  "Diphylleia",
+  "Single Day",
+  "Poor Story",
+  "Bagel Fat One",
+  "Dongle",
+  "Cute Font",
+  "Gugi",
 ]);
 const FONT_LOAD_SAMPLE_TEXT = "가나다라마바사아자차카타파하 ABC xyz 123";
 const TEXT_FONT_LOAD_SIZE = 32;

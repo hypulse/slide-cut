@@ -214,6 +214,78 @@
   font-display: block;
 }
 
+@font-face {
+  font-family: "Gowun Dodum";
+  src: url("./fonts/gowun-dodum-korean-400-normal.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Gowun Batang";
+  src: url("./fonts/gowun-batang-korean-400-normal.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Diphylleia";
+  src: url("./fonts/diphylleia-korean-400-normal.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Single Day";
+  src: url("./fonts/single-day-korean-400-normal.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Poor Story";
+  src: url("./fonts/poor-story-korean-400-normal.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Bagel Fat One";
+  src: url("./fonts/bagel-fat-one-korean-400-normal.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Dongle";
+  src: url("./fonts/dongle-korean-400-normal.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Cute Font";
+  src: url("./fonts/cute-font-korean-400-normal.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Gugi";
+  src: url("./fonts/gugi-korean-400-normal.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+}
+
 :root {
   color-scheme: light;
 
