@@ -217,7 +217,7 @@ export function createProjectModel(deps) {
 
   function normalizeProjectData(data) {
     if (!data || data.format !== PROJECT_FORMAT || !Array.isArray(data.slides)) {
-      throw new Error("Slide Cut 프로젝트 파일이 아닙니다.");
+      throw new Error("Not a Slide Cut project file.");
     }
 
     const normalizedSlides = data.slides.map((slide, index) => ({

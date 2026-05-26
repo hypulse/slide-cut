@@ -301,12 +301,12 @@ button.has-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: 6px;
 }
 
 .button-icon {
-  width: 13px;
-  height: 13px;
+  width: 12px;
+  height: 12px;
   flex: 0 0 auto;
   stroke-width: 2;
 }
@@ -1158,7 +1158,7 @@ button.danger:hover {
   display: grid;
   gap: 8px;
   border-bottom: 1px solid var(--border-strong);
-  padding: 0 12px 10px;
+  padding: 0 12px 12px;
 }
 
 .panel[hidden],
@@ -1172,18 +1172,76 @@ button.danger:hover {
 }
 
 .panel h2 {
-  margin: 0 -12px 4px;
-  padding: 0 12px;
-  height: 22px;
+  margin: 0 -12px 6px;
+  padding: 0 10px;
+  height: 26px;
   display: flex;
   align-items: center;
+  gap: 6px;
   background: var(--surface-sunken);
   border-bottom: 1px solid var(--border-strong);
   color: var(--text-secondary);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.panel-toggle {
+  cursor: pointer;
+  user-select: none;
+}
+
+.panel-toggle:hover {
+  background: #e4e6ea;
+}
+
+.panel-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.panel-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 10px;
+  height: 10px;
+  flex: 0 0 auto;
+  color: var(--muted);
+  transition: transform 120ms ease;
+}
+
+.panel-chevron::before {
+  content: "";
+  display: block;
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid currentColor;
+}
+
+.panel.is-collapsed .panel-chevron {
+  transform: rotate(-90deg);
+}
+
+.panel.is-collapsed > :not(h2):not(.panel-title-row) {
+  display: none !important;
+}
+
+.panel.is-collapsed > h2,
+.panel.is-collapsed > .panel-title-row {
+  margin-bottom: 0;
+}
+
+.panel.is-collapsed {
+  padding-bottom: 0;
+}
+
+.panel-title {
+  display: inline-flex;
+  align-items: center;
 }
 
 .panel-title-row {
@@ -1191,9 +1249,9 @@ button.danger:hover {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin: 0 -12px 4px;
-  padding: 0 12px;
-  height: 22px;
+  margin: 0 -12px 6px;
+  padding: 0 10px;
+  height: 26px;
   background: var(--surface-sunken);
   border-bottom: 1px solid var(--border-strong);
 }
@@ -1205,6 +1263,8 @@ button.danger:hover {
   background: transparent;
   border: 0;
   display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .panel-summary {
@@ -1218,6 +1278,29 @@ button.danger:hover {
   white-space: nowrap;
 }
 
+.subgroup {
+  display: grid;
+  gap: 8px;
+}
+
+.subgroup + .subgroup {
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+}
+
+.subgroup[data-label]::before {
+  content: attr(data-label);
+  display: block;
+  margin: 0 0 2px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
 #dynamicSlidePanel {
   padding-top: 10px;
 }
@@ -1225,12 +1308,12 @@ button.danger:hover {
 label,
 .field-row {
   display: grid;
-  grid-template-columns: 68px minmax(0, 1fr);
+  grid-template-columns: 76px minmax(0, 1fr);
   align-items: center;
   gap: 8px;
-  min-height: 24px;
+  min-height: 26px;
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 600;
 }
 
@@ -1256,7 +1339,7 @@ label > span:first-child,
 
 input[type="number"] {
   width: 100%;
-  height: 24px;
+  height: 26px;
   border: 1px solid var(--border);
   border-radius: 3px;
   padding: 0 7px;
@@ -1271,7 +1354,7 @@ input[type="number"] {
 input[type="text"],
 input[type="password"] {
   width: 100%;
-  height: 24px;
+  height: 26px;
   border: 1px solid var(--border);
   border-radius: 3px;
   padding: 0 7px;
@@ -1293,7 +1376,7 @@ textarea:focus {
 
 select {
   width: 100%;
-  height: 24px;
+  height: 26px;
   border: 1px solid var(--border);
   border-radius: 3px;
   padding: 0 7px;
@@ -1317,7 +1400,7 @@ select {
 }
 
 .video-source-actions button {
-  height: 24px;
+  height: 26px;
   font-size: 11px;
   font-weight: 600;
 }
@@ -1329,10 +1412,10 @@ select {
 }
 
 .video-fit-buttons button {
-  height: 24px;
+  height: 26px;
   border-radius: 3px;
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.02em;
 }
@@ -1377,7 +1460,7 @@ select {
 }
 
 .dynamic-actions button {
-  height: 24px;
+  height: 26px;
   font-size: 11px;
   font-weight: 600;
 }
@@ -1413,7 +1496,7 @@ select {
 }
 
 .color-preset-buttons button {
-  height: 24px;
+  height: 26px;
   border-radius: 3px;
   font-size: 11px;
   font-weight: 600;
@@ -1446,11 +1529,34 @@ select {
 .chat-size-buttons {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 2px;
+  gap: 3px;
 }
 
 .animation-buttons {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.animation-buttons.anim-in {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-areas:
+    "none fade pop"
+    "slide-up slide-up slide-up";
+}
+
+.animation-buttons.anim-in [data-animation-in="none"] {
+  grid-area: none;
+}
+
+.animation-buttons.anim-in [data-animation-in="fade"] {
+  grid-area: fade;
+}
+
+.animation-buttons.anim-in [data-animation-in="pop"] {
+  grid-area: pop;
+}
+
+.animation-buttons.anim-in [data-animation-in="slideUp"] {
+  grid-area: slide-up;
 }
 
 .animation-buttons.wide {
@@ -1512,19 +1618,26 @@ select {
 .animation-buttons button,
 .animation-point-buttons button,
 .chat-size-buttons button {
-  height: 24px;
+  height: 26px;
   border-radius: 3px;
+  padding: 0 4px;
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.02em;
 }
 
+.text-font-buttons button,
+.subtitle-font-buttons button {
+  font-family: var(--font-ui);
+  font-size: 11px;
+}
+
 .text-align-buttons button,
 .image-flip-buttons button {
-  height: 24px;
+  height: 26px;
   border-radius: 3px;
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 600;
 }
 
@@ -1561,7 +1674,7 @@ select {
 
 input[type="color"] {
   width: 100%;
-  height: 24px;
+  height: 26px;
   border: 1px solid var(--border);
   border-radius: 3px;
   padding: 2px;
@@ -1598,28 +1711,64 @@ input[type="checkbox"] {
 
 .arrange-controls {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 3px;
 }
 
 .selected-actions {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 3px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-areas:
+    "duplicate edit"
+    "delete delete";
+  gap: 4px;
+}
+
+.selected-actions #duplicateSelected {
+  grid-area: duplicate;
+}
+
+.selected-actions #editSelectedText {
+  grid-area: edit;
+}
+
+.selected-actions #deleteSelected {
+  grid-area: delete;
 }
 
 .arrange-controls button,
 .selected-actions button {
-  height: 24px;
-  font-size: 10.5px;
+  height: 28px;
+  font-size: 11px;
   font-weight: 600;
-  padding: 0 6px;
+  padding: 0 8px;
 }
 
 .arrange-controls .button-icon,
 .selected-actions .button-icon {
-  width: 11px;
-  height: 11px;
+  width: 12px;
+  height: 12px;
+}
+
+.arrange-controls.icon-only button {
+  position: relative;
+  padding: 0;
+  height: 28px;
+}
+
+.arrange-controls.icon-only button > :not(.button-icon) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.arrange-controls.icon-only .button-icon {
+  width: 14px;
+  height: 14px;
 }
 
 .arrange-controls button:disabled,

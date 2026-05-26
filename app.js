@@ -960,12 +960,12 @@ const GIT_DIFF_MAX_LCS_CELLS = 220000;
 const MAX_GIT_COMMIT_OPTIONS = 80;
 const MAX_GIT_FILE_OPTIONS = 300;
 const GIT_SLIDE_HELPER_TEXTS = new Set([
-  "저장소를 선택한 뒤 커밋과 파일을 불러오세요.",
-  "저장소의 커밋 기록을 불러오세요.",
-  "커밋의 변경 파일 목록을 불러오는 중입니다.",
-  "이 저장소에서 읽을 커밋을 찾지 못했습니다.",
-  "Load Diff를 눌러 선택한 파일의 변경 내용을 불러오세요.",
-  "이 커밋에서 변경된 파일을 찾지 못했습니다.",
+  "Choose a repository, then load commits and files.",
+  "Load the commit history of the repository.",
+  "Loading the list of files changed in this commit.",
+  "No readable commits were found in this repository.",
+  "Press Load Diff to load changes from the selected file.",
+  "No files were changed in this commit.",
 ]);
 const SLIDE_KINDS = new Set(["canvas", "gitTyping", "chatTyping"]);
 
@@ -2295,7 +2295,7 @@ function attachObjectEvents(element) {
     if (isMultiSelect && !handle) {
       event.preventDefault();
       selectObject(element, { toggle: true });
-      setStatus(`${selectedObjects.length}개 오브젝트를 선택했습니다.`);
+      setStatus(`Selected ${selectedObjects.length} object${selectedObjects.length === 1 ? "" : "s"}.`);
       return;
     }
 
@@ -2332,7 +2332,7 @@ function addImageObject(src, naturalWidth = 300, naturalHeight = 200) {
   attachObjectEvents(element);
   applyState(element, { ...position, width, height, rotation: 0 });
   selectObject(element);
-  setStatus("이미지를 붙여넣었습니다. 모서리 핸들로 크기 조절, 위쪽 핸들로 회전할 수 있습니다.");
+  setStatus("Image pasted. Drag corner handles to resize, the top handle to rotate.");
   recordHistory();
 }
 
@@ -2358,7 +2358,7 @@ function loadImageElementFromBlob(blob) {
     };
     image.onerror = () => {
       URL.revokeObjectURL(url);
-      reject(new Error("이미지를 읽지 못했습니다."));
+      reject(new Error("Failed to read image."));
     };
     image.src = url;
   });
@@ -2434,7 +2434,7 @@ async function ensureActiveProjectForAsset() {
   }
   const record = await saveActiveNativeProject({ forceCreate: true });
   if (!record?.meta?.id) {
-    throw new Error("이미지를 저장할 프로젝트를 만들지 못했습니다.");
+    throw new Error("Failed to create a project to store the image.");
   }
   return record.meta.id;
 }
@@ -2468,10 +2468,10 @@ async function importImageFileAsset(path) {
   addImageObject(importedAsset.path, width, height);
 }
 
-function addTextObject(text, statusMessage = "텍스트를 붙여넣었습니다. 텍스트 폰트는 Pretendard로 고정됩니다.") {
+function addTextObject(text, statusMessage = "Text pasted. The font is fixed to Pretendard.") {
   const cleanText = text.trimEnd();
   if (!cleanText) {
-    setStatus("붙여넣을 텍스트가 없습니다.");
+    setStatus("No text to paste.");
     return;
   }
 
@@ -2513,10 +2513,10 @@ function setDrawTool(tool, options = {}) {
   }
 
   if (nextTool === "select") {
-    setStatus("선택 도구입니다. 오브젝트를 이동, 회전, 크기 조절할 수 있습니다.");
+    setStatus("Select tool active. Move, rotate, or resize objects.");
   } else {
-    const label = nextTool === "arrow" ? "화살표" : nextTool === "line" ? "선" : "펜 선";
-    setStatus(`캔버스에서 드래그하면 ${label} 오브젝트가 만들어집니다.`);
+    const label = nextTool === "arrow" ? "arrow" : nextTool === "line" ? "line" : "pen stroke";
+    setStatus(`Drag on the canvas to create a ${label} object.`);
   }
 }
 
@@ -2796,14 +2796,14 @@ function finishShapeDraw(event) {
   const distance = getShapeDrawDistance(draft.points);
   if (event.type === "pointercancel" || distance < MIN_SHAPE_DRAW_DISTANCE) {
     draft.element.remove();
-    setStatus("너무 짧은 선은 만들지 않았습니다.");
+    setStatus("Stroke too short — nothing was created.");
     return true;
   }
 
   selectObject(draft.element);
   setDrawTool("select", { silent: true });
   renderSlideList();
-  setStatus("그린 오브젝트를 추가했습니다. 선택 상태에서 바로 이동, 회전, 크기 조절할 수 있습니다.");
+  setStatus("Object added. Move, rotate, or resize it while selected.");
   recordHistory();
   return true;
 }
@@ -2947,7 +2947,7 @@ function startTextEdit(element) {
     selectEditableContent(editor);
   });
   syncSelectedInputs();
-  setStatus("텍스트 편집 중입니다. Esc 또는 Done으로 종료할 수 있습니다.");
+  setStatus("Editing text. Press Esc or Done to exit.");
 }
 
 function stopTextEdit(element, shouldSetStatus = true) {
@@ -2970,7 +2970,7 @@ function stopTextEdit(element, shouldSetStatus = true) {
   delete element.dataset.editStartHeight;
   delete element.dataset.isComposing;
   if (shouldSetStatus) {
-    setStatus("텍스트 편집을 종료했습니다.");
+    setStatus("Text editing ended.");
   }
   const state = getState(element);
   const changed =
@@ -3106,7 +3106,7 @@ function handlePointerEnd(event) {
 
 async function pasteImageFromClipboard() {
   if (!navigator.clipboard?.read) {
-    setStatus("현재 데스크톱 환경에서 이미지 클립보드 읽기를 사용할 수 없습니다. Cmd+V로 붙여넣어 주세요.");
+    setStatus("Clipboard image read is not available in this desktop environment. Use Cmd+V to paste.");
     return;
   }
 
@@ -3121,19 +3121,19 @@ async function pasteImageFromClipboard() {
       await loadImageBlob(blob);
       return;
     }
-    setStatus("클립보드에 이미지가 없습니다.");
+    setStatus("No image found on the clipboard.");
   } catch (error) {
-    setStatus("이미지 붙여넣기 권한이 필요합니다. Cmd+V로 다시 시도할 수 있습니다.");
+    setStatus("Permission required to paste images. Try Cmd+V instead.");
   }
 }
 
 async function loadImageBlob(blob, name = "clipboard-image") {
   if (!blob) {
-    setStatus("이미지를 읽지 못했습니다.");
+    setStatus("Failed to read image.");
     return;
   }
 
-  setStatus("이미지를 최적화해 프로젝트 asset으로 저장하고 있습니다.");
+  setStatus("Optimizing image and saving to project assets...");
   const image = await loadImageElementFromBlob(blob);
   const optimized = await optimizeImageBlob(blob, image, name);
   const importedAsset = await importImageBlobAsset(optimized.blob, optimized.name || name);
@@ -3146,10 +3146,10 @@ async function chooseImageFileForCurrentSlide() {
     if (!path) {
       return;
     }
-    setStatus(`${isAnimatedGifSource(path) ? "GIF" : "이미지"}를 프로젝트 asset으로 저장하고 있습니다.`);
+    setStatus(`Saving ${isAnimatedGifSource(path) ? "GIF" : "image"} to project assets...`);
     await importImageFileAsset(path);
   } catch (error) {
-    setStatus(error?.message || "이미지 파일을 추가하지 못했습니다.");
+    setStatus(error?.message || "Failed to add image file.");
   }
 }
 
@@ -4130,7 +4130,7 @@ function loadImageForRender(src) {
   return new Promise((resolve, reject) => {
     const image = new Image();
     image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error("이미지를 렌더링하지 못했습니다."));
+    image.onerror = () => reject(new Error("Failed to render image."));
     getRenderAssetUrl(src)
       .then((url) => {
         image.src = url;
@@ -4195,8 +4195,8 @@ function createDynamicSlide(kind) {
   slide.color = kind === "gitTyping" ? "#0b1020" : "#f4f7fb";
   slide.notes =
     kind === "gitTyping"
-      ? "Git 변경 내용을 코드 에디터에서 수정하는 장면처럼 보여줍니다."
-      : "GPT 질문과 응답이 실시간 대화처럼 출력됩니다.";
+      ? "Shows Git changes as if they were being edited in a code editor."
+      : "Plays out a GPT question and answer as a live conversation.";
   if (kind === "gitTyping") {
     slide.gitTyping = createDefaultGitTypingData();
   } else {
@@ -4922,7 +4922,7 @@ function reorderSlide(fromIndex, toIndex) {
     activeSlideIndex += 1;
   }
   renderSlideList();
-  setStatus("슬라이드 순서를 변경했습니다.");
+  setStatus("Slide order changed.");
   recordHistory();
 }
 
@@ -4930,7 +4930,7 @@ function addNewSlide() {
   serializeCurrentSlide();
   slides.push(createDefaultSlide());
   loadSlide(slides.length - 1, false);
-  setStatus("새 슬라이드를 추가했습니다.");
+  setStatus("Added a new slide.");
   recordHistory();
 }
 
@@ -4938,7 +4938,7 @@ function addDynamicSlide(kind) {
   serializeCurrentSlide();
   slides.push(createDynamicSlide(kind));
   loadSlide(slides.length - 1, false);
-  setStatus(kind === "gitTyping" ? "Git 타이핑 슬라이드를 추가했습니다." : "GPT 대화 타이핑 슬라이드를 추가했습니다.");
+  setStatus(kind === "gitTyping" ? "Added a Git typing slide." : "Added a GPT chat typing slide.");
   recordHistory();
 }
 
@@ -4952,7 +4952,7 @@ function duplicateCurrentSlide() {
   duplicatedSlide.id = `slide-${++slideSeed}`;
   slides.splice(activeSlideIndex + 1, 0, duplicatedSlide);
   loadSlide(activeSlideIndex + 1, false);
-  setStatus("현재 슬라이드를 복제했습니다.");
+  setStatus("Current slide duplicated.");
   recordHistory();
 }
 
@@ -4978,7 +4978,7 @@ function duplicateSelectedObjects() {
   selectObjects(copies);
   renderSlideList();
   syncObjectAnimationPreview();
-  setStatus(`${copies.length}개 오브젝트를 복제했습니다.`);
+  setStatus(`Duplicated ${copies.length} object${copies.length === 1 ? "" : "s"}.`);
   recordHistory();
   return true;
 }
@@ -5023,7 +5023,7 @@ function moveSelectedLayer(mode) {
 
   selectObjects(ordered);
   renderSlideList();
-  setStatus("오브젝트 순서를 변경했습니다.");
+  setStatus("Object order changed.");
   recordHistory();
 }
 
@@ -5089,7 +5089,7 @@ function flipSelectedImages(axis) {
 
   syncSelectedInputs();
   renderSlideList();
-  setStatus(`${imageObjects.length}개 이미지가 ${axis === "x" ? "좌우" : "상하"} 반전되었습니다.`);
+  setStatus(`Flipped ${imageObjects.length} image${imageObjects.length === 1 ? "" : "s"} ${axis === "x" ? "horizontally" : "vertically"}.`);
   recordHistory();
   return true;
 }
@@ -5106,7 +5106,7 @@ function deleteSelectedObjects() {
   selectedObjects = [];
   syncSelectedInputs();
   syncObjectAnimationPreview();
-  setStatus("선택한 오브젝트를 삭제했습니다.");
+  setStatus("Selected objects deleted.");
   renderSlideList();
   recordHistory();
   return true;
@@ -5114,14 +5114,14 @@ function deleteSelectedObjects() {
 
 function deleteCurrentSlide() {
   if (slides.length <= 1) {
-    setStatus("마지막 슬라이드는 삭제할 수 없습니다.");
+    setStatus("Cannot delete the last slide.");
     return;
   }
   serializeCurrentSlide();
   slides.splice(activeSlideIndex, 1);
   activeSlideIndex = clamp(activeSlideIndex, 0, slides.length - 1);
   loadSlide(activeSlideIndex, false);
-  setStatus("현재 슬라이드를 삭제했습니다.");
+  setStatus("Current slide deleted.");
   recordHistory();
 }
 
@@ -5286,13 +5286,13 @@ async function saveActiveNativeProject(options = {}) {
       await refreshNativeProjectList();
       setSaveState("Saved");
       if (options.showStatus) {
-        setStatus("프로젝트를 앱 내부에 저장했습니다.");
+        setStatus("Project saved to app storage.");
       }
       return record;
     })
     .catch((error) => {
       setSaveState("Save failed");
-      setStatus(error?.message || "프로젝트 저장에 실패했습니다.");
+      setStatus(error?.message || "Failed to save the project.");
       return null;
     })
     .finally(() => {
@@ -5354,7 +5354,7 @@ function renderNativeProjectList() {
   if (nativeProjects.length === 0) {
     const empty = document.createElement("div");
     empty.className = "project-empty";
-    empty.textContent = "저장된 프로젝트가 없습니다.";
+    empty.textContent = "No saved projects.";
     projectLibraryList.append(empty);
     return;
   }
@@ -5491,9 +5491,9 @@ async function openNativeProject(projectId, options = {}) {
     applyProjectState(project);
     nativeDraftDirty = false;
     hideProjectLibrary();
-    setStatus(`${activeProjectName} 프로젝트를 열었습니다.`);
+    setStatus(`Opened project: ${activeProjectName}.`);
   } catch (error) {
-    setStatus(error?.message || "프로젝트를 열지 못했습니다.");
+    setStatus(error?.message || "Failed to open the project.");
   } finally {
     isLoadingNativeProject = false;
   }
@@ -5506,9 +5506,9 @@ async function renameNativeProject(projectId, name) {
       setActiveProjectMeta(meta);
     }
     await refreshNativeProjectList();
-    setStatus("프로젝트 이름을 변경했습니다.");
+    setStatus("Project renamed.");
   } catch (error) {
-    setStatus(error?.message || "프로젝트 이름 변경에 실패했습니다.");
+    setStatus(error?.message || "Failed to rename the project.");
   }
 }
 
@@ -5517,14 +5517,14 @@ async function duplicateNativeProject(projectId) {
     await saveActiveNativeProject();
     await nativeApi.duplicateProject(projectId);
     await refreshNativeProjectList();
-    setStatus("프로젝트를 복제했습니다.");
+    setStatus("Project duplicated.");
   } catch (error) {
-    setStatus(error?.message || "프로젝트 복제에 실패했습니다.");
+    setStatus(error?.message || "Failed to duplicate the project.");
   }
 }
 
 async function deleteNativeProject(projectId) {
-  if (!window.confirm("이 프로젝트를 삭제할까요?")) {
+  if (!window.confirm("Delete this project?")) {
     return;
   }
   try {
@@ -5539,9 +5539,9 @@ async function deleteNativeProject(projectId) {
         await createNewNativeProject({ silent: true, skipCurrentSave: true, deferSave: true });
       }
     }
-    setStatus("프로젝트를 삭제했습니다.");
+    setStatus("Project deleted.");
   } catch (error) {
-    setStatus(error?.message || "프로젝트 삭제에 실패했습니다.");
+    setStatus(error?.message || "Failed to delete the project.");
   }
 }
 
@@ -5641,24 +5641,24 @@ function applyHistorySnapshot(snapshot) {
 
 function undoChange() {
   if (historyIndex <= 0) {
-    setStatus("되돌릴 작업이 없습니다.");
+    setStatus("Nothing to undo.");
     return;
   }
 
   historyIndex -= 1;
   applyHistorySnapshot(historyStack[historyIndex]);
-  setStatus("이전 상태로 되돌렸습니다.");
+  setStatus("Reverted to the previous state.");
 }
 
 function redoChange() {
   if (historyIndex >= historyStack.length - 1) {
-    setStatus("다시 적용할 작업이 없습니다.");
+    setStatus("Nothing to redo.");
     return;
   }
 
   historyIndex += 1;
   applyHistorySnapshot(historyStack[historyIndex]);
-  setStatus("되돌린 작업을 다시 적용했습니다.");
+  setStatus("Redo applied.");
 }
 
 function isEditableShortcutTarget(target) {
@@ -5692,7 +5692,7 @@ async function exportProjectFile() {
   const savedPath = await nativeApi.exportProjectFile(`${baseName}-${timestamp}.slidecut`, project);
   if (savedPath) {
     setSaveState("Exported");
-    setStatus("선택한 경로에 asset 포함 프로젝트 패키지를 저장했습니다.");
+    setStatus("Project package (with assets) saved to the selected path.");
   }
 }
 
@@ -5717,13 +5717,13 @@ async function importNativeProjectFile() {
     applyProjectState(project);
     await saveActiveNativeProject({ showStatus: true, forceCreate: true });
   } catch (error) {
-    setStatus(error?.message || "프로젝트 파일을 가져오지 못했습니다.");
+    setStatus(error?.message || "Failed to import the project file.");
   }
 }
 
 async function chooseVideoForCurrentSlide() {
   if (isDynamicSlide(slides[activeSlideIndex])) {
-    setStatus("영상 소스는 일반 슬라이드에서만 사용할 수 있습니다.");
+    setStatus("Video source is only available on static slides.");
     return;
   }
 
@@ -5745,10 +5745,10 @@ async function chooseVideoForCurrentSlide() {
     };
     updateSlideVideoView();
     renderSlideList();
-    setStatus("배경 영상을 프로젝트에 복사해 연결했습니다.");
+    setStatus("Background video copied into the project and linked.");
     recordHistory();
   } catch (error) {
-    setStatus(error?.message || "영상 파일을 프로젝트에 복사하지 못했습니다.");
+    setStatus(error?.message || "Failed to copy the video file into the project.");
   }
 }
 
@@ -5759,7 +5759,7 @@ function clearVideoForCurrentSlide() {
   slides[activeSlideIndex].video = null;
   updateSlideVideoView();
   renderSlideList();
-  setStatus("배경 영상을 제거했습니다.");
+  setStatus("Background video removed.");
   recordHistory();
 }
 
@@ -5775,7 +5775,7 @@ function setVideoFitForCurrentSlide(fit) {
   };
   updateSlideVideoView();
   renderSlideList();
-  setStatus(`배경 영상 맞춤을 ${VIDEO_FIT_MODES[slide.video.fit].label}로 변경했습니다.`);
+  setStatus(`Background video fit changed to ${VIDEO_FIT_MODES[slide.video.fit].label}.`);
   recordHistory();
 }
 
@@ -5797,10 +5797,10 @@ async function chooseSoundForCurrentSlide() {
     };
     updateSlideSoundView();
     renderSlideList();
-    setStatus("슬라이드 시작 효과음을 프로젝트에 복사해 연결했습니다.");
+    setStatus("Slide start sound copied into the project and linked.");
     recordHistory();
   } catch (error) {
-    setStatus(error?.message || "효과음 파일을 프로젝트에 복사하지 못했습니다.");
+    setStatus(error?.message || "Failed to copy the sound file into the project.");
   }
 }
 
@@ -5811,7 +5811,7 @@ function clearSoundForCurrentSlide() {
   slides[activeSlideIndex].startSound = null;
   updateSlideSoundView();
   renderSlideList();
-  setStatus("슬라이드 시작 효과음을 제거했습니다.");
+  setStatus("Slide start sound removed.");
   recordHistory();
 }
 
@@ -5835,10 +5835,10 @@ async function chooseBackgroundMusicForProject() {
       },
     });
     updateBackgroundMusicView();
-    setStatus("프로젝트 배경음을 프로젝트에 복사해 연결했습니다.");
+    setStatus("Background music copied into the project and linked.");
     scheduleNativeProjectSave();
   } catch (error) {
-    setStatus(error?.message || "배경음 파일을 프로젝트에 복사하지 못했습니다.");
+    setStatus(error?.message || "Failed to copy the BGM file into the project.");
   }
 }
 
@@ -5848,7 +5848,7 @@ function clearBackgroundMusicForProject() {
     backgroundMusic: null,
   });
   updateBackgroundMusicView();
-  setStatus("프로젝트 배경음을 제거했습니다.");
+  setStatus("Background music removed.");
   scheduleNativeProjectSave();
 }
 
@@ -5917,7 +5917,7 @@ async function saveCanvasAsPng() {
   link.download = `slide-cut-${timestamp}.png`;
   link.href = exportCanvas.toDataURL("image/png");
   link.click();
-  setStatus("PNG를 내보냈습니다.");
+  setStatus("PNG exported.");
 }
 
 function syncSlideTranslationControls() {
@@ -5929,7 +5929,7 @@ function syncSlideTranslationControls() {
   slideTranslateSource.disabled = isTranslatingSlide;
   slideTranslateTarget.disabled = isTranslatingSlide;
   translateSlideButton.disabled = isTranslatingSlide || isBlockedSlide;
-  translateSlideButton.title = isBlockedSlide ? "Git/GPT 슬라이드는 번역 대상이 아닙니다." : "";
+  translateSlideButton.title = isBlockedSlide ? "Git / GPT slides cannot be translated." : "";
   setButtonLabel(translateSlideButton, isTranslatingSlide ? "Translating..." : "Translate Slide");
 }
 
@@ -6020,30 +6020,30 @@ async function translateCurrentSlideContent() {
 
   const slide = slides[activeSlideIndex];
   if (!slide || isDynamicSlide(slide)) {
-    setStatus("Git/GPT 슬라이드는 번역 대상이 아닙니다.");
+    setStatus("Git / GPT slides cannot be translated.");
     return;
   }
 
   const sourceLanguage = slideTranslateSource.value;
   const targetLanguage = slideTranslateTarget.value;
   if (!sourceLanguage || !targetLanguage) {
-    setStatus("현재 언어와 타겟 언어를 선택해 주세요.");
+    setStatus("Please choose source and target languages.");
     return;
   }
   if (sourceLanguage === targetLanguage) {
-    setStatus("현재 언어와 타겟 언어가 같습니다.");
+    setStatus("Source and target languages are the same.");
     return;
   }
 
   const items = collectActiveSlideTranslationItems();
   if (items.length === 0) {
-    setStatus("현재 슬라이드에 번역할 텍스트나 노트가 없습니다.");
+    setStatus("Current slide has no text or notes to translate.");
     return;
   }
 
   isTranslatingSlide = true;
   syncSlideTranslationControls();
-  setStatus("현재 슬라이드를 번역하는 중입니다.");
+  setStatus("Translating the current slide...");
   try {
     const result = await nativeApi.translateSlide({
       apiKey: appSettingsState.openAiApiKey,
@@ -6057,12 +6057,12 @@ async function translateCurrentSlideContent() {
     const changed = applyActiveSlideTranslation(items, result?.items || []);
     setStatus(
       changed
-        ? `현재 슬라이드를 ${selectedOptionLabel(slideTranslateTarget)}로 번역했습니다.`
-        : "번역 결과가 기존 내용과 같습니다."
+        ? `Current slide translated to ${selectedOptionLabel(slideTranslateTarget)}.`
+        : "Translation result is identical to the original."
     );
   } catch (error) {
     console.error("Slide translation failed", error);
-    setStatus(formatErrorMessage(error, "슬라이드 번역에 실패했습니다."));
+    setStatus(formatErrorMessage(error, "Failed to translate the slide."));
   } finally {
     isTranslatingSlide = false;
     syncSlideTranslationControls();
@@ -6249,10 +6249,10 @@ async function saveSettings() {
     applyProjectCanvasSettingsToSlides({ record: true });
     scheduleNativeProjectSave();
     syncSettingsControls();
-    setStatus("설정을 저장했습니다. API Key는 앱 전역, 나머지는 현재 프로젝트에 저장됩니다.");
+    setStatus("Settings saved. API keys are app-wide; other values are saved with this project.");
     hideAppSettings();
   } catch (error) {
-    setStatus(error?.message || "설정 저장에 실패했습니다.");
+    setStatus(error?.message || "Failed to save settings.");
   }
 }
 
@@ -6270,19 +6270,19 @@ async function chooseProjectExportDirectory() {
     const path = await nativeApi.selectDirectory();
     if (path) {
       settingsExportDir.value = path;
-      setStatus("영상 내보내기 폴더를 선택했습니다. 설정을 저장하면 적용됩니다.");
+      setStatus("Export folder selected. Save settings to apply.");
     }
   } catch (error) {
-    setStatus(error?.message || "영상 내보내기 폴더를 선택하지 못했습니다.");
+    setStatus(error?.message || "Failed to select export folder.");
   }
 }
 
 async function resetProjectExportDirectory() {
   try {
     settingsExportDir.value = defaultProjectExportDir;
-    setStatus("영상 내보내기 폴더를 Downloads로 되돌렸습니다. 설정을 저장하면 적용됩니다.");
+    setStatus("Export folder reset to Downloads. Save settings to apply.");
   } catch (error) {
-    setStatus(error?.message || "기본 Downloads 폴더를 읽지 못했습니다.");
+    setStatus(error?.message || "Failed to read the default Downloads folder.");
   }
 }
 
@@ -6383,7 +6383,7 @@ function getActiveGitTypingSlide() {
 function requireGitRepoPath() {
   const repoPath = gitRepoPath.value.trim();
   if (!repoPath) {
-    setStatus("먼저 Git 저장소 폴더를 선택해 주세요.");
+    setStatus("Please choose a Git repository folder first.");
     return "";
   }
   return repoPath;
@@ -6399,7 +6399,7 @@ async function loadGitCommitsForSlide() {
     return;
   }
   try {
-    setStatus("Git 커밋 기록을 불러오는 중입니다.");
+    setStatus("Loading Git commit history...");
     const result = await nativeApi.listGitCommits(repoPath);
     const commits = sanitizeGitCommitOptions(result.commits);
     const current = getGitTypingData(slide);
@@ -6423,10 +6423,10 @@ async function loadGitCommitsForSlide() {
     if (selectedCommit) {
       await loadGitFilesForSlide({ record: true, clearContent: true, autoLoadChange: true });
     } else {
-      setStatus("이 저장소에서 읽을 커밋을 찾지 못했습니다.");
+      setStatus("No readable commits were found in this repository.");
     }
   } catch (error) {
-    setStatus(error?.message || "Git 커밋 기록을 읽지 못했습니다.");
+    setStatus(error?.message || "Failed to read Git commit history.");
   }
 }
 
@@ -6438,11 +6438,11 @@ async function loadGitFilesForSlide(options = {}) {
   const repoPath = requireGitRepoPath();
   const commitHash = gitCommitSelect.value;
   if (!repoPath || !commitHash) {
-    setStatus("커밋을 먼저 선택해 주세요.");
+    setStatus("Please select a commit first.");
     return;
   }
   try {
-    setStatus("커밋의 변경 파일을 불러오는 중입니다.");
+    setStatus("Loading the list of files changed in this commit...");
     const result = await nativeApi.listGitCommitFiles(repoPath, commitHash);
     const files = sanitizeGitFileOptions(result.files);
     const current = getGitTypingData(slide);
@@ -6468,9 +6468,9 @@ async function loadGitFilesForSlide(options = {}) {
       await loadGitFileChangeForSlide({ record: Boolean(options.record) });
       return;
     }
-    setStatus(files.length ? "변경 파일 목록을 불러왔습니다." : "이 커밋에서 변경된 파일을 찾지 못했습니다.");
+    setStatus(files.length ? "Loaded the list of changed files." : "No files were changed in this commit.");
   } catch (error) {
-    setStatus(error?.message || "Git 변경 파일 목록을 읽지 못했습니다.");
+    setStatus(error?.message || "Failed to read Git changed files.");
   }
 }
 
@@ -6483,11 +6483,11 @@ async function loadGitFileChangeForSlide(options = {}) {
   const commitHash = gitCommitSelect.value;
   const filePath = gitFileSelect.value;
   if (!repoPath || !commitHash || !filePath) {
-    setStatus("저장소, 커밋, 파일을 모두 선택해 주세요.");
+    setStatus("Please select a repository, commit, and file.");
     return;
   }
   try {
-    setStatus("선택한 파일의 변경 내용을 불러오는 중입니다.");
+    setStatus("Loading changes for the selected file...");
     const result = await nativeApi.readGitCommitFileChange(repoPath, commitHash, filePath);
     const current = getGitTypingData(slide);
     updateActiveDynamicSlide((activeSlide) => {
@@ -6505,9 +6505,9 @@ async function loadGitFileChangeForSlide(options = {}) {
       };
     }, { record: options.record !== false });
     syncDynamicSlidePanel();
-    setStatus("선택한 파일 변경 내용을 타이핑 슬라이드에 불러왔습니다.");
+    setStatus("Loaded changes for the selected file into the typing slide.");
   } catch (error) {
-    setStatus(error?.message || "Git 파일 변경 내용을 읽지 못했습니다.");
+    setStatus(error?.message || "Failed to read Git file changes.");
   }
 }
 
@@ -6525,7 +6525,7 @@ function setExportModalProgress(phase, message, current = 0, total = 1) {
 
 function throwIfExportCancelled() {
   if (activeExportJob?.cancelled) {
-    throw new Error("영상 내보내기를 취소했습니다.");
+    throw new Error("Video export cancelled.");
   }
 }
 
@@ -6547,7 +6547,7 @@ async function beginExportJob(exportId) {
       }
       setExportModalProgress(
         progress.phase || "Exporting",
-        progress.message || "영상 파일을 생성하고 있습니다.",
+        progress.message || "Generating the video file...",
         progress.current,
         progress.total
       );
@@ -6577,7 +6577,7 @@ async function cancelActiveExportJob() {
   }
   activeExportJob.cancelled = true;
   cancelExport.disabled = true;
-  setExportModalProgress("Cancelling", "영상 내보내기를 취소하는 중입니다.", 1, 1);
+  setExportModalProgress("Cancelling", "Cancelling video export...", 1, 1);
   try {
     await nativeApi.cancelVideoExport(activeExportJob.id);
   } catch {
@@ -6593,7 +6593,7 @@ async function exportProjectAsMp4() {
   try {
     outputPath = await nativeApi.selectMp4Output(`${baseName}-${timestamp}.mp4`, projectSettingsState.exportDir);
   } catch (error) {
-    setStatus(error?.message || "영상 저장 경로를 선택하지 못했습니다.");
+    setStatus(error?.message || "Failed to choose the video output path.");
     return;
   }
   if (!outputPath) {
@@ -6604,7 +6604,7 @@ async function exportProjectAsMp4() {
   const exportId = createExportId();
   exportMp4.disabled = true;
   await beginExportJob(exportId);
-  setStatus("슬라이드를 영상 추출용 프레임으로 렌더링하고 있습니다.");
+  setStatus("Rendering slides into video frames...");
 
   try {
     const backgroundMusic = normalizeProjectBackgroundMusic(projectSettingsState.backgroundMusic);
@@ -6617,7 +6617,7 @@ async function exportProjectAsMp4() {
       }
       const video = normalizeSlideVideo(slide.video);
       const startSound = normalizeSlideStartSound(slide.startSound);
-      setExportModalProgress("Rendering", `슬라이드 ${index + 1} / ${slides.length} 렌더링 중입니다.`, index, slides.length);
+      setExportModalProgress("Rendering", `Rendering slide ${index + 1} / ${slides.length}...`, index, slides.length);
       const notes = getExportNotesText(slide.notes);
       const ttsSegments = splitNotesForTtsSegments(slide.notes);
       const hasTtsNotes = ttsSegments.length > 0;
@@ -6646,7 +6646,7 @@ async function exportProjectAsMp4() {
         subtitleFontWeight: projectSettingsState.subtitleFontWeight,
       };
       if (isDynamicSlide(slide)) {
-        setExportModalProgress("Rendering", `슬라이드 ${index + 1} / ${slides.length} 타이핑 프레임을 만들고 있습니다.`, index, slides.length);
+        setExportModalProgress("Rendering", `Generating typing frames for slide ${index + 1} / ${slides.length}...`, index, slides.length);
         const animation = await renderDynamicSlideFrames(slide, {
           excludeAnimatedGifs: gifOverlays.length > 0,
           subtitles: false,
@@ -6711,7 +6711,7 @@ async function exportProjectAsMp4() {
     }
 
     throwIfExportCancelled();
-    setExportModalProgress("Encoding", "음성과 영상 세그먼트를 생성하고 있습니다.", 0, 1);
+    setExportModalProgress("Encoding", "Generating audio and video segments...", 0, 1);
     const result = await nativeApi.exportVideo({
       exportId,
       outputPath,
@@ -6721,10 +6721,10 @@ async function exportProjectAsMp4() {
       tts: getTtsSettings(),
       slides: renderedSlides,
     });
-    setExportModalProgress("Complete", "영상 내보내기가 완료되었습니다.", 1, 1);
-    setStatus(`영상을 내보냈습니다: ${result?.outputPath || outputPath}`);
+    setExportModalProgress("Complete", "Video export complete.", 1, 1);
+    setStatus(`Video exported: ${result?.outputPath || outputPath}`);
   } catch (error) {
-    const message = error?.message || String(error) || "영상 내보내기에 실패했습니다.";
+    const message = error?.message || String(error) || "Video export failed.";
     setStatus(message);
   } finally {
     exportMp4.disabled = previousDisabled;
@@ -6743,7 +6743,7 @@ function handlePaste(event) {
   if (imageItem) {
     event.preventDefault();
     const file = imageItem.getAsFile();
-    loadImageBlob(file, file?.name || "clipboard-image").catch(() => setStatus("이미지를 읽지 못했습니다."));
+    loadImageBlob(file, file?.name || "clipboard-image").catch(() => setStatus("Failed to read image."));
     return;
   }
 
@@ -6783,7 +6783,7 @@ function applySelectedTextSizeChange(sizeKey) {
   if (!fitTextBoxToContent(selectedObject)) {
     renderTextObject(selectedObject);
   }
-  setStatus(`텍스트 크기를 ${sizeKey.toUpperCase()}로 변경했습니다.`);
+  setStatus(`Text size changed to ${sizeKey.toUpperCase()}.`);
   renderSlideList();
   recordHistory();
 }
@@ -6804,7 +6804,7 @@ function applySelectedTextFontChange(fontFamily, fontWeight) {
   if (!fitTextBoxToContent(selectedObject)) {
     renderTextObject(selectedObject);
   }
-  setStatus(`텍스트 폰트를 ${safeFamily}로 변경했습니다.`);
+  setStatus(`Text font changed to ${safeFamily}.`);
   renderSlideList();
   recordHistory();
 }
@@ -6831,7 +6831,7 @@ function applySelectedTextStyleChange(effectKey) {
   if (!fitTextBoxToContent(selectedObject)) {
     renderTextObject(selectedObject);
   }
-  setStatus(`텍스트 스타일을 ${preset.label || safeEffect}로 변경했습니다.`);
+  setStatus(`Text style changed to ${preset.label || safeEffect}.`);
   renderSlideList();
   recordHistory();
 }
@@ -6847,7 +6847,7 @@ function applySelectedTextColorChange(shouldRecord = false) {
   editor.style.color = selectedTextColor.value;
   renderTextObject(selectedObject);
   syncColorPresetButtons();
-  setStatus(`텍스트 색상을 ${selectedTextColor.value}로 변경했습니다.`);
+  setStatus(`Text color changed to ${selectedTextColor.value}.`);
   renderSlideList();
   if (shouldRecord) {
     recordHistory();
@@ -6865,7 +6865,7 @@ function applySelectedTextAlignChange(align) {
   const editor = selectedObject.querySelector(".text-editor");
   editor.style.textAlign = safeAlign;
   renderTextObject(selectedObject);
-  setStatus(`텍스트 정렬을 ${safeAlign}로 변경했습니다.`);
+  setStatus(`Text align changed to ${safeAlign}.`);
   renderSlideList();
   recordHistory();
 }
@@ -6911,7 +6911,7 @@ function applySelectedAnimationChange(kind, value) {
   syncSelectedInputs();
   syncObjectAnimationPreview();
   renderSlideList();
-  setStatus(`${targets.length || 1}개 오브젝트의 애니메이션을 변경했습니다.`);
+  setStatus(`Animation updated on ${targets.length || 1} object${(targets.length || 1) === 1 ? "" : "s"}.`);
   recordHistory();
 }
 
@@ -6930,7 +6930,7 @@ function applySelectedMoveInputChange(shouldRecord = false) {
   syncObjectAnimationPreview();
   renderSlideList();
   if (shouldRecord) {
-    setStatus("Move 애니메이션 좌표를 변경했습니다.");
+    setStatus("Move animation coordinates updated.");
     recordHistory();
   }
 }
@@ -6958,7 +6958,7 @@ function applyColorPreset(presetKey) {
 
   settingsCanvasColor.value = preset.canvasColor;
   syncColorPresetButtons();
-  setStatus(`${preset.canvasColor === "#000000" ? "검정 배경 / 흰색 글씨" : "흰색 배경 / 검정 글씨"} 기본값을 선택했습니다. 설정을 저장하면 적용됩니다.`);
+  setStatus(`${preset.canvasColor === "#000000" ? "Black background / white text" : "White background / black text"} preset selected. Save settings to apply.`);
 }
 
 function applySelectedShapeStyleChange(shouldRecord = false) {
@@ -6976,7 +6976,7 @@ function applySelectedShapeStyleChange(shouldRecord = false) {
     renderShapeObject(object);
   }
   renderSlideList();
-  setStatus(`선 오브젝트 ${shapeObjects.length}개의 스타일을 변경했습니다.`);
+  setStatus(`Style updated on ${shapeObjects.length} shape object${shapeObjects.length === 1 ? "" : "s"}.`);
   if (shouldRecord) {
     recordHistory();
   }
@@ -7088,7 +7088,7 @@ for (const button of settingsSubtitleFontButtons) {
 pasteImage.addEventListener("click", pasteImageFromClipboard);
 chooseImage.addEventListener("click", chooseImageFileForCurrentSlide);
 addTextBox.addEventListener("click", () => {
-  addTextObject("텍스트", "텍스트 상자를 만들었습니다. 바로 입력해서 내용을 바꿀 수 있습니다.");
+  addTextObject("Text", "Text box created. Type to change its contents.");
   startTextEdit(selectedObject);
 });
 addGitTypingSlide.addEventListener("click", () => addDynamicSlide("gitTyping"));
@@ -7113,7 +7113,7 @@ for (const input of [gitSlideTitle, gitRepoPath, gitTypingSpeed, gitTypingConten
 }
 dynamicContinueAfterTts.addEventListener("change", () => {
   syncDynamicTimingToSlide({ record: true });
-  setStatus(dynamicContinueAfterTts.checked ? "TTS 이후에도 슬라이드가 이어집니다." : "TTS 종료 시 다음 슬라이드로 넘어갑니다.");
+  setStatus(dynamicContinueAfterTts.checked ? "Slide continues after TTS finishes." : "Slide advances when TTS finishes.");
 });
 for (const input of [chatSlideTitle, chatTypingSpeed, chatQuestion, chatAnswer]) {
   input.addEventListener("input", () => syncChatTypingInputsToSlide());
@@ -7277,11 +7277,40 @@ document.addEventListener("keydown", (event) => {
 
 window.addEventListener("resize", fitCanvasToWorkspace);
 
+function initCollapsiblePanels() {
+  const panels = document.querySelectorAll('.toolbar .panel[data-collapsible="true"]');
+  panels.forEach((panel) => {
+    const key = `panel-collapsed:${panel.id || panel.getAttribute("aria-labelledby") || ""}`;
+    const header = panel.querySelector(".panel-title-row.panel-toggle") || panel.querySelector("h2.panel-toggle");
+    if (!header) return;
+
+    if (key && localStorage.getItem(key) === "1") {
+      panel.classList.add("is-collapsed");
+      header.setAttribute("aria-expanded", "false");
+    }
+
+    const toggle = (event) => {
+      if (event?.target?.closest("button, input, select, textarea")) return;
+      const collapsed = panel.classList.toggle("is-collapsed");
+      header.setAttribute("aria-expanded", collapsed ? "false" : "true");
+      if (key) localStorage.setItem(key, collapsed ? "1" : "0");
+    };
+
+    header.addEventListener("click", toggle);
+    header.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        toggle(event);
+      }
+    });
+  });
+}
+
 async function initializeApp() {
   try {
     await loadAppSettings();
   } catch (error) {
-    setStatus(error?.message || "앱 설정을 불러오지 못했습니다.");
+    setStatus(error?.message || "Failed to load app settings.");
     appSettingsState = normalizeAppSettings();
     projectSettingsState = normalizeProjectSettings(projectSettingsState);
     syncSettingsControls();
@@ -7295,10 +7324,11 @@ async function initializeApp() {
   try {
     await initializeNativeMode();
   } catch (error) {
-    setStatus(error?.message || "프로젝트 목록을 초기화하지 못했습니다.");
+    setStatus(error?.message || "Failed to initialize project list.");
   }
 
   hydrateButtonIcons();
+  initCollapsiblePanels();
 }
 
 initializeApp();
