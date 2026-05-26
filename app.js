@@ -189,6 +189,7 @@ const settingsTtsInstructions = document.querySelector("#settingsTtsInstructions
 const settingsSubtitleEnabled = document.querySelector("#settingsSubtitleEnabled");
 const settingsSubtitleSize = document.querySelector("#settingsSubtitleSize");
 const settingsSubtitleY = document.querySelector("#settingsSubtitleY");
+const settingsSubtitleFontButtons = [...document.querySelectorAll("[data-subtitle-font]")];
 const settingsExportDir = document.querySelector("#settingsExportDir");
 const chooseExportDir = document.querySelector("#chooseExportDir");
 const resetExportDir = document.querySelector("#resetExportDir");
@@ -207,6 +208,7 @@ const selectedMoveDuration = document.querySelector("#selectedMoveDuration");
 const selectedTextSize = document.querySelector("#selectedTextSize");
 const imageFlipButtons = [...document.querySelectorAll("[data-image-flip]")];
 const textSizeButtons = [...document.querySelectorAll("[data-text-size]")];
+const textFontButtons = [...document.querySelectorAll("[data-text-font]")];
 const textStyleButtons = [...document.querySelectorAll("[data-text-style]")];
 const textAlignButtons = [...document.querySelectorAll("[data-text-align]")];
 const animationInButtons = [...document.querySelectorAll("[data-animation-in]")];
@@ -289,6 +291,8 @@ let projectSettingsState = {
   subtitleEnabled: true,
   subtitleSize: 100,
   subtitleY: 90,
+  subtitleFontFamily: "Pretendard",
+  subtitleFontWeight: 700,
   exportDir: "",
   backgroundMusic: null,
 };
@@ -309,7 +313,21 @@ const DEFAULT_TEXT_COLOR = "#000000";
 const DEFAULT_TEXT_FONT_FAMILY = "Pretendard";
 const DEFAULT_TEXT_FONT_WEIGHT = 600;
 const DEFAULT_TEXT_EFFECT = "clean";
-const TEXT_FONT_FAMILIES = new Set(["Pretendard", "Gmarket Sans", "Jua", "Black Han Sans", "Do Hyeon", "Noto Sans KR"]);
+const DEFAULT_SUBTITLE_FONT_FAMILY = "Pretendard";
+const DEFAULT_SUBTITLE_FONT_WEIGHT = 700;
+const TEXT_FONT_FAMILIES = new Set([
+  "Pretendard",
+  "Gmarket Sans",
+  "Jua",
+  "Black Han Sans",
+  "Do Hyeon",
+  "Noto Sans KR",
+  "Gaegu",
+  "Hi Melody",
+  "Gamja Flower",
+  "Nanum Pen Script",
+  "Nanum Brush Script",
+]);
 const FONT_LOAD_SAMPLE_TEXT = "가나다라마바사아자차카타파하 ABC xyz 123";
 const TEXT_FONT_LOAD_SIZE = 32;
 const textFontLoadPromises = new Map();
@@ -392,6 +410,74 @@ const TEXT_EFFECT_PRESETS = {
     shadowBlur: 10,
     shadowOffsetX: 0,
     shadowOffsetY: 0,
+  },
+  diaryNote: {
+    label: "Diary Note",
+    fontFamily: "Hi Melody",
+    fontWeight: 400,
+    fillColor: "#fff8ec",
+    strokeColor: "#7a4d2a",
+    strokeWidth: 2,
+    shadowColor: "rgba(122, 77, 42, 0.28)",
+    shadowBlur: 1,
+    shadowOffsetX: 3,
+    shadowOffsetY: 4,
+  },
+  softPen: {
+    label: "Soft Pen",
+    fontFamily: "Nanum Pen Script",
+    fontWeight: 400,
+    fillColor: "#ffffff",
+    strokeColor: "#243b6b",
+    strokeWidth: 5,
+    shadowColor: "rgba(36, 59, 107, 0.25)",
+    shadowBlur: 2,
+    shadowOffsetX: 2,
+    shadowOffsetY: 3,
+  },
+  cozyLabel: {
+    label: "Cozy Label",
+    fontFamily: "Gamja Flower",
+    fontWeight: 400,
+    fillColor: "#5f3a4e",
+    backgroundColor: "#fff3f6",
+    backgroundStrokeColor: "#f2a8c6",
+    backgroundStrokeWidth: 4,
+    backgroundPaddingX: 18,
+    backgroundPaddingY: 10,
+    backgroundRadius: 12,
+    shadowColor: "rgba(95, 58, 78, 0.22)",
+    shadowBlur: 0,
+    shadowOffsetX: 4,
+    shadowOffsetY: 5,
+  },
+  doodlePop: {
+    label: "Doodle Pop",
+    fontFamily: "Gaegu",
+    fontWeight: 700,
+    fillColor: "#ffffff",
+    strokeColor: "#202020",
+    strokeWidth: 6,
+    shadowColor: "rgba(0, 0, 0, 0.18)",
+    shadowBlur: 0,
+    shadowOffsetX: 2,
+    shadowOffsetY: 3,
+    shadowLayerColor: "#8ee6ff",
+    shadowLayerStrokeWidth: 8,
+    shadowLayerOffsetX: 6,
+    shadowLayerOffsetY: 6,
+  },
+  brushMood: {
+    label: "Brush Mood",
+    fontFamily: "Nanum Brush Script",
+    fontWeight: 400,
+    fillColor: "#31233f",
+    strokeColor: "#fff2f7",
+    strokeWidth: 4,
+    shadowColor: "rgba(111, 67, 133, 0.34)",
+    shadowBlur: 1,
+    shadowOffsetX: 4,
+    shadowOffsetY: 5,
   },
 };
 const DEFAULT_CANVAS_WIDTH = 1280;
@@ -1089,6 +1175,14 @@ function normalizeSubtitleY(value) {
   return sanitizeNumber(value, DEFAULT_SUBTITLE_Y, 5, 95);
 }
 
+function normalizeSubtitleFontFamily(value) {
+  return sanitizeTextFontFamily(value || DEFAULT_SUBTITLE_FONT_FAMILY);
+}
+
+function normalizeSubtitleFontWeight(value) {
+  return sanitizeTextFontWeight(value, DEFAULT_SUBTITLE_FONT_WEIGHT);
+}
+
 function normalizeContinueAfterTts(value) {
   return Boolean(value);
 }
@@ -1461,8 +1555,11 @@ async function ensureTextFontsReady(fontRequests = []) {
   await Promise.all([...uniqueRequests.values()].map(loadDocumentFont));
 }
 
-function getSubtitleFontRequest() {
-  return { family: "Pretendard", weight: 700 };
+function getSubtitleFontRequest(options = {}) {
+  return {
+    family: normalizeSubtitleFontFamily(options.subtitleFontFamily ?? projectSettingsState.subtitleFontFamily),
+    weight: normalizeSubtitleFontWeight(options.subtitleFontWeight ?? projectSettingsState.subtitleFontWeight),
+  };
 }
 
 function getSlideFontRequests(slide, options = {}) {
@@ -1477,7 +1574,7 @@ function getSlideFontRequests(slide, options = {}) {
   }
   const subtitleText = typeof options.subtitleText === "string" ? options.subtitleText : slide?.notes;
   if ((options.subtitles || options.reserveSubtitles) && String(subtitleText || "").trim()) {
-    requests.push(getSubtitleFontRequest());
+    requests.push(getSubtitleFontRequest(options));
   }
   return requests;
 }
@@ -1496,7 +1593,7 @@ function getCanvasFontRequests(options = {}) {
     })
   );
   if (options.subtitles && String(options.subtitleText || "").trim()) {
-    requests.push(getSubtitleFontRequest());
+    requests.push(getSubtitleFontRequest(options));
   }
   return requests;
 }
@@ -2034,6 +2131,9 @@ function syncSelectedInputs() {
   for (const button of textSizeButtons) {
     button.disabled = !hasTextSelection;
   }
+  for (const button of textFontButtons) {
+    button.disabled = !hasTextSelection;
+  }
   for (const button of textStyleButtons) {
     button.disabled = !hasTextSelection;
   }
@@ -2062,6 +2162,7 @@ function syncSelectedInputs() {
     selectedH.value = "";
     selectedR.value = "";
     setActiveTextSizeButton("h3");
+    setActiveTextFontButton(DEFAULT_TEXT_FONT_FAMILY, DEFAULT_TEXT_FONT_WEIGHT);
     setActiveTextStyleButton(DEFAULT_TEXT_EFFECT);
     setActiveTextAlignButton("left");
     syncAnimationButtons({
@@ -2088,6 +2189,7 @@ function syncSelectedInputs() {
   selectedH.value = Math.round(state.height);
   selectedR.value = Math.round(state.rotation);
   setActiveTextSizeButton(selectedObject.dataset.textSize || "h3");
+  setActiveTextFontButton(selectedObject.dataset.fontFamily, selectedObject.dataset.fontWeight);
   setActiveTextStyleButton(selectedObject.dataset.textEffect || DEFAULT_TEXT_EFFECT);
   setActiveTextAlignButton(selectedObject.dataset.textAlign || "left");
   const animationData = getElementAnimationData(selectedObject);
@@ -2109,6 +2211,16 @@ function syncSelectedInputs() {
 function setActiveTextSizeButton(sizeKey) {
   for (const button of textSizeButtons) {
     button.classList.toggle("is-active", button.dataset.textSize === sizeKey);
+  }
+}
+
+function setActiveTextFontButton(fontFamily, fontWeight) {
+  const safeFamily = sanitizeTextFontFamily(fontFamily);
+  const safeWeight = sanitizeTextFontWeight(fontWeight);
+  for (const button of textFontButtons) {
+    const buttonFamily = sanitizeTextFontFamily(button.dataset.textFont);
+    const buttonWeight = sanitizeTextFontWeight(button.dataset.textFontWeight);
+    button.classList.toggle("is-active", buttonFamily === safeFamily && buttonWeight === safeWeight);
   }
 }
 
@@ -3191,6 +3303,8 @@ function getSubtitleLayout(context, text, width, height, options = {}) {
 
   const subtitleSize = normalizeSubtitleSize(options.subtitleSize);
   const subtitleY = normalizeSubtitleY(options.subtitleY);
+  const fontFamily = normalizeSubtitleFontFamily(options.subtitleFontFamily);
+  const fontWeight = normalizeSubtitleFontWeight(options.subtitleFontWeight);
   const baseFontSize = clamp(Math.round(width * 0.032), 22, 34);
   const fontSize = clamp(Math.round(baseFontSize * (subtitleSize / 100)), 14, 72);
   const lineHeight = Math.round(fontSize * 1.24);
@@ -3199,7 +3313,7 @@ function getSubtitleLayout(context, text, width, height, options = {}) {
   const maxTextWidth = Math.round(width * 0.78);
 
   context.save();
-  context.font = `700 ${fontSize}px "Pretendard"`;
+  context.font = `${fontWeight} ${fontSize}px ${quoteFontFamily(fontFamily)}`;
   const lines = trimSubtitleLines(wrapTextLines(context, cleanText, maxTextWidth + TEXT_PADDING_X * 2), SUBTITLE_MAX_LINES);
   const measuredWidth = Math.min(maxTextWidth, Math.max(...lines.map((line) => context.measureText(line).width)));
   context.restore();
@@ -3211,7 +3325,7 @@ function getSubtitleLayout(context, text, width, height, options = {}) {
   const maxBoxY = Math.max(verticalMargin, height - boxHeight - verticalMargin);
   const boxY = clamp(targetCenterY - boxHeight / 2, verticalMargin, maxBoxY);
   const bottomOffset = Math.max(0, height - boxY - boxHeight);
-  return { fontSize, lineHeight, paddingY, lines, boxWidth, boxHeight, boxX, boxY, bottomOffset, subtitleY };
+  return { fontSize, fontFamily, fontWeight, lineHeight, paddingY, lines, boxWidth, boxHeight, boxX, boxY, bottomOffset, subtitleY };
 }
 
 function getSubtitleReservedHeight(context, text, width, height, options = {}) {
@@ -3231,14 +3345,14 @@ function drawSubtitleBox(context, text, width, height, options = {}) {
     return;
   }
 
-  const { fontSize, lineHeight, paddingY, lines, boxWidth, boxHeight, boxX, boxY } = layout;
+  const { fontSize, fontFamily, fontWeight, lineHeight, paddingY, lines, boxWidth, boxHeight, boxX, boxY } = layout;
   context.save();
   context.fillStyle = "rgba(0, 0, 0, 0.8)";
   fillRoundedRect(context, boxX, boxY, boxWidth, boxHeight, 6);
   context.fillStyle = "#ffffff";
   context.textAlign = "center";
   context.textBaseline = "top";
-  context.font = `700 ${fontSize}px "Pretendard"`;
+  context.font = `${fontWeight} ${fontSize}px ${quoteFontFamily(fontFamily)}`;
   for (const [index, line] of lines.entries()) {
     context.fillText(line, width / 2, boxY + paddingY + index * lineHeight);
   }
@@ -3302,7 +3416,7 @@ function getSubtitleTextForRender(slide, options = {}) {
 }
 
 async function renderSubtitleOverlayToDataUrl(slide, text, options = {}) {
-  await ensureTextFontsReady([getSubtitleFontRequest()]);
+  await ensureTextFontsReady([getSubtitleFontRequest(options)]);
   const exportCanvas = document.createElement("canvas");
   exportCanvas.width = Math.max(1, roundedCanvasSize(slide.width));
   exportCanvas.height = Math.max(1, roundedCanvasSize(slide.height));
@@ -3320,6 +3434,8 @@ async function renderSubtitleImagesForSegments(slide, segments) {
       renderSubtitleOverlayToDataUrl(slide, segment, {
         subtitleSize: projectSettingsState.subtitleSize,
         subtitleY: projectSettingsState.subtitleY,
+        subtitleFontFamily: projectSettingsState.subtitleFontFamily,
+        subtitleFontWeight: projectSettingsState.subtitleFontWeight,
       })
     )
   );
@@ -5744,6 +5860,8 @@ async function saveCanvasAsPng() {
   await ensureCanvasFontsReady({
     subtitles: projectSettingsState.subtitleEnabled,
     subtitleText: currentSlide?.notes,
+    subtitleFontFamily: projectSettingsState.subtitleFontFamily,
+    subtitleFontWeight: projectSettingsState.subtitleFontWeight,
   });
   await Promise.all([...canvas.querySelectorAll("img")].map(waitForImageLoad));
 
@@ -5789,6 +5907,8 @@ async function saveCanvasAsPng() {
     drawSubtitleBox(context, getSubtitleTextForRender(currentSlide, {}), exportCanvas.width, exportCanvas.height, {
       subtitleSize: projectSettingsState.subtitleSize,
       subtitleY: projectSettingsState.subtitleY,
+      subtitleFontFamily: projectSettingsState.subtitleFontFamily,
+      subtitleFontWeight: projectSettingsState.subtitleFontWeight,
     });
   }
 
@@ -6008,6 +6128,24 @@ function normalizeAppSettings(value = {}) {
   };
 }
 
+function setActiveSubtitleFontButton(fontFamily, fontWeight) {
+  const safeFamily = normalizeSubtitleFontFamily(fontFamily);
+  const safeWeight = normalizeSubtitleFontWeight(fontWeight);
+  for (const button of settingsSubtitleFontButtons) {
+    const buttonFamily = normalizeSubtitleFontFamily(button.dataset.subtitleFont);
+    const buttonWeight = normalizeSubtitleFontWeight(button.dataset.subtitleFontWeight);
+    button.classList.toggle("is-active", buttonFamily === safeFamily && buttonWeight === safeWeight);
+  }
+}
+
+function getActiveSubtitleFontSelection() {
+  const activeButton = settingsSubtitleFontButtons.find((button) => button.classList.contains("is-active"));
+  return {
+    subtitleFontFamily: normalizeSubtitleFontFamily(activeButton?.dataset.subtitleFont ?? projectSettingsState.subtitleFontFamily),
+    subtitleFontWeight: normalizeSubtitleFontWeight(activeButton?.dataset.subtitleFontWeight ?? projectSettingsState.subtitleFontWeight),
+  };
+}
+
 function normalizeProjectSettings(value = {}) {
   const ttsProvider = normalizeTtsProvider(value.ttsProvider);
   return {
@@ -6022,6 +6160,8 @@ function normalizeProjectSettings(value = {}) {
     subtitleEnabled: normalizeSubtitleEnabled(value.subtitleEnabled),
     subtitleSize: normalizeSubtitleSize(value.subtitleSize),
     subtitleY: normalizeSubtitleY(value.subtitleY),
+    subtitleFontFamily: normalizeSubtitleFontFamily(value.subtitleFontFamily),
+    subtitleFontWeight: normalizeSubtitleFontWeight(value.subtitleFontWeight),
     exportDir: typeof value.exportDir === "string" && value.exportDir.trim() ? value.exportDir.trim() : defaultProjectExportDir,
     backgroundMusic: normalizeProjectBackgroundMusic(value.backgroundMusic),
   };
@@ -6041,12 +6181,14 @@ function syncSettingsControls() {
   settingsSubtitleEnabled.checked = projectSettingsState.subtitleEnabled;
   settingsSubtitleSize.value = String(projectSettingsState.subtitleSize);
   settingsSubtitleY.value = String(projectSettingsState.subtitleY);
+  setActiveSubtitleFontButton(projectSettingsState.subtitleFontFamily, projectSettingsState.subtitleFontWeight);
   settingsExportDir.value = projectSettingsState.exportDir;
   updateBackgroundMusicView();
   syncColorPresetButtons();
 }
 
 function getProjectSettingsFromControls() {
+  const subtitleFont = getActiveSubtitleFontSelection();
   return normalizeProjectSettings({
     canvasWidth: settingsCanvasWidth.value,
     canvasHeight: settingsCanvasHeight.value,
@@ -6059,6 +6201,8 @@ function getProjectSettingsFromControls() {
     subtitleEnabled: settingsSubtitleEnabled.checked,
     subtitleSize: settingsSubtitleSize.value,
     subtitleY: settingsSubtitleY.value,
+    subtitleFontFamily: subtitleFont.subtitleFontFamily,
+    subtitleFontWeight: subtitleFont.subtitleFontWeight,
     exportDir: settingsExportDir.value,
     backgroundMusic: projectSettingsState.backgroundMusic,
   });
@@ -6481,6 +6625,8 @@ async function exportProjectAsMp4() {
       await ensureSlideFontsReady(slide, {
         reserveSubtitles: projectSettingsState.subtitleEnabled,
         subtitleText: notes,
+        subtitleFontFamily: projectSettingsState.subtitleFontFamily,
+        subtitleFontWeight: projectSettingsState.subtitleFontWeight,
       });
       const subtitleImages = await renderSubtitleImagesForSegments(slide, ttsSegments);
       const baseSlidePayload = {
@@ -6496,6 +6642,8 @@ async function exportProjectAsMp4() {
         subtitleEnabled: projectSettingsState.subtitleEnabled,
         subtitleSize: projectSettingsState.subtitleSize,
         subtitleY: projectSettingsState.subtitleY,
+        subtitleFontFamily: projectSettingsState.subtitleFontFamily,
+        subtitleFontWeight: projectSettingsState.subtitleFontWeight,
       };
       if (isDynamicSlide(slide)) {
         setExportModalProgress("Rendering", `슬라이드 ${index + 1} / ${slides.length} 타이핑 프레임을 만들고 있습니다.`, index, slides.length);
@@ -6506,6 +6654,8 @@ async function exportProjectAsMp4() {
           subtitleText: notes,
           subtitleSize: projectSettingsState.subtitleSize,
           subtitleY: projectSettingsState.subtitleY,
+          subtitleFontFamily: projectSettingsState.subtitleFontFamily,
+          subtitleFontWeight: projectSettingsState.subtitleFontWeight,
           durationSeconds: getSlideAnimationFrameDuration(slide, notes),
         });
         renderedSlides.push({
@@ -6527,6 +6677,8 @@ async function exportProjectAsMp4() {
           subtitleText: notes,
           subtitleSize: projectSettingsState.subtitleSize,
           subtitleY: projectSettingsState.subtitleY,
+          subtitleFontFamily: projectSettingsState.subtitleFontFamily,
+          subtitleFontWeight: projectSettingsState.subtitleFontWeight,
         };
         if (slideHasObjectAnimations(slide)) {
           const loopAnimationFrames = shouldLoopAnimationFrames(slide);
@@ -6636,6 +6788,27 @@ function applySelectedTextSizeChange(sizeKey) {
   recordHistory();
 }
 
+function applySelectedTextFontChange(fontFamily, fontWeight) {
+  if (!selectedObject || selectedObject.dataset.type !== "text") {
+    return;
+  }
+
+  const safeFamily = sanitizeTextFontFamily(fontFamily);
+  const safeWeight = sanitizeTextFontWeight(fontWeight);
+  selectedObject.dataset.fontFamily = safeFamily;
+  selectedObject.dataset.fontWeight = String(safeWeight);
+  setActiveTextFontButton(safeFamily, safeWeight);
+  const editor = selectedObject.querySelector(".text-editor");
+  editor.style.fontFamily = quoteFontFamily(safeFamily);
+  editor.style.fontWeight = String(safeWeight);
+  if (!fitTextBoxToContent(selectedObject)) {
+    renderTextObject(selectedObject);
+  }
+  setStatus(`텍스트 폰트를 ${safeFamily}로 변경했습니다.`);
+  renderSlideList();
+  recordHistory();
+}
+
 function applySelectedTextStyleChange(effectKey) {
   if (!selectedObject || selectedObject.dataset.type !== "text") {
     return;
@@ -6650,6 +6823,7 @@ function applySelectedTextStyleChange(effectKey) {
     selectedTextColor.value = preset.fillColor;
   }
   setActiveTextStyleButton(safeEffect);
+  setActiveTextFontButton(selectedObject.dataset.fontFamily, selectedObject.dataset.fontWeight);
   const editor = selectedObject.querySelector(".text-editor");
   editor.style.fontFamily = quoteFontFamily(sanitizeTextFontFamily(selectedObject.dataset.fontFamily));
   editor.style.fontWeight = selectedObject.dataset.fontWeight;
@@ -6905,6 +7079,11 @@ settingsSubtitleSize.addEventListener("blur", () => {
 settingsSubtitleY.addEventListener("blur", () => {
   settingsSubtitleY.value = String(normalizeSubtitleY(settingsSubtitleY.value));
 });
+for (const button of settingsSubtitleFontButtons) {
+  button.addEventListener("click", () => {
+    setActiveSubtitleFontButton(button.dataset.subtitleFont, button.dataset.subtitleFontWeight);
+  });
+}
 
 pasteImage.addEventListener("click", pasteImageFromClipboard);
 chooseImage.addEventListener("click", chooseImageFileForCurrentSlide);
@@ -6982,6 +7161,9 @@ for (const input of [selectedX, selectedY, selectedW, selectedH, selectedR]) {
 }
 for (const button of textSizeButtons) {
   button.addEventListener("click", () => applySelectedTextSizeChange(button.dataset.textSize));
+}
+for (const button of textFontButtons) {
+  button.addEventListener("click", () => applySelectedTextFontChange(button.dataset.textFont, button.dataset.textFontWeight));
 }
 for (const button of textStyleButtons) {
   button.addEventListener("click", () => applySelectedTextStyleChange(button.dataset.textStyle));

@@ -52,6 +52,8 @@ pub(crate) struct VideoExportSlide {
     subtitle_images: Option<Vec<String>>,
     subtitle_size: Option<f64>,
     subtitle_y: Option<f64>,
+    subtitle_font_family: Option<String>,
+    subtitle_font_weight: Option<f64>,
     gif_overlays: Option<Vec<GifOverlay>>,
 }
 
@@ -835,6 +837,28 @@ fn subtitle_font_size(width: u32, size_percent: Option<f64>) -> f64 {
     (base * scale).round().clamp(14.0, 72.0)
 }
 
+fn sanitize_ass_font_family(value: Option<&str>) -> String {
+    let clean = value
+        .unwrap_or("Pretendard")
+        .trim()
+        .chars()
+        .filter(|character| !matches!(character, '\n' | '\r' | ','))
+        .collect::<String>();
+    if clean.trim().is_empty() {
+        "Pretendard".to_string()
+    } else {
+        clean
+    }
+}
+
+fn ass_bold_value(font_weight: Option<f64>) -> i32 {
+    if font_weight.unwrap_or(700.0) >= 700.0 {
+        -1
+    } else {
+        0
+    }
+}
+
 fn subtitle_char_units(character: char) -> f64 {
     if character.is_ascii_whitespace() {
         0.35
@@ -904,14 +928,18 @@ fn write_ass_subtitles(
     height: u32,
     size_percent: Option<f64>,
     y_percent: Option<f64>,
+    font_family: Option<&str>,
+    font_weight: Option<f64>,
 ) -> Result<(), String> {
     let font_size = subtitle_font_size(width, size_percent);
+    let font_family = sanitize_ass_font_family(font_family);
+    let bold = ass_bold_value(font_weight);
     let y = ((height as f64) * y_percent.unwrap_or(90.0).clamp(5.0, 95.0) / 100.0)
         .round()
         .clamp(1.0, height as f64);
     let margin_lr = ((width as f64) * 0.11).round() as u32;
     let mut ass = format!(
-        "[Script Info]\nScriptType: v4.00+\nPlayResX: {width}\nPlayResY: {height}\nWrapStyle: 0\nScaledBorderAndShadow: yes\n\n[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\nStyle: Default,Pretendard,{font_size:.0},&H00FFFFFF,&H000000FF,&H00000000,&H33000000,-1,0,0,0,100,100,0,0,3,0,0,5,{margin_lr},{margin_lr},0,1\n\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
+        "[Script Info]\nScriptType: v4.00+\nPlayResX: {width}\nPlayResY: {height}\nWrapStyle: 0\nScaledBorderAndShadow: yes\n\n[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\nStyle: Default,{font_family},{font_size:.0},&H00FFFFFF,&H000000FF,&H00000000,&H33000000,{bold},0,0,0,100,100,0,0,3,0,0,5,{margin_lr},{margin_lr},0,1\n\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
     );
 
     for segment in segments {
@@ -1894,6 +1922,8 @@ pub(crate) fn export_video(
                     height,
                     slide.subtitle_size,
                     slide.subtitle_y,
+                    slide.subtitle_font_family.as_deref(),
+                    slide.subtitle_font_weight,
                 )?;
                 Some(build_subtitle_filter(&subtitle_path, fonts_dir.as_deref()))
             } else {
