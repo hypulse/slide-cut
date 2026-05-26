@@ -194,6 +194,8 @@ const settingsSubtitleFontButtons = [...document.querySelectorAll("[data-subtitl
 let settingsSubtitleStickerButtons = [...document.querySelectorAll("[data-subtitle-text-effect]")];
 const settingsSubtitleFontLabel = document.querySelector(".settings-subtitle-font-label");
 const settingsSubtitleStickerLabel = document.querySelector(".settings-subtitle-sticker-label");
+const settingsSubtitleFontGroup = document.querySelector("#settingsSubtitleFont");
+const settingsSubtitleStickerGroup = document.querySelector("#settingsSubtitleSticker");
 const settingsExportDir = document.querySelector("#settingsExportDir");
 const chooseExportDir = document.querySelector("#chooseExportDir");
 const resetExportDir = document.querySelector("#resetExportDir");
@@ -359,10 +361,10 @@ const TEXT_EFFECT_PRESETS = {
   cleanCaption: {
     label: "Clean Caption",
     fontFamily: "Pretendard",
-    fontWeight: 700,
+    fontWeight: 600,
     fillColor: "#ffffff",
-    shadowColor: "rgba(8, 12, 22, 0.42)",
-    shadowBlur: 5,
+    shadowColor: "rgba(8, 12, 22, 0.55)",
+    shadowBlur: 10,
     shadowOffsetX: 0,
     shadowOffsetY: 2,
   },
@@ -433,15 +435,15 @@ const TEXT_EFFECT_PRESETS = {
   },
   doodleNote: {
     label: "Doodle Note",
-    fontFamily: "Pretendard",
+    fontFamily: "Gaegu",
     fontWeight: 700,
     fillColor: "#ffffff",
     strokeColor: "#1c1c24",
-    strokeWidth: 5,
+    strokeWidth: 4,
     shadowLayerColor: "#ff7aa8",
-    shadowLayerStrokeWidth: 8,
-    shadowLayerOffsetX: 5,
-    shadowLayerOffsetY: 6,
+    shadowLayerStrokeWidth: 6,
+    shadowLayerOffsetX: 4,
+    shadowLayerOffsetY: 5,
   },
   postItNote: {
     label: "Post-it Note",
@@ -478,15 +480,15 @@ const TEXT_EFFECT_PRESETS = {
   },
   bubbleBounce: {
     label: "Bubble Bounce",
-    fontFamily: "Pretendard",
+    fontFamily: "Jua",
     fontWeight: 400,
     fillColor: "#ffffff",
     strokeColor: "#1f74df",
-    strokeWidth: 7,
+    strokeWidth: 8,
     shadowLayerColor: "#9ce8ff",
-    shadowLayerStrokeWidth: 9,
-    shadowLayerOffsetX: 5,
-    shadowLayerOffsetY: 7,
+    shadowLayerStrokeWidth: 10,
+    shadowLayerOffsetX: 4,
+    shadowLayerOffsetY: 6,
   },
   flowerPoem: {
     label: "Poetry Page",
@@ -504,38 +506,28 @@ const TEXT_EFFECT_PRESETS = {
     shadowOffsetX: 0,
     shadowOffsetY: 6,
     decorations: [
-      { type: "sparkle", phase: "front", count: 6, colors: ["#f5d7e8", "#d8ccef", "#ffffff"], spread: 18 },
-      { type: "confetti", phase: "front", count: 4, colors: ["#ead8ef", "#f7e0d1"], spread: 16 },
+      { type: "sparkle", phase: "front", count: 4, colors: ["#f5d7e8", "#d8ccef", "#ffffff"], spread: 14 },
     ],
-    decorationOutsetX: 22,
-    decorationOutsetY: 22,
+    decorationOutsetX: 18,
+    decorationOutsetY: 18,
   },
   neonChromatic: {
     label: "Neon Chromatic",
     fontFamily: "Pretendard",
     fontWeight: 700,
     fillColor: "#ffffff",
-    fillGradient: {
-      direction: "horizontal",
-      stops: [
-        { offset: 0, color: "#ffffff" },
-        { offset: 0.48, color: "#fff1fb" },
-        { offset: 1, color: "#e9fdff" },
-      ],
-    },
     strokeColor: "#101015",
-    strokeWidth: 5,
+    strokeWidth: 4,
     offsetLayers: [
-      { color: "#00d9ff", strokeWidth: 6, offsetX: -5, offsetY: 5 },
-      { color: "#ff2bbd", strokeWidth: 6, offsetX: 5, offsetY: -3 },
-      { color: "#ffe936", strokeWidth: 4, offsetX: 8, offsetY: 8 },
+      { color: "#00d9ff", strokeWidth: 6, offsetX: -6, offsetY: 0 },
+      { color: "#ff2bbd", strokeWidth: 6, offsetX: 6, offsetY: 0 },
     ],
     glowLayers: [
       { color: "rgba(255, 48, 198, 0.45)", blur: 8 },
       { color: "rgba(0, 217, 255, 0.35)", blur: 10 },
     ],
     decorationOutsetX: 18,
-    decorationOutsetY: 18,
+    decorationOutsetY: 14,
   },
   hotPinkNeon: {
     label: "Hot Pink Neon",
@@ -567,16 +559,15 @@ const TEXT_EFFECT_PRESETS = {
     shadowLayerOffsetX: 5,
     shadowLayerOffsetY: 6,
     decorations: [
-      { type: "sparkle", phase: "front", count: 14, colors: ["#ffffff", "#ffd7f2", "#fff35f"] },
-      { type: "confetti", phase: "front", count: 10, colors: ["#ff4fa3", "#ffffff", "#8de6ff"] },
+      { type: "sparkle", phase: "front", count: 6, colors: ["#ffffff", "#ffd7f2", "#fff35f"], spread: 26 },
     ],
-    decorationOutsetX: 30,
-    decorationOutsetY: 30,
+    decorationOutsetX: 26,
+    decorationOutsetY: 26,
   },
   graffitiBurst: {
     label: "Graffiti Burst",
-    fontFamily: "Pretendard",
-    fontWeight: 700,
+    fontFamily: "Black Han Sans",
+    fontWeight: 400,
     fillColor: "#fff42c",
     strokeColor: "#101015",
     strokeWidth: 6,
@@ -585,9 +576,9 @@ const TEXT_EFFECT_PRESETS = {
     shadowLayerOffsetX: 4,
     shadowLayerOffsetY: 5,
     decorations: [
-      { type: "paintBurst", count: 28, colors: ["#69ff35", "#ff39bf", "#9e4dff", "#00d8ff"] },
+      { type: "drip", phase: "front", count: 5, colors: ["#fff42c", "#ff2dac"], strokeColor: "#101015" },
     ],
-    decorationOutsetX: 34,
+    decorationOutsetX: 20,
     decorationOutsetY: 28,
   },
   goldGlow: {
@@ -667,13 +658,12 @@ const TEXT_EFFECT_PRESETS = {
     fillColor: "#ffffff",
     strokeColor: "#71315d",
     strokeWidth: 3,
-    shadowColor: "rgba(68, 28, 52, 0.2)",
-    shadowBlur: 3,
+    shadowColor: "rgba(68, 28, 52, 0.22)",
+    shadowBlur: 4,
     shadowOffsetX: 0,
-    shadowOffsetY: 2,
+    shadowOffsetY: 3,
     decorations: [
       { type: "tape", colors: ["rgba(255, 128, 186, 0.92)", "rgba(255, 236, 167, 0.9)"], rotate: -5 },
-      { type: "stripe", phase: "overBackground", color: "rgba(255, 255, 255, 0.28)", stripeWidth: 7 },
     ],
     decorationOutsetX: 22,
     decorationOutsetY: 18,
@@ -842,6 +832,55 @@ const TEXT_EFFECT_ALIASES = {
   softDiary: "postItNote",
 };
 const TEXT_EFFECT_OPTIONS = Object.keys(TEXT_EFFECT_PRESETS);
+let subtitleSettingsRowHeightFrame = 0;
+let subtitleSettingsRowResizeObserver = null;
+
+function setSubtitleSettingsRowHeight(label, group) {
+  if (!label || !group) {
+    return;
+  }
+  if (label.hidden) {
+    label.style.removeProperty("--settings-subtitle-row-height");
+    return;
+  }
+
+  const labelText = label.querySelector(":scope > span:first-child");
+  const labelTextStyle = labelText ? window.getComputedStyle(labelText) : null;
+  const labelTextHeight = labelText
+    ? Math.ceil(labelText.getBoundingClientRect().height + numberOr(parseFloat(labelTextStyle?.paddingTop), 0))
+    : 0;
+  const groupHeight = Math.ceil(group.getBoundingClientRect().height || group.scrollHeight || 0);
+  label.style.setProperty("--settings-subtitle-row-height", `${Math.max(26, labelTextHeight, groupHeight)}px`);
+}
+
+function updateSubtitleSettingsRowHeights() {
+  subtitleSettingsRowHeightFrame = 0;
+  if (appSettings.hidden) {
+    return;
+  }
+  setSubtitleSettingsRowHeight(settingsSubtitleFontLabel, settingsSubtitleFontGroup);
+  setSubtitleSettingsRowHeight(settingsSubtitleStickerLabel, settingsSubtitleStickerGroup);
+}
+
+function scheduleSubtitleSettingsRowHeightUpdate() {
+  if (subtitleSettingsRowHeightFrame) {
+    window.cancelAnimationFrame(subtitleSettingsRowHeightFrame);
+  }
+  subtitleSettingsRowHeightFrame = window.requestAnimationFrame(updateSubtitleSettingsRowHeights);
+}
+
+function observeSubtitleSettingsRows() {
+  if (typeof ResizeObserver === "undefined" || subtitleSettingsRowResizeObserver) {
+    return;
+  }
+  subtitleSettingsRowResizeObserver = new ResizeObserver(() => scheduleSubtitleSettingsRowHeightUpdate());
+  if (settingsSubtitleFontGroup) {
+    subtitleSettingsRowResizeObserver.observe(settingsSubtitleFontGroup);
+  }
+  if (settingsSubtitleStickerGroup) {
+    subtitleSettingsRowResizeObserver.observe(settingsSubtitleStickerGroup);
+  }
+}
 
 function createTextEffectButton(effectKey, datasetKey) {
   const preset = TEXT_EFFECT_PRESETS[effectKey] || TEXT_EFFECT_PRESETS[DEFAULT_TEXT_EFFECT];
@@ -871,9 +910,11 @@ function renderTextEffectButtons() {
       ...subtitleStickerContainer.querySelectorAll("[data-subtitle-text-effect]"),
     ];
   }
+  scheduleSubtitleSettingsRowHeightUpdate();
 }
 
 renderTextEffectButtons();
+observeSubtitleSettingsRows();
 const DEFAULT_CANVAS_WIDTH = 1280;
 const DEFAULT_CANVAS_HEIGHT = 720;
 const DEFAULT_CANVAS_COLOR = "#ffffff";
@@ -6649,6 +6690,7 @@ function setActiveSubtitleFontButton(fontFamily, fontWeight) {
     const buttonWeight = normalizeSubtitleFontWeight(button.dataset.subtitleFontWeight);
     button.classList.toggle("is-active", buttonFamily === safeFamily && buttonWeight === safeWeight);
   }
+  scheduleSubtitleSettingsRowHeightUpdate();
 }
 
 function setActiveSubtitleStyleModeButton(mode) {
@@ -6658,6 +6700,7 @@ function setActiveSubtitleStyleModeButton(mode) {
   }
   settingsSubtitleFontLabel.hidden = safeMode !== "standard";
   settingsSubtitleStickerLabel.hidden = safeMode !== "sticker";
+  scheduleSubtitleSettingsRowHeightUpdate();
 }
 
 function setActiveSubtitleTextEffectButton(effectKey) {
@@ -6665,6 +6708,7 @@ function setActiveSubtitleTextEffectButton(effectKey) {
   for (const button of settingsSubtitleStickerButtons) {
     button.classList.toggle("is-active", button.dataset.subtitleTextEffect === safeEffect);
   }
+  scheduleSubtitleSettingsRowHeightUpdate();
 }
 
 function getActiveSubtitleFontSelection() {
@@ -6727,6 +6771,7 @@ function syncSettingsControls() {
   settingsExportDir.value = projectSettingsState.exportDir;
   updateBackgroundMusicView();
   syncColorPresetButtons();
+  scheduleSubtitleSettingsRowHeightUpdate();
 }
 
 function getProjectSettingsFromControls() {
@@ -6804,6 +6849,7 @@ async function saveSettings() {
 function showAppSettings() {
   syncSettingsControls();
   appSettings.hidden = false;
+  scheduleSubtitleSettingsRowHeightUpdate();
 }
 
 function hideAppSettings() {
@@ -7609,6 +7655,8 @@ appSettings.addEventListener("click", (event) => {
     hideAppSettings();
   }
 });
+window.addEventListener("resize", scheduleSubtitleSettingsRowHeightUpdate);
+document.fonts?.ready?.then(scheduleSubtitleSettingsRowHeightUpdate).catch(() => {});
 libraryNewProject.addEventListener("click", () => createNewNativeProject());
 strokeColor.addEventListener("input", () => applySelectedShapeStyleChange());
 strokeColor.addEventListener("change", () => applySelectedShapeStyleChange(true));

@@ -720,11 +720,12 @@ button.danger:hover {
 .settings-subtitle-font-label,
 .settings-subtitle-sticker-label {
   align-items: start;
-  min-height: 62px;
+  min-height: var(--settings-subtitle-row-height, auto);
 }
 
-.settings-subtitle-sticker-label {
-  min-height: 170px;
+.settings-subtitle-font-label[hidden],
+.settings-subtitle-sticker-label[hidden] {
+  display: none !important;
 }
 
 .settings-subtitle-font-label > span:first-child,
