@@ -506,11 +506,6 @@ const TEXT_EFFECT_PRESETS = {
     shadowBlur: 14,
     shadowOffsetX: 0,
     shadowOffsetY: 6,
-    decorations: [
-      { type: "sparkle", phase: "front", count: 4, colors: ["#f5d7e8", "#d8ccef", "#ffffff"], spread: 14 },
-    ],
-    decorationOutsetX: 18,
-    decorationOutsetY: 18,
   },
   neonChromatic: {
     label: "Neon Chromatic",
@@ -565,8 +560,8 @@ const TEXT_EFFECT_PRESETS = {
     decorationOutsetX: 28,
     decorationOutsetY: 28,
   },
-  graffitiBurst: {
-    label: "Graffiti Burst",
+  graffitiTag: {
+    label: "Graffiti Tag",
     fontFamily: "Bagel Fat One",
     fontWeight: 400,
     fillColor: "#fff42c",
@@ -588,38 +583,6 @@ const TEXT_EFFECT_PRESETS = {
     shadowLayerStrokeWidth: 9,
     shadowLayerOffsetX: 4,
     shadowLayerOffsetY: 6,
-    decorations: [
-      {
-        type: "paintBurst",
-        phase: "behind",
-        count: 36,
-        colors: ["#25f06d", "#ff2dac", "#00d9ff", "#fff42c"],
-        spread: 36,
-        minSize: 6,
-        maxSize: 24,
-        opacity: 0.9,
-      },
-      {
-        type: "spray",
-        phase: "behind",
-        count: 88,
-        colors: ["#25f06d", "#ff2dac", "#00d9ff", "#ffffff"],
-        spread: 42,
-        minSize: 1.1,
-        maxSize: 3.4,
-        opacity: 0.72,
-      },
-      {
-        type: "drip",
-        phase: "front",
-        count: 4,
-        colors: ["#ff2dac", "#fff42c", "#25f06d"],
-        strokeColor: "#101015",
-        anchorInset: 4,
-      },
-    ],
-    decorationOutsetX: 46,
-    decorationOutsetY: 48,
   },
   goldGlow: {
     label: "Gold Glow",
@@ -2051,8 +2014,8 @@ function getTextRenderStyle(data = {}) {
 }
 
 function getTextDecorationScale(renderStyle = {}) {
-  const fontSize = numberOr(renderStyle.fontSize, TEXT_PRESETS.h3.fontSize);
-  return clamp(fontSize / TEXT_PRESETS.h3.fontSize, 0.7, 3);
+  const fontSize = numberOr(renderStyle.fontSize, TEXT_SIZE_PRESETS.h3.fontSize);
+  return clamp(fontSize / TEXT_SIZE_PRESETS.h3.fontSize, 0.7, 3);
 }
 
 function getTextEffectOutset(renderStyle = {}) {
