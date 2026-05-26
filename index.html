@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Slide Cut</title>
-    <link rel="stylesheet" href="./styles.css?v=20260526-ui-refresh" />
+    <link rel="stylesheet" href="./styles.css?v=20260526-subtitle-stickers" />
   </head>
   <body>
     <div class="app-frame">
@@ -549,6 +549,13 @@
             <span>Subtitles</span>
             <input id="settingsSubtitleEnabled" type="checkbox" checked />
           </label>
+          <label class="settings-subtitle-style-label">
+            <span>Subtitle Style</span>
+            <div id="settingsSubtitleStyle" class="subtitle-style-buttons" role="group" aria-label="Subtitle style">
+              <button type="button" data-subtitle-style-mode="standard" class="is-active">Standard</button>
+              <button type="button" data-subtitle-style-mode="sticker">Sticker</button>
+            </div>
+          </label>
           <label class="settings-subtitle-font-label">
             <span>Subtitle Font</span>
             <div id="settingsSubtitleFont" class="subtitle-font-buttons" role="group" aria-label="Subtitle font">
@@ -559,6 +566,29 @@
               <button type="button" data-subtitle-font="Gamja Flower" data-subtitle-font-weight="400">Gamja</button>
               <button type="button" data-subtitle-font="Nanum Pen Script" data-subtitle-font-weight="400">Pen</button>
               <button type="button" data-subtitle-font="Nanum Brush Script" data-subtitle-font-weight="400">Brush</button>
+            </div>
+          </label>
+          <label class="settings-subtitle-sticker-label" hidden>
+            <span>Sticker Style</span>
+            <div id="settingsSubtitleSticker" class="subtitle-sticker-buttons" role="group" aria-label="Subtitle sticker style">
+              <button type="button" data-subtitle-text-effect="clean">Clean</button>
+              <button type="button" data-subtitle-text-effect="cleanReel">Clean Reel</button>
+              <button type="button" data-subtitle-text-effect="popSticker" class="is-active">Pop</button>
+              <button type="button" data-subtitle-text-effect="doodlePop">Doodle</button>
+              <button type="button" data-subtitle-text-effect="candyLabel">Candy</button>
+              <button type="button" data-subtitle-text-effect="comicBubble">Comic</button>
+              <button type="button" data-subtitle-text-effect="neonPop">Neon</button>
+              <button type="button" data-subtitle-text-effect="glassChip">Glass</button>
+              <button type="button" data-subtitle-text-effect="paperLabel">Paper</button>
+              <button type="button" data-subtitle-text-effect="diaryNote">Diary</button>
+              <button type="button" data-subtitle-text-effect="softPen">Soft Pen</button>
+              <button type="button" data-subtitle-text-effect="cozyLabel">Cozy</button>
+              <button type="button" data-subtitle-text-effect="brushMood">Brush</button>
+              <button type="button" data-subtitle-text-effect="filmCaption">Film</button>
+              <button type="button" data-subtitle-text-effect="poemNote">Poem</button>
+              <button type="button" data-subtitle-text-effect="warmGlow">Warm Glow</button>
+              <button type="button" data-subtitle-text-effect="rainCaption">Rain</button>
+              <button type="button" data-subtitle-text-effect="letterPaper">Letter</button>
             </div>
           </label>
           <label>
@@ -585,6 +615,6 @@
     </div>
 
     <script src="./vendor/lucide.min.js" defer></script>
-    <script type="module" src="./app.js?v=20260526-stickers-v2"></script>
+    <script type="module" src="./app.js?v=20260526-subtitle-stickers"></script>
   </body>
 </html>

@@ -681,23 +681,31 @@ button.danger:hover {
   align-items: start;
 }
 
-.settings-subtitle-font-label {
+.settings-subtitle-font-label,
+.settings-subtitle-sticker-label {
   align-items: start;
   min-height: 62px;
 }
 
-.settings-subtitle-font-label > span:first-child {
+.settings-subtitle-sticker-label {
+  min-height: 170px;
+}
+
+.settings-subtitle-font-label > span:first-child,
+.settings-subtitle-sticker-label > span:first-child {
   padding-top: 6px;
 }
 
-.settings-subtitle-font-label .subtitle-font-buttons {
+.settings-subtitle-font-label .subtitle-font-buttons,
+.settings-subtitle-sticker-label .subtitle-sticker-buttons {
   display: flex;
   flex-wrap: wrap;
   align-self: start;
   gap: 4px;
 }
 
-.settings-subtitle-font-label .subtitle-font-buttons button {
+.settings-subtitle-font-label .subtitle-font-buttons button,
+.settings-subtitle-sticker-label .subtitle-sticker-buttons button {
   flex: 1 1 94px;
   min-width: 0;
 }
@@ -1545,7 +1553,9 @@ select {
 .text-size-buttons,
 .text-font-buttons,
 .text-style-buttons,
+.subtitle-style-buttons,
 .subtitle-font-buttons,
+.subtitle-sticker-buttons,
 .animation-buttons,
 .chat-size-buttons {
   display: grid;
@@ -1621,6 +1631,10 @@ select {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.subtitle-style-buttons {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .text-align-buttons,
 .image-flip-buttons {
   display: grid;
@@ -1635,7 +1649,9 @@ select {
 .text-size-buttons button,
 .text-font-buttons button,
 .text-style-buttons button,
+.subtitle-style-buttons button,
 .subtitle-font-buttons button,
+.subtitle-sticker-buttons button,
 .animation-buttons button,
 .animation-point-buttons button,
 .chat-size-buttons button {
@@ -1649,7 +1665,8 @@ select {
 }
 
 .text-font-buttons button,
-.subtitle-font-buttons button {
+.subtitle-font-buttons button,
+.subtitle-sticker-buttons button {
   font-family: var(--font-ui);
   font-size: 11px;
 }
@@ -1665,7 +1682,9 @@ select {
 .text-size-buttons button.is-active,
 .text-font-buttons button.is-active,
 .text-style-buttons button.is-active,
+.subtitle-style-buttons button.is-active,
 .subtitle-font-buttons button.is-active,
+.subtitle-sticker-buttons button.is-active,
 .animation-buttons button.is-active,
 .chat-size-buttons button.is-active {
   border-color: var(--accent);
@@ -1683,7 +1702,9 @@ select {
 .text-size-buttons button:disabled,
 .text-font-buttons button:disabled,
 .text-style-buttons button:disabled,
+.subtitle-style-buttons button:disabled,
 .subtitle-font-buttons button:disabled,
+.subtitle-sticker-buttons button:disabled,
 .animation-buttons button:disabled,
 .animation-point-buttons button:disabled,
 .chat-size-buttons button:disabled,
@@ -2202,44 +2223,53 @@ input[type="checkbox"] {
 
 .handle {
   position: absolute;
-  width: 12px;
-  height: 12px;
+  width: 18px;
+  height: 18px;
   border: 2px solid #ffffff;
   border-radius: 50%;
   background: var(--accent);
-  box-shadow: 0 1px 4px rgba(13, 24, 46, 0.28);
+  box-shadow:
+    0 1px 5px rgba(13, 24, 46, 0.28),
+    0 0 0 1px rgba(37, 99, 235, 0.18);
   pointer-events: auto;
 }
 
+.handle::before {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+}
+
 .handle.nw {
-  left: -7px;
-  top: -7px;
+  left: -23px;
+  top: -23px;
   cursor: nwse-resize;
 }
 
 .handle.ne {
-  right: -7px;
-  top: -7px;
+  right: -23px;
+  top: -23px;
   cursor: nesw-resize;
 }
 
 .handle.sw {
-  left: -7px;
-  bottom: -7px;
+  left: -23px;
+  bottom: -23px;
   cursor: nesw-resize;
 }
 
 .handle.se {
-  right: -7px;
-  bottom: -7px;
+  right: -23px;
+  bottom: -23px;
   cursor: nwse-resize;
 }
 
 .handle.rotate {
   left: 50%;
-  top: -38px;
-  width: 14px;
-  height: 14px;
+  top: -52px;
+  width: 20px;
+  height: 20px;
   transform: translateX(-50%);
   cursor: grab;
 }
@@ -2248,9 +2278,9 @@ input[type="checkbox"] {
   content: "";
   position: absolute;
   left: 50%;
-  top: 12px;
+  top: 24px;
   width: 2px;
-  height: 24px;
+  height: 27px;
   background: var(--accent);
   transform: translateX(-50%);
 }

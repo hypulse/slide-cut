@@ -189,7 +189,11 @@ const settingsTtsInstructions = document.querySelector("#settingsTtsInstructions
 const settingsSubtitleEnabled = document.querySelector("#settingsSubtitleEnabled");
 const settingsSubtitleSize = document.querySelector("#settingsSubtitleSize");
 const settingsSubtitleY = document.querySelector("#settingsSubtitleY");
+const settingsSubtitleStyleButtons = [...document.querySelectorAll("[data-subtitle-style-mode]")];
 const settingsSubtitleFontButtons = [...document.querySelectorAll("[data-subtitle-font]")];
+const settingsSubtitleStickerButtons = [...document.querySelectorAll("[data-subtitle-text-effect]")];
+const settingsSubtitleFontLabel = document.querySelector(".settings-subtitle-font-label");
+const settingsSubtitleStickerLabel = document.querySelector(".settings-subtitle-sticker-label");
 const settingsExportDir = document.querySelector("#settingsExportDir");
 const chooseExportDir = document.querySelector("#chooseExportDir");
 const resetExportDir = document.querySelector("#resetExportDir");
@@ -295,8 +299,10 @@ let projectSettingsState = {
   subtitleEnabled: true,
   subtitleSize: 100,
   subtitleY: 90,
+  subtitleStyleMode: "standard",
   subtitleFontFamily: "Pretendard",
   subtitleFontWeight: 700,
+  subtitleTextEffect: "popSticker",
   exportDir: "",
   backgroundMusic: null,
 };
@@ -319,6 +325,9 @@ const DEFAULT_TEXT_FONT_WEIGHT = 600;
 const DEFAULT_TEXT_EFFECT = "clean";
 const DEFAULT_SUBTITLE_FONT_FAMILY = "Pretendard";
 const DEFAULT_SUBTITLE_FONT_WEIGHT = 700;
+const DEFAULT_SUBTITLE_STYLE_MODE = "standard";
+const DEFAULT_SUBTITLE_TEXT_EFFECT = "popSticker";
+const SUBTITLE_STYLE_MODES = new Set(["standard", "sticker"]);
 const TEXT_FONT_FAMILIES = new Set([
   "Pretendard",
   "Gmarket Sans",
@@ -1399,12 +1408,20 @@ function normalizeSubtitleY(value) {
   return sanitizeNumber(value, DEFAULT_SUBTITLE_Y, 5, 95);
 }
 
+function normalizeSubtitleStyleMode(value) {
+  return SUBTITLE_STYLE_MODES.has(value) ? value : DEFAULT_SUBTITLE_STYLE_MODE;
+}
+
 function normalizeSubtitleFontFamily(value) {
   return sanitizeTextFontFamily(value || DEFAULT_SUBTITLE_FONT_FAMILY);
 }
 
 function normalizeSubtitleFontWeight(value) {
   return sanitizeTextFontWeight(value, DEFAULT_SUBTITLE_FONT_WEIGHT);
+}
+
+function normalizeSubtitleTextEffect(value) {
+  return sanitizeTextEffect(value || DEFAULT_SUBTITLE_TEXT_EFFECT);
 }
 
 function normalizeContinueAfterTts(value) {
@@ -1791,6 +1808,11 @@ async function ensureTextFontsReady(fontRequests = []) {
 }
 
 function getSubtitleFontRequest(options = {}) {
+  if (normalizeSubtitleStyleMode(options.subtitleStyleMode ?? projectSettingsState.subtitleStyleMode) === "sticker") {
+    return getTextRenderFontRequest({
+      textEffect: normalizeSubtitleTextEffect(options.subtitleTextEffect ?? projectSettingsState.subtitleTextEffect),
+    });
+  }
   return {
     family: normalizeSubtitleFontFamily(options.subtitleFontFamily ?? projectSettingsState.subtitleFontFamily),
     weight: normalizeSubtitleFontWeight(options.subtitleFontWeight ?? projectSettingsState.subtitleFontWeight),
@@ -3543,37 +3565,72 @@ function trimSubtitleLines(lines, maxLines) {
   return output;
 }
 
+function getSubtitleTextMetrics(width, options = {}) {
+  const subtitleSize = normalizeSubtitleSize(options.subtitleSize);
+  const baseFontSize = clamp(Math.round(width * 0.032), 22, 34);
+  const fontSize = clamp(Math.round(baseFontSize * (subtitleSize / 100)), 14, 72);
+  return {
+    fontSize,
+    lineHeight: Math.round(fontSize * 1.24),
+  };
+}
+
 function getSubtitleLayout(context, text, width, height, options = {}) {
   const cleanText = String(text || "").trim();
   if (!cleanText) {
     return null;
   }
 
-  const subtitleSize = normalizeSubtitleSize(options.subtitleSize);
+  const subtitleStyleMode = normalizeSubtitleStyleMode(options.subtitleStyleMode);
   const subtitleY = normalizeSubtitleY(options.subtitleY);
-  const fontFamily = normalizeSubtitleFontFamily(options.subtitleFontFamily);
-  const fontWeight = normalizeSubtitleFontWeight(options.subtitleFontWeight);
-  const baseFontSize = clamp(Math.round(width * 0.032), 22, 34);
-  const fontSize = clamp(Math.round(baseFontSize * (subtitleSize / 100)), 14, 72);
-  const lineHeight = Math.round(fontSize * 1.24);
+  const { fontSize, lineHeight } = getSubtitleTextMetrics(width, options);
   const paddingX = Math.round(fontSize * 0.45);
   const paddingY = Math.round(fontSize * 0.22);
   const maxTextWidth = Math.round(width * 0.78);
+  const textEffect = normalizeSubtitleTextEffect(options.subtitleTextEffect);
+  const renderStyle =
+    subtitleStyleMode === "sticker"
+      ? getTextRenderStyle({
+          textEffect,
+        })
+      : null;
+  const fontFamily =
+    subtitleStyleMode === "sticker" ? renderStyle.fontFamily : normalizeSubtitleFontFamily(options.subtitleFontFamily);
+  const fontWeight =
+    subtitleStyleMode === "sticker" ? renderStyle.fontWeight : normalizeSubtitleFontWeight(options.subtitleFontWeight);
 
   context.save();
   context.font = `${fontWeight} ${fontSize}px ${quoteFontFamily(fontFamily)}`;
   const lines = trimSubtitleLines(wrapTextLines(context, cleanText, maxTextWidth + TEXT_PADDING_X * 2), SUBTITLE_MAX_LINES);
   const measuredWidth = Math.min(maxTextWidth, Math.max(...lines.map((line) => context.measureText(line).width)));
   context.restore();
-  const boxWidth = Math.min(width - 48, Math.ceil(measuredWidth + paddingX * 2));
-  const boxHeight = Math.ceil(lines.length * lineHeight + paddingY * 2);
+  const stickerOutset = renderStyle ? getTextEffectOutset(renderStyle) : { x: 0, y: 0 };
+  const stickerPaddingX = renderStyle?.backgroundColor ? Math.max(paddingX, renderStyle.backgroundPaddingX || 12) : paddingX;
+  const stickerPaddingY = renderStyle?.backgroundColor ? Math.max(paddingY, renderStyle.backgroundPaddingY || 6) : paddingY;
+  const boxWidth = Math.min(width - 48, Math.ceil(measuredWidth + stickerPaddingX * 2 + stickerOutset.x * 2));
+  const boxHeight = Math.ceil(lines.length * lineHeight + stickerPaddingY * 2 + stickerOutset.y * 2);
   const boxX = (width - boxWidth) / 2;
   const verticalMargin = Math.round(height * 0.02);
   const targetCenterY = (height * subtitleY) / 100;
   const maxBoxY = Math.max(verticalMargin, height - boxHeight - verticalMargin);
   const boxY = clamp(targetCenterY - boxHeight / 2, verticalMargin, maxBoxY);
   const bottomOffset = Math.max(0, height - boxY - boxHeight);
-  return { fontSize, fontFamily, fontWeight, lineHeight, paddingY, lines, boxWidth, boxHeight, boxX, boxY, bottomOffset, subtitleY };
+  return {
+    subtitleStyleMode,
+    textEffect,
+    fontSize,
+    fontFamily,
+    fontWeight,
+    lineHeight,
+    paddingY,
+    lines,
+    boxWidth,
+    boxHeight,
+    boxX,
+    boxY,
+    bottomOffset,
+    subtitleY,
+  };
 }
 
 function getSubtitleReservedHeight(context, text, width, height, options = {}) {
@@ -3593,7 +3650,19 @@ function drawSubtitleBox(context, text, width, height, options = {}) {
     return;
   }
 
-  const { fontSize, fontFamily, fontWeight, lineHeight, paddingY, lines, boxWidth, boxHeight, boxX, boxY } = layout;
+  const { subtitleStyleMode, textEffect, fontSize, fontFamily, fontWeight, lineHeight, paddingY, lines, boxWidth, boxHeight, boxX, boxY } = layout;
+  if (subtitleStyleMode === "sticker") {
+    context.save();
+    context.translate(boxX, boxY);
+    drawTextLines(context, lines.join("\n"), boxWidth, boxHeight, false, "h3", "center", {
+      textEffect,
+      fontSize,
+      lineHeight,
+    });
+    context.restore();
+    return;
+  }
+
   context.save();
   context.fillStyle = "rgba(0, 0, 0, 0.8)";
   fillRoundedRect(context, boxX, boxY, boxWidth, boxHeight, 6);
@@ -3663,6 +3732,17 @@ function getSubtitleTextForRender(slide, options = {}) {
   return typeof options.subtitleText === "string" ? options.subtitleText : slide.notes;
 }
 
+function getProjectSubtitleRenderOptions() {
+  return {
+    subtitleSize: projectSettingsState.subtitleSize,
+    subtitleY: projectSettingsState.subtitleY,
+    subtitleStyleMode: projectSettingsState.subtitleStyleMode,
+    subtitleFontFamily: projectSettingsState.subtitleFontFamily,
+    subtitleFontWeight: projectSettingsState.subtitleFontWeight,
+    subtitleTextEffect: projectSettingsState.subtitleTextEffect,
+  };
+}
+
 async function renderSubtitleOverlayToDataUrl(slide, text, options = {}) {
   await ensureTextFontsReady([getSubtitleFontRequest(options)]);
   const exportCanvas = document.createElement("canvas");
@@ -3680,10 +3760,7 @@ async function renderSubtitleImagesForSegments(slide, segments) {
   return Promise.all(
     segments.map((segment) =>
       renderSubtitleOverlayToDataUrl(slide, segment, {
-        subtitleSize: projectSettingsState.subtitleSize,
-        subtitleY: projectSettingsState.subtitleY,
-        subtitleFontFamily: projectSettingsState.subtitleFontFamily,
-        subtitleFontWeight: projectSettingsState.subtitleFontWeight,
+        ...getProjectSubtitleRenderOptions(),
       })
     )
   );
@@ -6108,8 +6185,7 @@ async function saveCanvasAsPng() {
   await ensureCanvasFontsReady({
     subtitles: projectSettingsState.subtitleEnabled,
     subtitleText: currentSlide?.notes,
-    subtitleFontFamily: projectSettingsState.subtitleFontFamily,
-    subtitleFontWeight: projectSettingsState.subtitleFontWeight,
+    ...getProjectSubtitleRenderOptions(),
   });
   await Promise.all([...canvas.querySelectorAll("img")].map(waitForImageLoad));
 
@@ -6153,10 +6229,7 @@ async function saveCanvasAsPng() {
 
   if (projectSettingsState.subtitleEnabled && currentSlide) {
     drawSubtitleBox(context, getSubtitleTextForRender(currentSlide, {}), exportCanvas.width, exportCanvas.height, {
-      subtitleSize: projectSettingsState.subtitleSize,
-      subtitleY: projectSettingsState.subtitleY,
-      subtitleFontFamily: projectSettingsState.subtitleFontFamily,
-      subtitleFontWeight: projectSettingsState.subtitleFontWeight,
+      ...getProjectSubtitleRenderOptions(),
     });
   }
 
@@ -6386,11 +6459,36 @@ function setActiveSubtitleFontButton(fontFamily, fontWeight) {
   }
 }
 
+function setActiveSubtitleStyleModeButton(mode) {
+  const safeMode = normalizeSubtitleStyleMode(mode);
+  for (const button of settingsSubtitleStyleButtons) {
+    button.classList.toggle("is-active", button.dataset.subtitleStyleMode === safeMode);
+  }
+  settingsSubtitleFontLabel.hidden = safeMode !== "standard";
+  settingsSubtitleStickerLabel.hidden = safeMode !== "sticker";
+}
+
+function setActiveSubtitleTextEffectButton(effectKey) {
+  const safeEffect = normalizeSubtitleTextEffect(effectKey);
+  for (const button of settingsSubtitleStickerButtons) {
+    button.classList.toggle("is-active", button.dataset.subtitleTextEffect === safeEffect);
+  }
+}
+
 function getActiveSubtitleFontSelection() {
   const activeButton = settingsSubtitleFontButtons.find((button) => button.classList.contains("is-active"));
   return {
     subtitleFontFamily: normalizeSubtitleFontFamily(activeButton?.dataset.subtitleFont ?? projectSettingsState.subtitleFontFamily),
     subtitleFontWeight: normalizeSubtitleFontWeight(activeButton?.dataset.subtitleFontWeight ?? projectSettingsState.subtitleFontWeight),
+  };
+}
+
+function getActiveSubtitleStyleSelection() {
+  const activeStyleButton = settingsSubtitleStyleButtons.find((button) => button.classList.contains("is-active"));
+  const activeStickerButton = settingsSubtitleStickerButtons.find((button) => button.classList.contains("is-active"));
+  return {
+    subtitleStyleMode: normalizeSubtitleStyleMode(activeStyleButton?.dataset.subtitleStyleMode ?? projectSettingsState.subtitleStyleMode),
+    subtitleTextEffect: normalizeSubtitleTextEffect(activeStickerButton?.dataset.subtitleTextEffect ?? projectSettingsState.subtitleTextEffect),
   };
 }
 
@@ -6408,8 +6506,10 @@ function normalizeProjectSettings(value = {}) {
     subtitleEnabled: normalizeSubtitleEnabled(value.subtitleEnabled),
     subtitleSize: normalizeSubtitleSize(value.subtitleSize),
     subtitleY: normalizeSubtitleY(value.subtitleY),
+    subtitleStyleMode: normalizeSubtitleStyleMode(value.subtitleStyleMode),
     subtitleFontFamily: normalizeSubtitleFontFamily(value.subtitleFontFamily),
     subtitleFontWeight: normalizeSubtitleFontWeight(value.subtitleFontWeight),
+    subtitleTextEffect: normalizeSubtitleTextEffect(value.subtitleTextEffect),
     exportDir: typeof value.exportDir === "string" && value.exportDir.trim() ? value.exportDir.trim() : defaultProjectExportDir,
     backgroundMusic: normalizeProjectBackgroundMusic(value.backgroundMusic),
   };
@@ -6429,7 +6529,9 @@ function syncSettingsControls() {
   settingsSubtitleEnabled.checked = projectSettingsState.subtitleEnabled;
   settingsSubtitleSize.value = String(projectSettingsState.subtitleSize);
   settingsSubtitleY.value = String(projectSettingsState.subtitleY);
+  setActiveSubtitleStyleModeButton(projectSettingsState.subtitleStyleMode);
   setActiveSubtitleFontButton(projectSettingsState.subtitleFontFamily, projectSettingsState.subtitleFontWeight);
+  setActiveSubtitleTextEffectButton(projectSettingsState.subtitleTextEffect);
   settingsExportDir.value = projectSettingsState.exportDir;
   updateBackgroundMusicView();
   syncColorPresetButtons();
@@ -6437,6 +6539,7 @@ function syncSettingsControls() {
 
 function getProjectSettingsFromControls() {
   const subtitleFont = getActiveSubtitleFontSelection();
+  const subtitleStyle = getActiveSubtitleStyleSelection();
   return normalizeProjectSettings({
     canvasWidth: settingsCanvasWidth.value,
     canvasHeight: settingsCanvasHeight.value,
@@ -6449,8 +6552,10 @@ function getProjectSettingsFromControls() {
     subtitleEnabled: settingsSubtitleEnabled.checked,
     subtitleSize: settingsSubtitleSize.value,
     subtitleY: settingsSubtitleY.value,
+    subtitleStyleMode: subtitleStyle.subtitleStyleMode,
     subtitleFontFamily: subtitleFont.subtitleFontFamily,
     subtitleFontWeight: subtitleFont.subtitleFontWeight,
+    subtitleTextEffect: subtitleStyle.subtitleTextEffect,
     exportDir: settingsExportDir.value,
     backgroundMusic: projectSettingsState.backgroundMusic,
   });
@@ -6870,11 +6975,11 @@ async function exportProjectAsMp4() {
       const ttsSegments = splitNotesForTtsSegments(slide.notes);
       const hasTtsNotes = ttsSegments.length > 0;
       const gifOverlays = getAnimatedGifOverlays(slide);
+      const subtitleRenderOptions = getProjectSubtitleRenderOptions();
       await ensureSlideFontsReady(slide, {
         reserveSubtitles: projectSettingsState.subtitleEnabled,
         subtitleText: notes,
-        subtitleFontFamily: projectSettingsState.subtitleFontFamily,
-        subtitleFontWeight: projectSettingsState.subtitleFontWeight,
+        ...subtitleRenderOptions,
       });
       const subtitleImages = await renderSubtitleImagesForSegments(slide, ttsSegments);
       const baseSlidePayload = {
@@ -6888,10 +6993,10 @@ async function exportProjectAsMp4() {
         ttsSegments,
         subtitleImages,
         subtitleEnabled: projectSettingsState.subtitleEnabled,
-        subtitleSize: projectSettingsState.subtitleSize,
-        subtitleY: projectSettingsState.subtitleY,
-        subtitleFontFamily: projectSettingsState.subtitleFontFamily,
-        subtitleFontWeight: projectSettingsState.subtitleFontWeight,
+        subtitleSize: subtitleRenderOptions.subtitleSize,
+        subtitleY: subtitleRenderOptions.subtitleY,
+        subtitleFontFamily: subtitleRenderOptions.subtitleFontFamily,
+        subtitleFontWeight: subtitleRenderOptions.subtitleFontWeight,
       };
       if (isDynamicSlide(slide)) {
         setExportModalProgress("Rendering", `Generating typing frames for slide ${index + 1} / ${slides.length}...`, index, slides.length);
@@ -6900,10 +7005,7 @@ async function exportProjectAsMp4() {
           subtitles: false,
           reserveSubtitles: projectSettingsState.subtitleEnabled,
           subtitleText: notes,
-          subtitleSize: projectSettingsState.subtitleSize,
-          subtitleY: projectSettingsState.subtitleY,
-          subtitleFontFamily: projectSettingsState.subtitleFontFamily,
-          subtitleFontWeight: projectSettingsState.subtitleFontWeight,
+          ...subtitleRenderOptions,
           durationSeconds: getSlideAnimationFrameDuration(slide, notes),
         });
         renderedSlides.push({
@@ -6923,10 +7025,7 @@ async function exportProjectAsMp4() {
           excludeAnimatedGifs: gifOverlays.length > 0,
           subtitles: false,
           subtitleText: notes,
-          subtitleSize: projectSettingsState.subtitleSize,
-          subtitleY: projectSettingsState.subtitleY,
-          subtitleFontFamily: projectSettingsState.subtitleFontFamily,
-          subtitleFontWeight: projectSettingsState.subtitleFontWeight,
+          ...subtitleRenderOptions,
         };
         if (slideHasObjectAnimations(slide)) {
           const loopAnimationFrames = shouldLoopAnimationFrames(slide);
@@ -7327,9 +7426,19 @@ settingsSubtitleSize.addEventListener("blur", () => {
 settingsSubtitleY.addEventListener("blur", () => {
   settingsSubtitleY.value = String(normalizeSubtitleY(settingsSubtitleY.value));
 });
+for (const button of settingsSubtitleStyleButtons) {
+  button.addEventListener("click", () => {
+    setActiveSubtitleStyleModeButton(button.dataset.subtitleStyleMode);
+  });
+}
 for (const button of settingsSubtitleFontButtons) {
   button.addEventListener("click", () => {
     setActiveSubtitleFontButton(button.dataset.subtitleFont, button.dataset.subtitleFontWeight);
+  });
+}
+for (const button of settingsSubtitleStickerButtons) {
+  button.addEventListener("click", () => {
+    setActiveSubtitleTextEffectButton(button.dataset.subtitleTextEffect);
   });
 }
 

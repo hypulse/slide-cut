@@ -66,10 +66,16 @@ export function createRenderer(deps) {
   }
 
   function drawTextLines(context, text, width, height, shouldClear = false, textSizeKey = "h3", textAlign = "left", textStyle = {}) {
-    const preset = getTextPreset(textSizeKey);
+    const basePreset = getTextPreset(textSizeKey);
+    const customFontSize = Number(textStyle.fontSize);
+    const customLineHeight = Number(textStyle.lineHeight);
+    const preset = {
+      fontSize: Number.isFinite(customFontSize) && customFontSize > 0 ? customFontSize : basePreset.fontSize,
+      lineHeight: Number.isFinite(customLineHeight) && customLineHeight > 0 ? customLineHeight : basePreset.lineHeight,
+    };
     const renderStyle = getTextRenderStyle({
       ...textStyle,
-      textColor: textStyle.textColor || context.__textColor || DEFAULT_TEXT_COLOR,
+      textColor: textStyle.textColor || context.__textColor,
     });
     const renderOpacity = normalizeOpacity(textStyle.renderOpacity);
     const safeAlign = sanitizeTextAlign(textAlign);
