@@ -1457,6 +1457,22 @@ label > span:first-child,
   letter-spacing: 0.01em;
 }
 
+label.stacked-field {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  gap: 4px;
+  min-height: 0;
+}
+
+label.stacked-field > span:first-child {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
 .checkbox-row {
   grid-template-columns: minmax(0, 1fr) auto;
 }
@@ -1658,6 +1674,7 @@ select {
 
 .text-size-buttons,
 .text-font-buttons,
+.text-weight-buttons,
 .text-style-buttons,
 .subtitle-style-buttons,
 .subtitle-font-buttons,
@@ -1733,8 +1750,73 @@ select {
 }
 
 .text-font-buttons,
+.text-weight-buttons,
 .subtitle-font-buttons {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.text-weight-buttons {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.stacked-field .text-font-buttons button,
+.stacked-field .subtitle-font-buttons button {
+  height: 34px;
+  font-size: 14px;
+  letter-spacing: 0;
+  line-height: 1;
+  padding: 0 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stacked-field .text-style-buttons button,
+.stacked-field .subtitle-sticker-buttons button {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  align-items: center;
+  justify-items: center;
+  gap: 2px;
+  height: 68px;
+  padding: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  letter-spacing: 0;
+  word-break: normal;
+}
+
+.settings-subtitle-sticker-label .subtitle-sticker-buttons button {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  align-items: center;
+  justify-items: center;
+  gap: 2px;
+  height: 68px;
+  padding: 4px;
+  overflow: hidden;
+}
+
+.text-effect-preview-canvas {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-height: 48px;
+}
+
+.text-effect-preview-label {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  color: inherit;
+  font-family: var(--font-ui);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .subtitle-style-buttons {
@@ -1754,6 +1836,7 @@ select {
 
 .text-size-buttons button,
 .text-font-buttons button,
+.text-weight-buttons button,
 .text-style-buttons button,
 .subtitle-style-buttons button,
 .subtitle-font-buttons button,
@@ -1771,6 +1854,7 @@ select {
 }
 
 .text-font-buttons button,
+.text-weight-buttons button,
 .subtitle-font-buttons button,
 .subtitle-sticker-buttons button {
   font-family: var(--font-ui);
@@ -1787,6 +1871,7 @@ select {
 
 .text-size-buttons button.is-active,
 .text-font-buttons button.is-active,
+.text-weight-buttons button.is-active,
 .text-style-buttons button.is-active,
 .subtitle-style-buttons button.is-active,
 .subtitle-font-buttons button.is-active,
@@ -1798,6 +1883,14 @@ select {
   color: var(--accent-hover);
 }
 
+.stacked-field .text-font-buttons button.is-active,
+.stacked-field .text-style-buttons button.is-active,
+.stacked-field .subtitle-font-buttons button.is-active,
+.stacked-field .subtitle-sticker-buttons button.is-active {
+  box-shadow: 0 0 0 2px var(--accent), 0 0 0 3px var(--surface-panel);
+  outline: none;
+}
+
 .text-align-buttons button.is-active,
 .image-flip-buttons button.is-active {
   border-color: var(--accent);
@@ -1807,6 +1900,7 @@ select {
 
 .text-size-buttons button:disabled,
 .text-font-buttons button:disabled,
+.text-weight-buttons button:disabled,
 .text-style-buttons button:disabled,
 .subtitle-style-buttons button:disabled,
 .subtitle-font-buttons button:disabled,

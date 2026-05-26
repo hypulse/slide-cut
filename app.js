@@ -1,4 +1,4 @@
-import { createRenderer } from "./rendering.js?v=20260527-sticker-effects-2";
+import { createRenderer } from "./rendering.js?v=20260527-graffiti-burst";
 import { createProjectModel } from "./project-model.js";
 
 const canvas = document.querySelector("#canvas");
@@ -220,6 +220,7 @@ const selectedTextSize = document.querySelector("#selectedTextSize");
 const imageFlipButtons = [...document.querySelectorAll("[data-image-flip]")];
 const textSizeButtons = [...document.querySelectorAll("[data-text-size]")];
 const textFontButtons = [...document.querySelectorAll("[data-text-font]")];
+const textWeightButtons = [...document.querySelectorAll("[data-text-weight]")];
 let textStyleButtons = [...document.querySelectorAll("[data-text-style]")];
 const textAlignButtons = [...document.querySelectorAll("[data-text-align]")];
 const animationInButtons = [...document.querySelectorAll("[data-animation-in]")];
@@ -566,35 +567,63 @@ const TEXT_EFFECT_PRESETS = {
   },
   graffitiBurst: {
     label: "Graffiti Burst",
-    fontFamily: "Black Han Sans",
+    fontFamily: "Bagel Fat One",
     fontWeight: 400,
     fillColor: "#fff42c",
+    fillGradient: {
+      direction: "horizontal",
+      stops: [
+        { offset: 0, color: "#fff42c" },
+        { offset: 0.48, color: "#38ff5f" },
+        { offset: 1, color: "#ff2dac" },
+      ],
+    },
     strokeColor: "#101015",
-    strokeWidth: 6,
-    shadowLayerColor: "#ff2dac",
-    shadowLayerStrokeWidth: 8,
+    strokeWidth: 7,
+    offsetLayers: [
+      { color: "#25f06d", strokeWidth: 10, offsetX: -5, offsetY: 5 },
+      { color: "#ff2dac", strokeWidth: 8, offsetX: 5, offsetY: -4 },
+    ],
+    shadowLayerColor: "#111015",
+    shadowLayerStrokeWidth: 9,
     shadowLayerOffsetX: 4,
-    shadowLayerOffsetY: 5,
+    shadowLayerOffsetY: 6,
     decorations: [
       {
-        type: "burst",
+        type: "paintBurst",
+        phase: "behind",
+        count: 36,
+        colors: ["#25f06d", "#ff2dac", "#00d9ff", "#fff42c"],
+        spread: 36,
+        minSize: 6,
+        maxSize: 24,
+        opacity: 0.9,
+      },
+      {
+        type: "spray",
+        phase: "behind",
+        count: 88,
+        colors: ["#25f06d", "#ff2dac", "#00d9ff", "#ffffff"],
+        spread: 42,
+        minSize: 1.1,
+        maxSize: 3.4,
+        opacity: 0.72,
+      },
+      {
+        type: "drip",
         phase: "front",
-        rayCount: 5,
-        rayLength: 38,
-        fanSpread: 1.85,
-        colors: ["#fff42c", "#ff2dac", "#ffffff"],
+        count: 4,
+        colors: ["#ff2dac", "#fff42c", "#25f06d"],
         strokeColor: "#101015",
-        strokeWidth: 1.4,
-        confettiCount: 8,
-        spread: 22,
+        anchorInset: 4,
       },
     ],
-    decorationOutsetX: 36,
-    decorationOutsetY: 36,
+    decorationOutsetX: 46,
+    decorationOutsetY: 48,
   },
   goldGlow: {
     label: "Gold Glow",
-    fontFamily: "Gmarket Sans",
+    fontFamily: "Noto Sans KR",
     fontWeight: 700,
     fillColor: "#ffd84d",
     fillGradient: {
@@ -782,8 +811,8 @@ const TEXT_EFFECT_PRESETS = {
   },
   auroraNeon: {
     label: "Aurora Neon",
-    fontFamily: "Gmarket Sans",
-    fontWeight: 700,
+    fontFamily: "Pretendard",
+    fontWeight: 800,
     fillColor: "#9bfffb",
     fillGradient: {
       direction: "horizontal",
@@ -893,13 +922,103 @@ function observeSubtitleSettingsRows() {
   }
 }
 
+const TEXT_EFFECT_PREVIEW_TEXT = "ART";
+const TEXT_EFFECT_PREVIEW_WIDTH = 300;
+const TEXT_EFFECT_PREVIEW_HEIGHT = 170;
+const TEXT_EFFECT_PREVIEW_FONT_SIZE = 40;
+const TEXT_EFFECT_PREVIEW_LINE_HEIGHT = 50;
+
 function createTextEffectButton(effectKey, datasetKey) {
   const preset = TEXT_EFFECT_PRESETS[effectKey] || TEXT_EFFECT_PRESETS[DEFAULT_TEXT_EFFECT];
   const button = document.createElement("button");
   button.type = "button";
   button.dataset[datasetKey] = effectKey;
-  button.textContent = preset.label || effectKey;
+  button.title = preset.label || effectKey;
+  button.setAttribute("aria-label", preset.label || effectKey);
+  const previewCanvas = document.createElement("canvas");
+  previewCanvas.className = "text-effect-preview-canvas";
+  previewCanvas.dataset.textEffectPreviewCanvas = "true";
+  previewCanvas.setAttribute("aria-hidden", "true");
+  const label = document.createElement("span");
+  label.className = "text-effect-preview-label";
+  label.textContent = preset.label || effectKey;
+  button.replaceChildren(previewCanvas, label);
   return button;
+}
+
+function getTextEffectPreviewButtons() {
+  return [
+    ...document.querySelectorAll("[data-text-style]"),
+    ...document.querySelectorAll("[data-subtitle-text-effect]"),
+  ];
+}
+
+function renderTextEffectButtonPreview(button) {
+  const effectKey = button.dataset.textStyle || button.dataset.subtitleTextEffect;
+  const canvas = button.querySelector("[data-text-effect-preview-canvas]");
+  if (!effectKey || !canvas) {
+    return;
+  }
+
+  const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = Math.round(TEXT_EFFECT_PREVIEW_WIDTH * pixelRatio);
+  canvas.height = Math.round(TEXT_EFFECT_PREVIEW_HEIGHT * pixelRatio);
+  canvas.style.width = "100%";
+  canvas.style.height = "auto";
+  const context = canvas.getContext("2d");
+  context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+  drawTextLines(
+    context,
+    TEXT_EFFECT_PREVIEW_TEXT,
+    TEXT_EFFECT_PREVIEW_WIDTH,
+    TEXT_EFFECT_PREVIEW_HEIGHT,
+    true,
+    "h3",
+    "center",
+    {
+      textEffect: effectKey,
+      fontSize: TEXT_EFFECT_PREVIEW_FONT_SIZE,
+      lineHeight: TEXT_EFFECT_PREVIEW_LINE_HEIGHT,
+    }
+  );
+}
+
+function renderTextEffectButtonPreviews() {
+  for (const button of getTextEffectPreviewButtons()) {
+    renderTextEffectButtonPreview(button);
+  }
+}
+
+function getTextEffectPreviewFontRequests() {
+  return TEXT_EFFECT_OPTIONS.map((effectKey) => {
+    const preset = TEXT_EFFECT_PRESETS[effectKey] || TEXT_EFFECT_PRESETS[DEFAULT_TEXT_EFFECT];
+    return {
+      family: sanitizeTextFontFamily(preset.fontFamily),
+      weight: sanitizeTextFontWeight(preset.fontWeight),
+    };
+  });
+}
+
+async function refreshTextEffectButtonPreviews() {
+  renderTextEffectButtonPreviews();
+  await ensureTextFontsReady(getTextEffectPreviewFontRequests());
+  renderTextEffectButtonPreviews();
+}
+
+function applyFontPreviewToButtons(buttons) {
+  for (const button of buttons) {
+    const family = button.dataset.textFont || button.dataset.subtitleFont;
+    if (!family) continue;
+    const weight = button.dataset.textFontWeight || button.dataset.subtitleFontWeight;
+    button.style.fontFamily = `"${family}", var(--font-ui)`;
+    if (weight) button.style.fontWeight = weight;
+  }
+}
+
+function applyTextWeightPreviewToButtons(buttons) {
+  for (const button of buttons) {
+    button.style.fontWeight = String(sanitizeTextFontWeight(button.dataset.textWeight));
+  }
 }
 
 function renderTextEffectButtons() {
@@ -924,7 +1043,8 @@ function renderTextEffectButtons() {
   scheduleSubtitleSettingsRowHeightUpdate();
 }
 
-renderTextEffectButtons();
+applyFontPreviewToButtons(document.querySelectorAll("[data-text-font], [data-subtitle-font]"));
+applyTextWeightPreviewToButtons(textWeightButtons);
 observeSubtitleSettingsRows();
 const DEFAULT_CANVAS_WIDTH = 1280;
 const DEFAULT_CANVAS_HEIGHT = 720;
@@ -1443,6 +1563,9 @@ const { drawTextLines, drawGitTypingSlide, renderSlideToDataUrl } = createRender
   getSubtitleTextForRender,
 });
 
+renderTextEffectButtons();
+refreshTextEffectButtonPreviews().catch(() => renderTextEffectButtonPreviews());
+
 const { serializeObject, serializeCurrentSlide, cloneProjectValue, normalizeProjectData } = createProjectModel({
   canvas,
   slideNotes,
@@ -1927,6 +2050,11 @@ function getTextRenderStyle(data = {}) {
   };
 }
 
+function getTextDecorationScale(renderStyle = {}) {
+  const fontSize = numberOr(renderStyle.fontSize, TEXT_PRESETS.h3.fontSize);
+  return clamp(fontSize / TEXT_PRESETS.h3.fontSize, 0.7, 3);
+}
+
 function getTextEffectOutset(renderStyle = {}) {
   const strokeOutset = Math.max(
     0,
@@ -1964,13 +2092,15 @@ function getTextEffectOutset(renderStyle = {}) {
       offsetLayerY = Math.max(offsetLayerY, Math.abs(numberOr(layer.offsetY, 0)) + layerStroke);
     }
   }
-  let decorationX = Math.max(0, numberOr(renderStyle.decorationOutsetX, 0));
-  let decorationY = Math.max(0, numberOr(renderStyle.decorationOutsetY, 0));
+  const decorationScale = getTextDecorationScale(renderStyle);
+  let decorationX = Math.max(0, numberOr(renderStyle.decorationOutsetX, 0)) * decorationScale;
+  let decorationY = Math.max(0, numberOr(renderStyle.decorationOutsetY, 0)) * decorationScale;
   if (Array.isArray(renderStyle.decorations)) {
     const defaultOutsets = {
       sparkle: 24,
       confetti: 18,
       paintBurst: 30,
+      spray: 34,
       burst: 36,
       drip: 26,
       tape: 18,
@@ -1979,8 +2109,8 @@ function getTextEffectOutset(renderStyle = {}) {
     for (const decoration of renderStyle.decorations) {
       if (!decoration) continue;
       const fallbackOutset = defaultOutsets[decoration.type] || 0;
-      decorationX = Math.max(decorationX, numberOr(decoration.outsetX, fallbackOutset));
-      decorationY = Math.max(decorationY, numberOr(decoration.outsetY, fallbackOutset));
+      decorationX = Math.max(decorationX, numberOr(decoration.outsetX, fallbackOutset) * decorationScale);
+      decorationY = Math.max(decorationY, numberOr(decoration.outsetY, fallbackOutset) * decorationScale);
     }
   }
   const existingX = Math.max(strokeOutset, shadowLayerOutset) + Math.max(shadowBlur + shadowX, glowBlur + glowX);
@@ -2648,6 +2778,9 @@ function syncSelectedInputs() {
   for (const button of textFontButtons) {
     button.disabled = !hasTextSelection;
   }
+  for (const button of textWeightButtons) {
+    button.disabled = !hasTextSelection;
+  }
   for (const button of textStyleButtons) {
     button.disabled = !hasTextSelection;
   }
@@ -2679,6 +2812,7 @@ function syncSelectedInputs() {
     selectedR.value = "";
     setActiveTextSizeButton("h3");
     setActiveTextFontButton(DEFAULT_TEXT_FONT_FAMILY, DEFAULT_TEXT_FONT_WEIGHT);
+    setActiveTextWeightButton(DEFAULT_TEXT_FONT_WEIGHT);
     setActiveTextStyleButton(DEFAULT_TEXT_EFFECT);
     setActiveTextAlignButton("left");
     syncAnimationButtons({
@@ -2706,6 +2840,7 @@ function syncSelectedInputs() {
   selectedR.value = Math.round(state.rotation);
   setActiveTextSizeButton(selectedObject.dataset.textSize || "h3");
   setActiveTextFontButton(selectedObject.dataset.fontFamily, selectedObject.dataset.fontWeight);
+  setActiveTextWeightButton(selectedObject.dataset.fontWeight);
   setActiveTextStyleButton(selectedObject.dataset.textEffect || DEFAULT_TEXT_EFFECT);
   setActiveTextAlignButton(selectedObject.dataset.textAlign || "left");
   const animationData = getElementAnimationData(selectedObject);
@@ -2760,6 +2895,34 @@ function getClosestTextFontButton(fontFamily, fontWeight) {
 function setActiveTextFontButton(fontFamily, fontWeight) {
   const activeButton = getClosestTextFontButton(fontFamily, fontWeight);
   for (const button of textFontButtons) {
+    button.classList.toggle("is-active", button === activeButton);
+  }
+}
+
+function getClosestTextWeightButton(fontWeight) {
+  const safeWeight = sanitizeTextFontWeight(fontWeight);
+  let closestButton = null;
+  let closestWeightDistance = Infinity;
+
+  for (const button of textWeightButtons) {
+    const buttonWeight = sanitizeTextFontWeight(button.dataset.textWeight);
+    if (buttonWeight === safeWeight) {
+      return button;
+    }
+
+    const weightDistance = Math.abs(buttonWeight - safeWeight);
+    if (weightDistance < closestWeightDistance) {
+      closestButton = button;
+      closestWeightDistance = weightDistance;
+    }
+  }
+
+  return closestButton;
+}
+
+function setActiveTextWeightButton(fontWeight) {
+  const activeButton = getClosestTextWeightButton(fontWeight);
+  for (const button of textWeightButtons) {
     button.classList.toggle("is-active", button === activeButton);
   }
 }
@@ -3379,12 +3542,16 @@ function renderTextObject(element) {
 function getTextContentHeight(element) {
   const state = getState(element);
   const preset = getTextPreset(element);
-  const renderStyle = getTextRenderStyle({
-    fontFamily: element.dataset.fontFamily,
-    fontWeight: element.dataset.fontWeight,
-    textEffect: element.dataset.textEffect,
-    textColor: element.dataset.textColor,
-  });
+  const renderStyle = {
+    ...getTextRenderStyle({
+      fontFamily: element.dataset.fontFamily,
+      fontWeight: element.dataset.fontWeight,
+      textEffect: element.dataset.textEffect,
+      textColor: element.dataset.textColor,
+    }),
+    fontSize: preset.fontSize,
+    lineHeight: preset.lineHeight,
+  };
   const outset = getTextEffectOutset(renderStyle);
   textMeasureContext.font = `${renderStyle.fontWeight} ${preset.fontSize}px ${quoteFontFamily(renderStyle.fontFamily)}`;
   const measureWidth = Math.max(1, state.width - outset.x * 2);
@@ -3860,9 +4027,13 @@ function getSubtitleLayout(context, text, width, height, options = {}) {
   const textEffect = normalizeSubtitleTextEffect(options.subtitleTextEffect);
   const renderStyle =
     subtitleStyleMode === "sticker"
-      ? getTextRenderStyle({
-          textEffect,
-        })
+      ? {
+          ...getTextRenderStyle({
+            textEffect,
+          }),
+          fontSize,
+          lineHeight,
+        }
       : null;
   const fontFamily =
     subtitleStyleMode === "sticker" ? renderStyle.fontFamily : normalizeSubtitleFontFamily(options.subtitleFontFamily);
@@ -7437,7 +7608,7 @@ function applySelectedTextSizeChange(sizeKey) {
   if (!fitTextBoxToContent(selectedObject)) {
     renderTextObject(selectedObject);
   }
-  setStatus(`Text size changed to ${sizeKey.toUpperCase()}.`);
+  setStatus(`Text size changed to ${preset.fontSize}px.`);
   renderSlideList();
   recordHistory();
 }
@@ -7452,6 +7623,7 @@ function applySelectedTextFontChange(fontFamily, fontWeight) {
   selectedObject.dataset.fontFamily = safeFamily;
   selectedObject.dataset.fontWeight = String(safeWeight);
   setActiveTextFontButton(safeFamily, safeWeight);
+  setActiveTextWeightButton(safeWeight);
   const editor = selectedObject.querySelector(".text-editor");
   editor.style.fontFamily = quoteFontFamily(safeFamily);
   editor.style.fontWeight = String(safeWeight);
@@ -7459,6 +7631,25 @@ function applySelectedTextFontChange(fontFamily, fontWeight) {
     renderTextObject(selectedObject);
   }
   setStatus(`Text font changed to ${safeFamily}.`);
+  renderSlideList();
+  recordHistory();
+}
+
+function applySelectedTextWeightChange(fontWeight) {
+  if (!selectedObject || selectedObject.dataset.type !== "text") {
+    return;
+  }
+
+  const safeWeight = sanitizeTextFontWeight(fontWeight);
+  selectedObject.dataset.fontWeight = String(safeWeight);
+  setActiveTextFontButton(selectedObject.dataset.fontFamily, safeWeight);
+  setActiveTextWeightButton(safeWeight);
+  const editor = selectedObject.querySelector(".text-editor");
+  editor.style.fontWeight = String(safeWeight);
+  if (!fitTextBoxToContent(selectedObject)) {
+    renderTextObject(selectedObject);
+  }
+  setStatus(`Text weight changed to ${safeWeight}.`);
   renderSlideList();
   recordHistory();
 }
@@ -7478,6 +7669,7 @@ function applySelectedTextStyleChange(effectKey) {
   }
   setActiveTextStyleButton(safeEffect);
   setActiveTextFontButton(selectedObject.dataset.fontFamily, selectedObject.dataset.fontWeight);
+  setActiveTextWeightButton(selectedObject.dataset.fontWeight);
   const editor = selectedObject.querySelector(".text-editor");
   editor.style.fontFamily = quoteFontFamily(sanitizeTextFontFamily(selectedObject.dataset.fontFamily));
   editor.style.fontWeight = selectedObject.dataset.fontWeight;
@@ -7841,6 +8033,9 @@ for (const button of textSizeButtons) {
 }
 for (const button of textFontButtons) {
   button.addEventListener("click", () => applySelectedTextFontChange(button.dataset.textFont, button.dataset.textFontWeight));
+}
+for (const button of textWeightButtons) {
+  button.addEventListener("click", () => applySelectedTextWeightChange(button.dataset.textWeight));
 }
 for (const button of textStyleButtons) {
   button.addEventListener("click", () => applySelectedTextStyleChange(button.dataset.textStyle));

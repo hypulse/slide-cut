@@ -196,19 +196,33 @@ export function createRenderer(deps) {
     };
   }
 
-  function drawSparkleDecoration(context, decoration, block, random, opacity) {
+  const DECORATION_BASE_FONT_SIZE = 28;
+
+  function getDecorationScale(renderStyle) {
+    const fontSize = Number(renderStyle?.fontSize);
+    return Number.isFinite(fontSize) && fontSize > 0
+      ? clamp(fontSize / DECORATION_BASE_FONT_SIZE, 0.7, 3)
+      : 1;
+  }
+
+  function scaleDecorationValue(value, fallback, scale) {
+    const numericValue = Number(value);
+    return (Number.isFinite(numericValue) ? numericValue : fallback) * scale;
+  }
+
+  function drawSparkleDecoration(context, decoration, block, random, opacity, scale) {
     const colors = decoration.colors?.length ? decoration.colors : ["#ffffff", "#fff45f"];
     const count = Math.max(1, Math.round(Number(decoration.count) || 6));
-    const spread = Number(decoration.spread) || 22;
-    const heroSize = Number(decoration.heroSize) || 9;
-    const satelliteSize = Number(decoration.satelliteSize) || 4.5;
+    const spread = scaleDecorationValue(decoration.spread, 22, scale);
+    const heroSize = scaleDecorationValue(decoration.heroSize, 9, scale);
+    const satelliteSize = scaleDecorationValue(decoration.satelliteSize, 4.5, scale);
     for (let index = 0; index < count; index += 1) {
       const point = getDecorationPoint(block, random, spread);
       const color = colors[index % colors.length];
       const isHero = index % 3 === 0;
       const size = isHero
-        ? heroSize + random() * 2.5
-        : satelliteSize + random() * 1.8;
+        ? heroSize + random() * 2.5 * scale
+        : satelliteSize + random() * 1.8 * scale;
       const rotation = random() < 0.5 ? 0 : Math.PI / 4;
       drawTwinkleStar(context, point.x, point.y, size, color, opacity, rotation);
       if (isHero) {
@@ -218,19 +232,19 @@ export function createRenderer(deps) {
         const dotY = point.y + Math.sin(offsetAngle) * offsetDistance;
         context.beginPath();
         context.fillStyle = colorWithOpacity(color, opacity * 0.85);
-        context.arc(dotX, dotY, 1.3 + random() * 1.1, 0, Math.PI * 2);
+        context.arc(dotX, dotY, (1.3 + random() * 1.1) * scale, 0, Math.PI * 2);
         context.fill();
       }
     }
   }
 
-  function drawConfettiDecoration(context, decoration, block, random, opacity) {
+  function drawConfettiDecoration(context, decoration, block, random, opacity, scale) {
     const colors = decoration.colors?.length ? decoration.colors : ["#ff4fa3", "#ffffff", "#8de6ff"];
     const count = Math.max(1, Math.round(Number(decoration.count) || 12));
-    const spread = Number(decoration.spread) || 18;
+    const spread = scaleDecorationValue(decoration.spread, 18, scale);
     for (let index = 0; index < count; index += 1) {
       const point = getDecorationPoint(block, random, spread);
-      const size = 3 + random() * 6;
+      const size = (3 + random() * 6) * scale;
       context.save();
       context.translate(point.x, point.y);
       context.rotate(random() * Math.PI);
@@ -250,17 +264,20 @@ export function createRenderer(deps) {
     }
   }
 
-  function drawPaintBurstDecoration(context, decoration, block, random, opacity) {
+  function drawPaintBurstDecoration(context, decoration, block, random, opacity, scale) {
     const colors = decoration.colors?.length ? decoration.colors : ["#69ff35", "#ff39bf", "#9e4dff"];
     const count = Math.max(1, Math.round(Number(decoration.count) || 22));
-    const spread = Number(decoration.spread) || 26;
+    const spread = scaleDecorationValue(decoration.spread, 26, scale);
+    const minSize = scaleDecorationValue(decoration.minSize, 5, scale);
+    const maxSize = Math.max(minSize, scaleDecorationValue(decoration.maxSize, 20, scale));
+    const decorationOpacity = normalizeOpacity(decoration.opacity, 0.9);
     for (let index = 0; index < count; index += 1) {
       const angle = random() * Math.PI * 2;
       const radiusX = block.width / 2 + random() * spread;
       const radiusY = block.height / 2 + random() * spread;
       const x = block.centerX + Math.cos(angle) * radiusX;
       const y = block.centerY + Math.sin(angle) * radiusY;
-      const size = 5 + random() * 15;
+      const size = minSize + random() * (maxSize - minSize);
       const points = 5 + Math.floor(random() * 4);
       context.beginPath();
       for (let pointIndex = 0; pointIndex < points; pointIndex += 1) {
@@ -275,22 +292,44 @@ export function createRenderer(deps) {
         }
       }
       context.closePath();
-      context.fillStyle = colorWithOpacity(colors[index % colors.length], opacity * 0.9);
+      context.fillStyle = colorWithOpacity(colors[index % colors.length], opacity * decorationOpacity);
       context.fill();
     }
   }
 
-  function drawBurstDecoration(context, decoration, block, random, opacity) {
+  function drawSprayDecoration(context, decoration, block, random, opacity, scale) {
+    const colors = decoration.colors?.length ? decoration.colors : ["#69ff35", "#ff39bf", "#ffffff"];
+    const count = Math.max(1, Math.round(Number(decoration.count) || 60));
+    const spread = scaleDecorationValue(decoration.spread, 28, scale);
+    const minSize = scaleDecorationValue(decoration.minSize, 0.9, scale);
+    const maxSize = Math.max(minSize, scaleDecorationValue(decoration.maxSize, 3, scale));
+    const decorationOpacity = normalizeOpacity(decoration.opacity, 0.68);
+
+    for (let index = 0; index < count; index += 1) {
+      const point = getDecorationPoint(block, random, spread);
+      const size = minSize + random() * (maxSize - minSize);
+      context.beginPath();
+      context.fillStyle = colorWithOpacity(colors[index % colors.length], opacity * decorationOpacity * (0.55 + random() * 0.45));
+      context.arc(point.x, point.y, size, 0, Math.PI * 2);
+      context.fill();
+    }
+  }
+
+  function drawBurstDecoration(context, decoration, block, random, opacity, scale) {
     const colors = decoration.colors?.length ? decoration.colors : ["#fff42c", "#ff2dac", "#ffffff"];
     const rayCount = Math.max(2, Math.round(Number(decoration.rayCount) || 5));
     const confettiCount = Math.max(0, Math.round(Number(decoration.confettiCount) ?? 10));
-    const spread = Number(decoration.spread) || 22;
+    const spread = scaleDecorationValue(decoration.spread, 22, scale);
     const strokeColor = decoration.strokeColor || "";
-    const strokeWidth = Number(decoration.strokeWidth) || 0;
+    const strokeWidth = scaleDecorationValue(decoration.strokeWidth, 0, scale);
     const fanSpread = Number(decoration.fanSpread) || Math.PI * 0.6;
-    const baseRayLength = Number(decoration.rayLength) || Math.max(26, Math.min(block.height * 0.85, 52));
-    const cornerInsetX = Math.min(block.width * 0.18, 14);
-    const cornerInsetY = Math.min(block.height * 0.25, 12);
+    const baseRayLength = scaleDecorationValue(
+      decoration.rayLength,
+      Math.max(26, Math.min(block.height * 0.85, 52)),
+      scale
+    );
+    const cornerInsetX = Math.min(block.width * 0.18, 14 * scale);
+    const cornerInsetY = Math.min(block.height * 0.25, 12 * scale);
     const origins = decoration.origins || [
       { x: block.x + cornerInsetX, y: block.y + cornerInsetY, angle: Math.PI + Math.PI / 4 },
       { x: block.x + block.width - cornerInsetX, y: block.y + cornerInsetY, angle: -Math.PI / 4 },
@@ -301,14 +340,14 @@ export function createRenderer(deps) {
         const t = rayCount === 1 ? 0.5 : i / (rayCount - 1);
         const angle = origin.angle - fanSpread / 2 + fanSpread * t + (random() - 0.5) * 0.06;
         const length = baseRayLength * (0.68 + random() * 0.5);
-        const baseWidth = 3.5 + random() * 3.5;
+        const baseWidth = (3.5 + random() * 3.5) * scale;
         context.save();
         context.translate(origin.x, origin.y);
         context.rotate(angle);
         context.beginPath();
         context.moveTo(0, -baseWidth / 2);
-        context.lineTo(length, -0.4);
-        context.lineTo(length, 0.4);
+        context.lineTo(length, -0.4 * scale);
+        context.lineTo(length, 0.4 * scale);
         context.lineTo(0, baseWidth / 2);
         context.closePath();
         context.fillStyle = colorWithOpacity(colors[(i + originIdx) % colors.length], opacity);
@@ -322,7 +361,7 @@ export function createRenderer(deps) {
         context.restore();
       }
       const originColor = colors[(originIdx + 1) % colors.length];
-      drawTwinkleStar(context, origin.x, origin.y, 6 + random() * 1.5, originColor, opacity, 0);
+      drawTwinkleStar(context, origin.x, origin.y, (6 + random() * 1.5) * scale, originColor, opacity, 0);
     }
 
     for (let i = 0; i < confettiCount; i += 1) {
@@ -333,15 +372,15 @@ export function createRenderer(deps) {
       context.translate(point.x, point.y);
       context.fillStyle = colorWithOpacity(color, opacity);
       if (roll < 0.35) {
-        const size = 4 + random() * 3;
+        const size = (4 + random() * 3) * scale;
         drawTwinkleStar(context, 0, 0, size, color, opacity, random() * Math.PI);
       } else if (roll < 0.7) {
-        const size = 2 + random() * 2.2;
+        const size = (2 + random() * 2.2) * scale;
         context.beginPath();
         context.arc(0, 0, size, 0, Math.PI * 2);
         context.fill();
       } else {
-        const size = 3 + random() * 3;
+        const size = (3 + random() * 3) * scale;
         context.rotate(random() * Math.PI);
         context.fillRect(-size * 0.5, -size * 0.32, size, size * 0.64);
       }
@@ -349,16 +388,16 @@ export function createRenderer(deps) {
     }
   }
 
-  function drawDripDecoration(context, decoration, block, random, opacity) {
+  function drawDripDecoration(context, decoration, block, random, opacity, scale) {
     const colors = decoration.colors?.length ? decoration.colors : ["#48e568", "#2fcf59"];
     const count = Math.max(1, Math.round(Number(decoration.count) || 7));
     const strokeColor = decoration.strokeColor || "";
-    const anchorInset = Number(decoration.anchorInset) || Math.min(22, block.height * 0.24);
+    const anchorInset = scaleDecorationValue(decoration.anchorInset, Math.min(22, block.height * 0.24), scale);
     for (let index = 0; index < count; index += 1) {
-      const width = 5 + random() * 9;
-      const height = 10 + random() * 24;
+      const width = (5 + random() * 9) * scale;
+      const height = (10 + random() * 24) * scale;
       const x = block.x + block.width * (0.08 + random() * 0.84);
-      const y = block.y + block.height - anchorInset + random() * 4;
+      const y = block.y + block.height - anchorInset + random() * 4 * scale;
       context.beginPath();
       context.moveTo(x - width / 2, y);
       context.quadraticCurveTo(x - width * 0.55, y + height * 0.35, x - width * 0.12, y + height);
@@ -368,7 +407,7 @@ export function createRenderer(deps) {
       context.fillStyle = colorWithOpacity(colors[index % colors.length], opacity);
       context.fill();
       if (strokeColor) {
-        context.lineWidth = 2;
+        context.lineWidth = 2 * scale;
         context.strokeStyle = colorWithOpacity(strokeColor, opacity);
         context.stroke();
       }
@@ -419,22 +458,26 @@ export function createRenderer(deps) {
         continue;
       }
       const random = createSeededRandom(`${seed}:${phase}:${index}:${decoration.type}`);
+      const decorationScale = getDecorationScale(renderStyle);
       context.save();
       switch (decoration.type) {
         case "sparkle":
-          drawSparkleDecoration(context, decoration, block, random, opacity);
+          drawSparkleDecoration(context, decoration, block, random, opacity, decorationScale);
           break;
         case "confetti":
-          drawConfettiDecoration(context, decoration, block, random, opacity);
+          drawConfettiDecoration(context, decoration, block, random, opacity, decorationScale);
           break;
         case "paintBurst":
-          drawPaintBurstDecoration(context, decoration, block, random, opacity);
+          drawPaintBurstDecoration(context, decoration, block, random, opacity, decorationScale);
+          break;
+        case "spray":
+          drawSprayDecoration(context, decoration, block, random, opacity, decorationScale);
           break;
         case "burst":
-          drawBurstDecoration(context, decoration, block, random, opacity);
+          drawBurstDecoration(context, decoration, block, random, opacity, decorationScale);
           break;
         case "drip":
-          drawDripDecoration(context, decoration, block, random, opacity);
+          drawDripDecoration(context, decoration, block, random, opacity, decorationScale);
           break;
         case "tape":
           drawTapeDecoration(context, decoration, block, opacity);
@@ -502,10 +545,14 @@ export function createRenderer(deps) {
       fontSize: Number.isFinite(customFontSize) && customFontSize > 0 ? customFontSize : basePreset.fontSize,
       lineHeight: Number.isFinite(customLineHeight) && customLineHeight > 0 ? customLineHeight : basePreset.lineHeight,
     };
-    const renderStyle = getTextRenderStyle({
-      ...textStyle,
-      textColor: textStyle.textColor || context.__textColor,
-    });
+    const renderStyle = {
+      ...getTextRenderStyle({
+        ...textStyle,
+        textColor: textStyle.textColor || context.__textColor,
+      }),
+      fontSize: preset.fontSize,
+      lineHeight: preset.lineHeight,
+    };
     const renderOpacity = normalizeOpacity(textStyle.renderOpacity);
     const safeAlign = sanitizeTextAlign(textAlign);
     if (shouldClear) {
