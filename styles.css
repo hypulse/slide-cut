@@ -1724,6 +1724,10 @@ input[type="checkbox"] {
   gap: 4px;
 }
 
+.selected-actions:not(.is-text-selection) {
+  grid-template-areas: "duplicate delete";
+}
+
 .selected-actions #duplicateSelected {
   grid-area: duplicate;
 }

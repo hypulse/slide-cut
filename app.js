@@ -195,6 +195,9 @@ const chooseExportDir = document.querySelector("#chooseExportDir");
 const resetExportDir = document.querySelector("#resetExportDir");
 
 const selectedPanel = document.querySelector(".selected-panel");
+const selectedSections = Object.fromEntries(
+  [...selectedPanel.querySelectorAll("[data-selection-section]")].map((section) => [section.dataset.selectionSection, section])
+);
 const selectedX = document.querySelector("#selectedX");
 const selectedY = document.querySelector("#selectedY");
 const selectedW = document.querySelector("#selectedW");
@@ -221,6 +224,7 @@ const selectedTextColor = document.querySelector("#selectedTextColor");
 const duplicateSelected = document.querySelector("#duplicateSelected");
 const editSelectedText = document.querySelector("#editSelectedText");
 const deleteSelected = document.querySelector("#deleteSelected");
+const selectedActions = document.querySelector(".selected-actions");
 const arrangeButtons = {
   backward: document.querySelector("#sendBackward"),
   forward: document.querySelector("#bringForward"),
@@ -2345,6 +2349,17 @@ function syncSelectedInputs() {
   const hasImageSelection = selectedImageObjects.length > 0;
   const hasAnimationSelection = canAnimateElement(selectedObject);
   selectedPanel.classList.toggle("is-empty", !hasSelection);
+  const visibleSections = {
+    position: hasSelection,
+    image: hasImageSelection,
+    animation: hasAnimationSelection,
+    text: hasTextSelection,
+    layer: hasSelection,
+    actions: hasSelection,
+  };
+  for (const [key, section] of Object.entries(selectedSections)) {
+    section.hidden = !visibleSections[key];
+  }
   for (const input of [selectedX, selectedY, selectedW, selectedH, selectedR]) {
     input.disabled = !hasSelection;
   }
@@ -2383,6 +2398,8 @@ function syncSelectedInputs() {
   duplicateSelected.disabled = !hasSelection;
   selectedTextColor.disabled = !hasTextSelection;
   editSelectedText.disabled = !hasTextSelection;
+  editSelectedText.hidden = !hasTextSelection;
+  selectedActions.classList.toggle("is-text-selection", hasTextSelection);
   setButtonLabel(editSelectedText, activeTextEditObject === selectedObject ? "Done" : "Edit Text");
   deleteSelected.disabled = !hasSelection;
 

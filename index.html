@@ -160,7 +160,7 @@
             </h2>
             <span id="selectionSummary" class="panel-summary">None</span>
           </div>
-          <div class="subgroup" data-label="Position">
+          <div class="subgroup" data-label="Position" data-selection-section="position">
             <label>
               <span>X</span>
               <input id="selectedX" type="number" step="1" />
@@ -182,7 +182,7 @@
               <input id="selectedR" type="number" step="1" />
             </label>
           </div>
-          <div class="subgroup" data-label="Transform">
+          <div class="subgroup" data-label="Transform" data-selection-section="image">
             <div class="field-row">
               <span>Image Flip</span>
               <div id="selectedImageFlip" class="image-flip-buttons" role="group" aria-label="Image flip">
@@ -191,7 +191,7 @@
               </div>
             </div>
           </div>
-          <div class="subgroup" data-label="Animation">
+          <div class="subgroup" data-label="Animation" data-selection-section="animation">
             <div class="field-row">
               <span>In</span>
               <div class="animation-buttons anim-in" role="group" aria-label="Entrance animation">
@@ -262,7 +262,7 @@
               </div>
             </div>
           </div>
-          <div class="subgroup" data-label="Text">
+          <div class="subgroup" data-label="Text" data-selection-section="text">
             <label>
               <span>Text Size</span>
               <div id="selectedTextSize" class="text-size-buttons" role="group" aria-label="Text size">
@@ -324,7 +324,7 @@
               </div>
             </label>
           </div>
-          <div class="subgroup" data-label="Layer">
+          <div class="subgroup" data-label="Layer" data-selection-section="layer">
             <div class="arrange-controls icon-only" aria-label="Layer order">
               <button id="sendBackward" type="button" data-icon="step-back" title="Send backward"><span>Backward</span></button>
               <button id="bringForward" type="button" data-icon="step-forward" title="Bring forward"><span>Forward</span></button>
@@ -332,7 +332,7 @@
               <button id="bringToFront" type="button" data-icon="bring-to-front" title="Bring to front"><span>Front</span></button>
             </div>
           </div>
-          <div class="subgroup" data-label="Actions">
+          <div class="subgroup" data-label="Actions" data-selection-section="actions">
             <div class="selected-actions">
               <button id="duplicateSelected" type="button" data-icon="copy">Duplicate</button>
               <button id="editSelectedText" type="button" data-icon="edit-3">Edit Text</button>
