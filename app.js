@@ -2370,6 +2370,7 @@ function syncSelectedInputs() {
   const selectedImageObjects = selectedObjects.filter((object) => object.dataset.type === "image");
   const hasImageSelection = selectedImageObjects.length > 0;
   const hasAnimationSelection = canAnimateElement(selectedObject);
+  selectedPanel.hidden = !hasSelection;
   selectedPanel.classList.toggle("is-empty", !hasSelection);
   const visibleSections = {
     position: hasSelection,
@@ -4762,7 +4763,6 @@ function syncSlideOptionPanels(kind) {
   slideVideoPanel.hidden = !isCanvasSlide;
   slideSoundPanel.hidden = false;
   dynamicSlidePanel.hidden = isCanvasSlide;
-  selectedPanel.hidden = false;
 }
 
 function syncDynamicSlidePanel() {
