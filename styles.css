@@ -1562,7 +1562,14 @@ select {
   gap: 2px;
 }
 
-.video-fit-buttons button {
+.video-frame-ratio-buttons {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 2px;
+}
+
+.video-fit-buttons button,
+.video-frame-ratio-buttons button {
   height: 26px;
   border-radius: 3px;
   font-family: var(--font-mono);
@@ -1571,13 +1578,15 @@ select {
   letter-spacing: 0.02em;
 }
 
-.video-fit-buttons button.is-active {
+.video-fit-buttons button.is-active,
+.video-frame-ratio-buttons button.is-active {
   border-color: var(--accent);
   background: var(--accent-soft);
   color: var(--accent-hover);
 }
 
-.video-fit-buttons button:disabled {
+.video-fit-buttons button:disabled,
+.video-frame-ratio-buttons button:disabled {
   opacity: 0.42;
   pointer-events: none;
 }
@@ -2128,7 +2137,8 @@ input[type="checkbox"] {
 
 .canvas-video {
   position: absolute;
-  inset: 0;
+  top: 0;
+  left: 0;
   z-index: 0;
   width: 100%;
   height: 100%;

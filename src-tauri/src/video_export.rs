@@ -36,8 +36,10 @@ pub(crate) struct VideoExportSlide {
     width: u32,
     height: u32,
     notes: String,
+    color: Option<String>,
     video_path: Option<String>,
     video_fit: Option<String>,
+    video_frame_ratio: Option<String>,
     start_sound_path: Option<String>,
     frame_png: String,
     tts_segments: Option<Vec<String>>,
@@ -106,6 +108,8 @@ pub(crate) struct PreparedSlide {
     audio_path: PathBuf,
     video_path: Option<PathBuf>,
     video_fit: String,
+    video_frame_ratio: String,
+    background_color: String,
     gif_overlays: Vec<PreparedGifOverlay>,
     subtitle_image_overlays: Vec<PreparedSubtitleImageOverlay>,
     subtitle_filter: Option<String>,
@@ -1030,15 +1034,81 @@ fn sanitize_video_fit(value: Option<&str>) -> String {
     }
 }
 
-fn background_video_filter(width: u32, height: u32, fit: &str) -> String {
-    match fit {
+fn sanitize_video_frame_ratio(value: Option<&str>) -> String {
+    match value.unwrap_or("").trim() {
+        "1:1" => "1:1".to_string(),
+        "3:4" => "3:4".to_string(),
+        "4:3" => "4:3".to_string(),
+        _ => "canvas".to_string(),
+    }
+}
+
+fn sanitize_filter_color(value: Option<&str>) -> String {
+    let raw = value.unwrap_or("#ffffff").trim();
+    if raw.len() == 7
+        && raw.starts_with('#')
+        && raw
+            .chars()
+            .skip(1)
+            .all(|character| character.is_ascii_hexdigit())
+    {
+        format!("0x{}", &raw[1..])
+    } else {
+        "0xffffff".to_string()
+    }
+}
+
+fn background_video_frame_rect(width: u32, height: u32, frame_ratio: &str) -> (u32, u32, u32, u32) {
+    let ratio = match frame_ratio {
+        "1:1" => Some(1.0),
+        "3:4" => Some(3.0 / 4.0),
+        "4:3" => Some(4.0 / 3.0),
+        _ => None,
+    };
+    let Some(ratio) = ratio else {
+        return (0, 0, width, height);
+    };
+
+    let canvas_ratio = width as f64 / height.max(1) as f64;
+    let (mut frame_width, mut frame_height) = if canvas_ratio > ratio {
+        ((height as f64 * ratio).round() as u32, height)
+    } else {
+        (width, (width as f64 / ratio).round() as u32)
+    };
+    frame_width = frame_width.max(1).min(width);
+    frame_height = frame_height.max(1).min(height);
+    (
+        (width - frame_width) / 2,
+        (height - frame_height) / 2,
+        frame_width,
+        frame_height,
+    )
+}
+
+fn background_video_filter(
+    width: u32,
+    height: u32,
+    fit: &str,
+    frame_ratio: &str,
+    background_color: &str,
+) -> String {
+    let (frame_x, frame_y, frame_width, frame_height) =
+        background_video_frame_rect(width, height, frame_ratio);
+    let frame_filter = match fit {
         "fit" => format!(
-            "scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1"
+            "scale={frame_width}:{frame_height}:force_original_aspect_ratio=decrease,pad={frame_width}:{frame_height}:(ow-iw)/2:(oh-ih)/2:color=black"
         ),
-        "stretch" => format!("scale={width}:{height},setsar=1"),
+        "stretch" => format!("scale={frame_width}:{frame_height}"),
         _ => format!(
-            "scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},setsar=1"
+            "scale={frame_width}:{frame_height}:force_original_aspect_ratio=increase,crop={frame_width}:{frame_height}"
         ),
+    };
+    if frame_x == 0 && frame_y == 0 && frame_width == width && frame_height == height {
+        format!("{frame_filter},setsar=1")
+    } else {
+        format!(
+            "{frame_filter},pad={width}:{height}:{frame_x}:{frame_y}:color={background_color},setsar=1"
+        )
     }
 }
 
@@ -1338,7 +1408,13 @@ fn create_video_segment(
         .video_path
         .as_ref()
         .ok_or_else(|| "영상 소스 경로가 없습니다.".to_string())?;
-    let video_filter = background_video_filter(width, height, &prepared.video_fit);
+    let video_filter = background_video_filter(
+        width,
+        height,
+        &prepared.video_fit,
+        &prepared.video_frame_ratio,
+        &prepared.background_color,
+    );
     let mut filter = format!(
         "[0:v]{video_filter}[bg];[1:v]scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=black@0,format=rgba[fg];[bg][fg]overlay=0:0:format=auto[base0];"
     );
@@ -1385,7 +1461,13 @@ fn create_video_segment(
         .args(["-shortest", "-movflags", "+faststart"])
         .arg(output_path);
     if !prepared.gif_overlays.is_empty() {
-        let video_filter = background_video_filter(width, height, &prepared.video_fit);
+        let video_filter = background_video_filter(
+            width,
+            height,
+            &prepared.video_fit,
+            &prepared.video_frame_ratio,
+            &prepared.background_color,
+        );
         let mut filter = format!(
             "[0:v]{video_filter}[bg];[1:v]scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=black@0,format=rgba[fg];[bg][fg]overlay=0:0:format=auto[base0];"
         );
@@ -1488,7 +1570,13 @@ fn create_animation_segment(
         prepared,
     );
     if let Some(video_path) = prepared.video_path.as_ref() {
-        let video_filter = background_video_filter(width, height, &prepared.video_fit);
+        let video_filter = background_video_filter(
+            width,
+            height,
+            &prepared.video_fit,
+            &prepared.video_frame_ratio,
+            &prepared.background_color,
+        );
         let mut filter = format!(
             "[0:v]{video_filter}[bg];[1:v]scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=black@0,tpad=stop_mode=clone:stop_duration={},format=rgba[fg];[bg][fg]overlay=0:0:format=auto[base0];",
             format_seconds(stop_duration)
@@ -1936,6 +2024,8 @@ pub(crate) fn export_video(
                 audio_path,
                 video_path,
                 video_fit: sanitize_video_fit(slide.video_fit.as_deref()),
+                video_frame_ratio: sanitize_video_frame_ratio(slide.video_frame_ratio.as_deref()),
+                background_color: sanitize_filter_color(slide.color.as_deref()),
                 gif_overlays,
                 subtitle_image_overlays,
                 subtitle_filter,

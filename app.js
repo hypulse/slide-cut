@@ -147,6 +147,7 @@ const chooseSlideVideo = document.querySelector("#chooseSlideVideo");
 const clearSlideVideo = document.querySelector("#clearSlideVideo");
 const slideVideoInfo = document.querySelector("#slideVideoInfo");
 const videoFitButtons = [...document.querySelectorAll("[data-video-fit]")];
+const videoFrameRatioButtons = [...document.querySelectorAll("[data-video-frame-ratio]")];
 const chooseSlideSound = document.querySelector("#chooseSlideSound");
 const clearSlideSound = document.querySelector("#clearSlideSound");
 const slideSoundInfo = document.querySelector("#slideSoundInfo");
@@ -358,6 +359,13 @@ const VIDEO_FIT_MODES = {
   fill: { label: "Fill", objectFit: "cover" },
   fit: { label: "Fit", objectFit: "contain" },
   stretch: { label: "Stretch", objectFit: "fill" },
+};
+const DEFAULT_VIDEO_FRAME_RATIO = "canvas";
+const VIDEO_FRAME_RATIO_MODES = {
+  canvas: { label: "Full", ratio: null },
+  "1:1": { label: "1:1", ratio: 1 },
+  "3:4": { label: "3:4", ratio: 3 / 4 },
+  "4:3": { label: "4:3", ratio: 4 / 3 },
 };
 const TEXT_EFFECT_PRESETS = {
   cleanCaption: {
@@ -3882,24 +3890,68 @@ function sanitizeVideoFit(value) {
   return VIDEO_FIT_MODES[value] ? value : DEFAULT_VIDEO_FIT;
 }
 
-function drawBackgroundMedia(context, media, width, height, fit = DEFAULT_VIDEO_FIT) {
+function sanitizeVideoFrameRatio(value) {
+  return VIDEO_FRAME_RATIO_MODES[value] ? value : DEFAULT_VIDEO_FRAME_RATIO;
+}
+
+function getVideoFrameRect(width, height, frameRatio = DEFAULT_VIDEO_FRAME_RATIO) {
+  const safeWidth = Math.max(1, Number(width) || 1);
+  const safeHeight = Math.max(1, Number(height) || 1);
+  const ratio = VIDEO_FRAME_RATIO_MODES[sanitizeVideoFrameRatio(frameRatio)]?.ratio;
+  if (!ratio) {
+    return {
+      x: 0,
+      y: 0,
+      width: safeWidth,
+      height: safeHeight,
+    };
+  }
+
+  const canvasRatio = safeWidth / safeHeight;
+  let frameWidth = safeWidth;
+  let frameHeight = safeHeight;
+  if (canvasRatio > ratio) {
+    frameWidth = safeHeight * ratio;
+  } else {
+    frameHeight = safeWidth / ratio;
+  }
+
+  return {
+    x: (safeWidth - frameWidth) / 2,
+    y: (safeHeight - frameHeight) / 2,
+    width: frameWidth,
+    height: frameHeight,
+  };
+}
+
+function drawBackgroundMedia(context, media, width, height, fit = DEFAULT_VIDEO_FIT, frameRatio = DEFAULT_VIDEO_FRAME_RATIO) {
   const safeFit = sanitizeVideoFit(fit);
+  const frame = getVideoFrameRect(width, height, frameRatio);
+  context.save();
+  context.beginPath();
+  context.rect(frame.x, frame.y, frame.width, frame.height);
+  context.clip();
   if (safeFit === "stretch") {
-    context.drawImage(media, 0, 0, width, height);
+    context.drawImage(media, frame.x, frame.y, frame.width, frame.height);
+    context.restore();
     return;
   }
 
   if (safeFit === "fit") {
     context.fillStyle = "#000000";
-    context.fillRect(0, 0, width, height);
+    context.fillRect(frame.x, frame.y, frame.width, frame.height);
   }
 
-  const naturalWidth = media.videoWidth || media.naturalWidth || width;
-  const naturalHeight = media.videoHeight || media.naturalHeight || height;
-  const scale = safeFit === "fit" ? Math.min(width / naturalWidth, height / naturalHeight) : Math.max(width / naturalWidth, height / naturalHeight);
+  const naturalWidth = media.videoWidth || media.naturalWidth || frame.width;
+  const naturalHeight = media.videoHeight || media.naturalHeight || frame.height;
+  const scale =
+    safeFit === "fit"
+      ? Math.min(frame.width / naturalWidth, frame.height / naturalHeight)
+      : Math.max(frame.width / naturalWidth, frame.height / naturalHeight);
   const drawWidth = naturalWidth * scale;
   const drawHeight = naturalHeight * scale;
-  context.drawImage(media, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight);
+  context.drawImage(media, frame.x + (frame.width - drawWidth) / 2, frame.y + (frame.height - drawHeight) / 2, drawWidth, drawHeight);
+  context.restore();
 }
 
 function wrapTextLines(context, text, width) {
@@ -4960,6 +5012,7 @@ function normalizeSlideVideo(value) {
     path: value.path,
     name: typeof value.name === "string" && value.name.trim() ? value.name : getFileNameFromPath(value.path),
     fit: sanitizeVideoFit(value.fit),
+    frameRatio: sanitizeVideoFrameRatio(value.frameRatio),
   };
 }
 
@@ -4993,6 +5046,19 @@ function getActiveSlideStartSound() {
   return normalizeSlideStartSound(slides[activeSlideIndex]?.startSound);
 }
 
+function applySlideVideoFrame(frameRatio = DEFAULT_VIDEO_FRAME_RATIO) {
+  if (!slideVideo) {
+    return;
+  }
+  const canvasWidth = roundedCanvasSize(canvas.style.width || canvas.clientWidth);
+  const canvasHeight = roundedCanvasSize(canvas.style.height || canvas.clientHeight);
+  const frame = getVideoFrameRect(canvasWidth, canvasHeight, frameRatio);
+  slideVideo.style.left = `${frame.x}px`;
+  slideVideo.style.top = `${frame.y}px`;
+  slideVideo.style.width = `${frame.width}px`;
+  slideVideo.style.height = `${frame.height}px`;
+}
+
 function updateSlideVideoView() {
   const video = getActiveSlideVideo();
   if (!slideVideo || !slideVideoInfo || !clearSlideVideo) {
@@ -5004,12 +5070,15 @@ function updateSlideVideoView() {
     slideVideo.removeAttribute("src");
     delete slideVideo.dataset.path;
     delete slideVideo.dataset.fit;
+    delete slideVideo.dataset.frameRatio;
     slideVideo.load();
     slideVideo.hidden = true;
+    applySlideVideoFrame();
     slideVideoInfo.textContent = "No video selected";
     slideVideoInfo.title = "";
     clearSlideVideo.disabled = true;
     syncVideoFitButtons(null);
+    syncVideoFrameRatioButtons(null);
     return;
   }
 
@@ -5021,7 +5090,9 @@ function updateSlideVideoView() {
   }
   slideVideo.hidden = false;
   slideVideo.dataset.fit = video.fit;
+  slideVideo.dataset.frameRatio = video.frameRatio;
   slideVideo.style.objectFit = VIDEO_FIT_MODES[video.fit]?.objectFit || VIDEO_FIT_MODES[DEFAULT_VIDEO_FIT].objectFit;
+  applySlideVideoFrame(video.frameRatio);
   slideVideo.muted = true;
   slideVideo.loop = true;
   slideVideo.play().catch(() => {});
@@ -5029,12 +5100,21 @@ function updateSlideVideoView() {
   slideVideoInfo.title = video.name;
   clearSlideVideo.disabled = false;
   syncVideoFitButtons(video.fit);
+  syncVideoFrameRatioButtons(video.frameRatio);
 }
 
 function syncVideoFitButtons(value) {
   const fit = value ? sanitizeVideoFit(value) : DEFAULT_VIDEO_FIT;
   for (const button of videoFitButtons) {
     button.classList.toggle("is-active", sanitizeVideoFit(button.dataset.videoFit) === fit);
+    button.disabled = !value;
+  }
+}
+
+function syncVideoFrameRatioButtons(value) {
+  const frameRatio = value ? sanitizeVideoFrameRatio(value) : DEFAULT_VIDEO_FRAME_RATIO;
+  for (const button of videoFrameRatioButtons) {
+    button.classList.toggle("is-active", sanitizeVideoFrameRatio(button.dataset.videoFrameRatio) === frameRatio);
     button.disabled = !value;
   }
 }
@@ -5390,12 +5470,15 @@ function renderSlidePreview(slide, previewCanvas, options = {}) {
   context.scale(metrics.scaleX, metrics.scaleY);
   context.fillStyle = slide.color;
   context.fillRect(0, 0, slide.width, slide.height);
-  if (normalizeSlideVideo(slide.video)) {
+  const video = normalizeSlideVideo(slide.video);
+  if (video) {
+    const frame = getVideoFrameRect(slide.width, slide.height, video.frameRatio);
     context.fillStyle = "#000000";
-    context.fillRect(0, 0, slide.width, slide.height);
+    context.fillRect(frame.x, frame.y, frame.width, frame.height);
     context.fillStyle = "rgba(255, 255, 255, 0.82)";
     context.font = '700 42px "Pretendard"';
-    context.fillText("VIDEO", 28, slide.height - 72);
+    const label = video.frameRatio === DEFAULT_VIDEO_FRAME_RATIO ? "VIDEO" : `VIDEO ${VIDEO_FRAME_RATIO_MODES[video.frameRatio].label}`;
+    context.fillText(label, frame.x + 28, Math.min(slide.height - 72, frame.y + frame.height - 28));
   }
 
   for (const object of slide.objects) {
@@ -6488,6 +6571,7 @@ async function chooseVideoForCurrentSlide() {
       path: importedAsset.path,
       name: importedAsset.name || getFileNameFromPath(path),
       fit: DEFAULT_VIDEO_FIT,
+      frameRatio: DEFAULT_VIDEO_FRAME_RATIO,
     };
     updateSlideVideoView();
     renderSlideList();
@@ -6522,6 +6606,22 @@ function setVideoFitForCurrentSlide(fit) {
   updateSlideVideoView();
   renderSlideList();
   setStatus(`Background video fit changed to ${VIDEO_FIT_MODES[slide.video.fit].label}.`);
+  recordHistory();
+}
+
+function setVideoFrameRatioForCurrentSlide(frameRatio) {
+  const slide = slides[activeSlideIndex];
+  const video = normalizeSlideVideo(slide?.video);
+  if (!slide || !video) {
+    return;
+  }
+  slide.video = {
+    ...video,
+    frameRatio: sanitizeVideoFrameRatio(frameRatio),
+  };
+  updateSlideVideoView();
+  renderSlideList();
+  setStatus(`Background video frame changed to ${VIDEO_FRAME_RATIO_MODES[slide.video.frameRatio].label}.`);
   recordHistory();
 }
 
@@ -6618,7 +6718,8 @@ async function saveCanvasAsPng() {
   context.fillStyle = getComputedStyle(canvas).backgroundColor || "#ffffff";
   context.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
   if (!slideVideo.hidden && slideVideo.readyState >= 2) {
-    drawBackgroundMedia(context, slideVideo, exportCanvas.width, exportCanvas.height, getActiveSlideVideo()?.fit);
+    const video = getActiveSlideVideo();
+    drawBackgroundMedia(context, slideVideo, exportCanvas.width, exportCanvas.height, video?.fit, video?.frameRatio);
   }
 
   const animationDuration = Math.max(VIDEO_EXPORT_FALLBACK_DURATION, getCanvasObjectAnimationDuration());
@@ -7415,6 +7516,7 @@ async function exportProjectAsMp4() {
         color: sanitizeColor(slide.color, "#ffffff"),
         videoPath: video?.path || null,
         videoFit: video?.fit || DEFAULT_VIDEO_FIT,
+        videoFrameRatio: video?.frameRatio || DEFAULT_VIDEO_FRAME_RATIO,
         notes,
         ttsSegments,
         subtitleImages,
@@ -7897,6 +7999,9 @@ chooseSlideVideo.addEventListener("click", chooseVideoForCurrentSlide);
 clearSlideVideo.addEventListener("click", clearVideoForCurrentSlide);
 for (const button of videoFitButtons) {
   button.addEventListener("click", () => setVideoFitForCurrentSlide(button.dataset.videoFit));
+}
+for (const button of videoFrameRatioButtons) {
+  button.addEventListener("click", () => setVideoFrameRatioForCurrentSlide(button.dataset.videoFrameRatio));
 }
 chooseSlideSound.addEventListener("click", chooseSoundForCurrentSlide);
 clearSlideSound.addEventListener("click", clearSoundForCurrentSlide);

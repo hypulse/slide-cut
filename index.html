@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Slide Cut</title>
-    <link rel="stylesheet" href="./styles.css?v=20260527-settings-row-height" />
+    <link rel="stylesheet" href="./styles.css?v=20260528-video-frame-ratio" />
   </head>
   <body>
     <div class="app-frame">
@@ -77,6 +77,12 @@
             <button type="button" data-video-fit="fill" class="is-active">Fill</button>
             <button type="button" data-video-fit="fit">Fit</button>
             <button type="button" data-video-fit="stretch">Stretch</button>
+          </div>
+          <div class="video-frame-ratio-buttons" role="group" aria-label="Background video frame ratio">
+            <button type="button" data-video-frame-ratio="canvas" class="is-active">Full</button>
+            <button type="button" data-video-frame-ratio="1:1">1:1</button>
+            <button type="button" data-video-frame-ratio="3:4">3:4</button>
+            <button type="button" data-video-frame-ratio="4:3">4:3</button>
           </div>
           <div id="slideVideoInfo" class="inline-info">No video selected</div>
         </section>
@@ -614,6 +620,6 @@
     </div>
 
     <script src="./vendor/lucide.min.js" defer></script>
-    <script type="module" src="./app.js?v=20260527-graffiti-burst"></script>
+    <script type="module" src="./app.js?v=20260528-video-frame-ratio"></script>
   </body>
 </html>
