@@ -1,4 +1,4 @@
-import { createRenderer } from "./rendering.js?v=20260527-graffiti-burst";
+import { createRenderer } from "./rendering.js?v=20260528-git-direct-code";
 import { createProjectModel } from "./project-model.js";
 
 const canvas = document.querySelector("#canvas");
@@ -159,12 +159,18 @@ const gitTypingControls = document.querySelector("#gitTypingControls");
 const chatTypingControls = document.querySelector("#chatTypingControls");
 const dynamicContinueAfterTts = document.querySelector("#dynamicContinueAfterTts");
 const canvasSlideHint = document.querySelector("#canvasSlideHint");
+const gitInputModeButtons = [...document.querySelectorAll("[data-git-input-mode]")];
+const gitRepositoryFields = document.querySelector("#gitRepositoryFields");
 const chooseGitRepo = document.querySelector("#chooseGitRepo");
 const gitRepoPath = document.querySelector("#gitRepoPath");
 const gitSlideTitle = document.querySelector("#gitSlideTitle");
 const gitCommitSelect = document.querySelector("#gitCommitSelect");
 const gitFileSelect = document.querySelector("#gitFileSelect");
 const gitTypingSpeed = document.querySelector("#gitTypingSpeed");
+const gitTextScaleButtons = [...document.querySelectorAll("[data-git-text-scale]")];
+const gitBeforeContentField = document.querySelector("#gitBeforeContentField");
+const gitBeforeContent = document.querySelector("#gitBeforeContent");
+const gitAfterContentLabel = document.querySelector("#gitAfterContentLabel");
 const gitTypingContent = document.querySelector("#gitTypingContent");
 const chatSlideTitle = document.querySelector("#chatSlideTitle");
 const chatTypingSpeed = document.querySelector("#chatTypingSpeed");
@@ -1514,7 +1520,9 @@ const VIDEO_EXPORT_FPS = 30;
 const VIDEO_EXPORT_FALLBACK_DURATION = 3;
 const DYNAMIC_FRAME_RATE = VIDEO_EXPORT_FPS;
 const DYNAMIC_MAX_DURATION = 60;
+const DEFAULT_GIT_INPUT_MODE = "git";
 const DEFAULT_GIT_TYPING_SPEED = 90;
+const DEFAULT_GIT_TEXT_SCALE = 1;
 const DEFAULT_CHAT_TYPING_SPEED = 80;
 const DEFAULT_CHAT_TEXT_SCALE = 1.25;
 const CHAT_ANSWER_DELAY_SECONDS = 0.55;
@@ -1522,6 +1530,7 @@ const GIT_CODE_MAX_RENDER_LINES = 700;
 const GIT_DIFF_MAX_LCS_CELLS = 220000;
 const MAX_GIT_COMMIT_OPTIONS = 80;
 const MAX_GIT_FILE_OPTIONS = 300;
+const GIT_INPUT_MODES = new Set(["git", "direct"]);
 const GIT_SLIDE_HELPER_TEXTS = new Set([
   "Choose a repository, then load commits and files.",
   "Load the commit history of the repository.",
@@ -1549,6 +1558,7 @@ const { drawTextLines, drawGitTypingSlide, renderSlideToDataUrl } = createRender
   traceRoundedRect,
   strokeRoundedRect,
   drawCodeLine,
+  sanitizeGitTextScale,
   isDynamicSlide,
   renderDynamicSlideToDataUrl,
   getDynamicSlideDuration,
@@ -1612,9 +1622,11 @@ const { serializeObject, serializeCurrentSlide, cloneProjectValue, normalizeProj
   createDefaultGitTypingData,
   createDefaultChatTypingData,
   stripGitSlideHelperText,
+  sanitizeGitInputMode,
   sanitizeGitCommitOptions,
   sanitizeGitFileOptions,
   sanitizeTypingSpeed,
+  sanitizeGitTextScale,
   sanitizeChatTextScale,
   normalizeProjectSettings,
 });
@@ -1954,6 +1966,14 @@ function isDynamicSlide(slide) {
 
 function sanitizeTypingSpeed(value, fallback) {
   return clamp(numberOr(value, fallback), 20, 240);
+}
+
+function sanitizeGitInputMode(value) {
+  return GIT_INPUT_MODES.has(value) ? value : DEFAULT_GIT_INPUT_MODE;
+}
+
+function sanitizeGitTextScale(value) {
+  return clamp(numberOr(value, DEFAULT_GIT_TEXT_SCALE), 0.75, 1.6);
 }
 
 function sanitizeChatTextScale(value) {
@@ -4807,9 +4827,11 @@ function getGitTypingData(slide) {
   const afterContent = rawAfterContent || content;
   return {
     ...data,
+    inputMode: sanitizeGitInputMode(data.inputMode),
     commits: sanitizeGitCommitOptions(data.commits),
     files: sanitizeGitFileOptions(data.files),
     typingSpeed: sanitizeTypingSpeed(slide?.gitTyping?.typingSpeed, DEFAULT_GIT_TYPING_SPEED),
+    textScale: sanitizeGitTextScale(slide?.gitTyping?.textScale),
     beforeContent: typeof data.beforeContent === "string" ? data.beforeContent : "",
     afterContent,
     beforePath: typeof data.beforePath === "string" ? data.beforePath : "",
@@ -5393,6 +5415,9 @@ async function refreshGitTypingSlideForExport(slide) {
     return slide;
   }
   const data = getGitTypingData(slide);
+  if (data.inputMode === "direct") {
+    return slide;
+  }
   if (gitTypingDataHasChanges(data) || !data.repoPath || !data.commitHash || !data.filePath) {
     return slide;
   }
@@ -5403,6 +5428,7 @@ async function refreshGitTypingSlideForExport(slide) {
       ...slide,
       gitTyping: {
         ...data,
+        inputMode: "git",
         repoPath: result.repoPath || data.repoPath,
         commitHash: result.commitHash || data.commitHash,
         commitLabel: data.commitLabel || result.commitHash || data.commitHash,
@@ -5514,6 +5540,7 @@ function createDefaultSlide() {
 function createDefaultGitTypingData() {
   return {
     title: "Git Diff",
+    inputMode: DEFAULT_GIT_INPUT_MODE,
     repoPath: "",
     commitHash: "",
     commitLabel: "",
@@ -5525,6 +5552,7 @@ function createDefaultGitTypingData() {
     afterContent: "",
     beforePath: "",
     typingSpeed: DEFAULT_GIT_TYPING_SPEED,
+    textScale: DEFAULT_GIT_TEXT_SCALE,
   };
 }
 
@@ -5769,6 +5797,39 @@ function updateGitSelectControls(data) {
   );
 }
 
+function syncGitInputModeButtons(value) {
+  const normalized = sanitizeGitInputMode(value);
+  for (const button of gitInputModeButtons) {
+    button.classList.toggle("is-active", sanitizeGitInputMode(button.dataset.gitInputMode) === normalized);
+  }
+}
+
+function getSelectedGitInputMode() {
+  const activeButton = gitInputModeButtons.find((button) => button.classList.contains("is-active"));
+  return sanitizeGitInputMode(activeButton?.dataset.gitInputMode);
+}
+
+function syncGitTextScaleButtons(value) {
+  const normalized = sanitizeGitTextScale(value);
+  for (const button of gitTextScaleButtons) {
+    const buttonValue = sanitizeGitTextScale(button.dataset.gitTextScale);
+    button.classList.toggle("is-active", Math.abs(buttonValue - normalized) < 0.01);
+  }
+}
+
+function getSelectedGitTextScale() {
+  const activeButton = gitTextScaleButtons.find((button) => button.classList.contains("is-active"));
+  return sanitizeGitTextScale(activeButton?.dataset.gitTextScale);
+}
+
+function syncGitInputModeVisibility(inputMode) {
+  const isDirect = sanitizeGitInputMode(inputMode) === "direct";
+  gitRepositoryFields.hidden = isDirect;
+  gitBeforeContentField.hidden = !isDirect;
+  gitAfterContentLabel.textContent = isDirect ? "After" : "Code";
+  gitTypingContent.placeholder = isDirect ? "Final code to type into the slide" : "Selected file content appears here.";
+}
+
 function renderDynamicSlidePreview(slide) {
   dynamicSlidePreview.replaceChildren();
   const kind = sanitizeSlideKind(slide?.kind);
@@ -5784,12 +5845,14 @@ function renderDynamicSlidePreview(slide) {
       createPreviewElement("span", "dynamic-preview-code-light yellow"),
       createPreviewElement("span", "dynamic-preview-code-light green")
     );
-    const title = createPreviewElement("div", "dynamic-preview-code-filename", getFileNameFromPath(data.filePath || data.title));
+    const titleSource = data.inputMode === "direct" ? data.title : data.filePath || data.beforePath || data.title;
+    const title = createPreviewElement("div", "dynamic-preview-code-filename", getFileNameFromPath(titleSource));
     const code = createPreviewElement(
       "pre",
       "dynamic-preview-code",
       truncateText(typeof data.afterContent === "string" ? data.afterContent : data.content, 2400)
     );
+    code.style.fontSize = `${Math.round(16 * data.textScale)}px`;
     titleBar.append(lights, title);
     codeWindow.append(titleBar, code);
     surface.append(codeWindow);
@@ -5838,10 +5901,14 @@ function syncDynamicSlidePanel() {
   if (kind === "gitTyping") {
     const data = getGitTypingData(slide);
     gitSlideTitle.value = data.title;
+    syncGitInputModeButtons(data.inputMode);
+    syncGitInputModeVisibility(data.inputMode);
     gitRepoPath.value = data.repoPath;
     updateGitSelectControls(data);
     gitTypingSpeed.value = String(data.typingSpeed);
-    gitTypingContent.value = data.content;
+    syncGitTextScaleButtons(data.textScale);
+    gitBeforeContent.value = data.beforeContent;
+    gitTypingContent.value = data.afterContent || data.content;
   } else if (kind === "chatTyping") {
     const data = getChatTypingData(slide);
     chatSlideTitle.value = data.title;
@@ -7785,15 +7852,19 @@ function syncDynamicTimingToSlide(options = {}) {
 
 function syncGitTypingInputsToSlide(options = {}) {
   updateActiveDynamicSlide((slide) => {
+    const inputMode = getSelectedGitInputMode();
     slide.gitTyping = {
       ...getGitTypingData(slide),
+      inputMode,
       title: gitSlideTitle.value,
       repoPath: gitRepoPath.value,
       commitHash: gitCommitSelect.value,
       commitLabel: gitCommitSelect.selectedOptions[0]?.textContent || "",
       filePath: gitFileSelect.value,
       typingSpeed: sanitizeTypingSpeed(gitTypingSpeed.value, DEFAULT_GIT_TYPING_SPEED),
+      textScale: getSelectedGitTextScale(),
       content: gitTypingContent.value,
+      beforeContent: gitBeforeContent.value,
       afterContent: gitTypingContent.value,
     };
   }, options);
@@ -7833,6 +7904,7 @@ async function chooseGitRepositoryForSlide() {
   updateActiveDynamicSlide((slide) => {
     slide.gitTyping = {
       ...getGitTypingData(slide),
+      inputMode: "git",
       repoPath: path,
       commitHash: "",
       commitLabel: "",
@@ -7884,6 +7956,7 @@ async function loadGitCommitsForSlide() {
     updateActiveDynamicSlide((activeSlide) => {
       activeSlide.gitTyping = {
         ...getGitTypingData(activeSlide),
+        inputMode: "git",
         repoPath: result.repoPath || repoPath,
         commitHash: selectedCommit?.hash || "",
         commitLabel: selectedCommit?.label || "",
@@ -7929,6 +8002,7 @@ async function loadGitFilesForSlide(options = {}) {
     updateActiveDynamicSlide((activeSlide) => {
       activeSlide.gitTyping = {
         ...getGitTypingData(activeSlide),
+        inputMode: "git",
         repoPath: result.repoPath || repoPath,
         commitHash,
         commitLabel: selectedCommit?.label || current.commitLabel || commitHash,
@@ -7970,6 +8044,7 @@ async function loadGitFileChangeForSlide(options = {}) {
     updateActiveDynamicSlide((activeSlide) => {
       activeSlide.gitTyping = {
         ...getGitTypingData(activeSlide),
+        inputMode: "git",
         repoPath: result.repoPath || repoPath,
         commitHash: result.commitHash || commitHash,
         commitLabel: current.commitLabel || result.commitHash || commitHash,
@@ -8668,6 +8743,28 @@ gitFileSelect.addEventListener("change", () => {
 for (const input of [gitSlideTitle, gitRepoPath, gitTypingSpeed, gitTypingContent]) {
   input.addEventListener("input", () => syncGitTypingInputsToSlide());
   input.addEventListener("change", () => syncGitTypingInputsToSlide({ record: true }));
+}
+for (const input of [gitBeforeContent]) {
+  input.addEventListener("input", () => syncGitTypingInputsToSlide());
+  input.addEventListener("change", () => syncGitTypingInputsToSlide({ record: true }));
+}
+for (const button of gitInputModeButtons) {
+  button.addEventListener("click", () => {
+    syncGitInputModeButtons(button.dataset.gitInputMode);
+    syncGitInputModeVisibility(button.dataset.gitInputMode);
+    syncGitTypingInputsToSlide({ record: true });
+    setStatus(
+      sanitizeGitInputMode(button.dataset.gitInputMode) === "direct"
+        ? "Git Slide now uses directly entered code."
+        : "Git Slide now reads code from a commit."
+    );
+  });
+}
+for (const button of gitTextScaleButtons) {
+  button.addEventListener("click", () => {
+    syncGitTextScaleButtons(button.dataset.gitTextScale);
+    syncGitTypingInputsToSlide({ record: true });
+  });
 }
 dynamicContinueAfterTts.addEventListener("change", () => {
   syncDynamicTimingToSlide({ record: true });

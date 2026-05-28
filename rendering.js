@@ -16,6 +16,7 @@ export function createRenderer(deps) {
     traceRoundedRect,
     strokeRoundedRect,
     drawCodeLine,
+    sanitizeGitTextScale,
     isDynamicSlide,
     renderDynamicSlideToDataUrl,
     getDynamicSlideDuration,
@@ -707,12 +708,14 @@ export function createRenderer(deps) {
     const windowHeight = height - windowY * 2;
     const windowRadius = clamp(Math.round(height * 0.028), 16, 24);
     const titleBarHeight = clamp(Math.round(height * 0.066), 42, 56);
-    const codeSize = clamp(Math.round(width * 0.0145), 15, 23);
+    const textScale = sanitizeGitTextScale(data.textScale);
+    const codeSize = clamp(Math.round(width * 0.0145 * textScale), 12, 36);
     const lineHeight = Math.round(codeSize * 1.55);
     const gutterWidth = Math.round(codeSize * 3.8);
     const editorPaddingX = Math.round(codeSize * 1.25);
     const editorPaddingTop = Math.round(codeSize * 1.05);
-    const fileName = getFileNameFromPath(data.filePath || data.beforePath || data.title || "changes");
+    const titleSource = data.inputMode === "direct" ? data.title : data.filePath || data.beforePath || data.title;
+    const fileName = getFileNameFromPath(titleSource || "changes");
     const editorX = windowX;
     const editorY = windowY + titleBarHeight;
     const editorWidth = windowWidth;
@@ -767,7 +770,7 @@ export function createRenderer(deps) {
     });
 
     context.fillStyle = "#d7dce5";
-    context.font = `700 ${clamp(Math.round(codeSize * 0.82), 12, 16)}px "Pretendard"`;
+    context.font = `700 ${clamp(Math.round(codeSize * 0.82), 12, 20)}px "Pretendard"`;
     context.textBaseline = "top";
     context.textAlign = "center";
     context.fillText(fileName, windowX + windowWidth / 2, windowY + Math.round((titleBarHeight - codeSize) / 2));

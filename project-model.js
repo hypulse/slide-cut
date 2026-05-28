@@ -46,9 +46,11 @@ export function createProjectModel(deps) {
     createDefaultGitTypingData,
     createDefaultChatTypingData,
     stripGitSlideHelperText,
+    sanitizeGitInputMode,
     sanitizeGitCommitOptions,
     sanitizeGitFileOptions,
     sanitizeTypingSpeed,
+    sanitizeGitTextScale,
     sanitizeChatTextScale,
     normalizeProjectSettings,
   } = deps;
@@ -242,6 +244,7 @@ export function createProjectModel(deps) {
               ...createDefaultGitTypingData(),
               ...(slide.gitTyping || {}),
               title: typeof slide.gitTyping?.title === "string" ? slide.gitTyping.title : createDefaultGitTypingData().title,
+              inputMode: sanitizeGitInputMode(slide.gitTyping?.inputMode),
               repoPath: typeof slide.gitTyping?.repoPath === "string" ? slide.gitTyping.repoPath : "",
               commitHash: typeof slide.gitTyping?.commitHash === "string" ? slide.gitTyping.commitHash : "",
               commitLabel: typeof slide.gitTyping?.commitLabel === "string" ? slide.gitTyping.commitLabel : "",
@@ -261,6 +264,7 @@ export function createProjectModel(deps) {
               ),
               beforePath: typeof slide.gitTyping?.beforePath === "string" ? slide.gitTyping.beforePath : "",
               typingSpeed: sanitizeTypingSpeed(slide.gitTyping?.typingSpeed, DEFAULT_GIT_TYPING_SPEED),
+              textScale: sanitizeGitTextScale(slide.gitTyping?.textScale),
             }
           : undefined,
       chatTyping:

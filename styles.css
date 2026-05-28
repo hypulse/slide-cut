@@ -1613,6 +1613,16 @@ select {
   gap: 6px;
 }
 
+.git-repository-fields {
+  display: grid;
+  gap: 6px;
+}
+
+.git-repository-fields[hidden],
+#gitBeforeContentField[hidden] {
+  display: none !important;
+}
+
 .dynamic-actions {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
@@ -1692,10 +1702,20 @@ select {
 .subtitle-font-buttons,
 .subtitle-sticker-buttons,
 .animation-buttons,
+.git-mode-buttons,
+.git-size-buttons,
 .chat-size-buttons {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 3px;
+}
+
+.git-mode-buttons {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.git-size-buttons {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .animation-buttons {
@@ -1854,6 +1874,8 @@ select {
 .subtitle-font-buttons button,
 .subtitle-sticker-buttons button,
 .animation-buttons button,
+.git-mode-buttons button,
+.git-size-buttons button,
 .animation-point-buttons button,
 .chat-size-buttons button {
   height: 26px;
@@ -1889,6 +1911,8 @@ select {
 .subtitle-font-buttons button.is-active,
 .subtitle-sticker-buttons button.is-active,
 .animation-buttons button.is-active,
+.git-mode-buttons button.is-active,
+.git-size-buttons button.is-active,
 .chat-size-buttons button.is-active {
   border-color: var(--accent);
   background: var(--accent-soft);
@@ -1919,6 +1943,8 @@ select {
 .subtitle-sticker-buttons button:disabled,
 .animation-buttons button:disabled,
 .animation-point-buttons button:disabled,
+.git-mode-buttons button:disabled,
+.git-size-buttons button:disabled,
 .chat-size-buttons button:disabled,
 .text-align-buttons button:disabled,
 .image-flip-buttons button:disabled {
