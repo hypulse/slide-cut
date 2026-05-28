@@ -8,6 +8,7 @@
 - Gamja Flower: https://fonts.google.com/specimen/Gamja+Flower
 - Nanum Pen Script: https://fonts.google.com/specimen/Nanum+Pen+Script
 - Mona12: https://monadabxy.com/fonts/mona/
+- JetBrains Mono: https://fonts.google.com/specimen/JetBrains+Mono
 - Hakgyoansim Bombanghak: https://fonts.taedonn.com/post/Hakgyoansim%2BBombanghak
 - Gowun Dodum: https://fonts.google.com/specimen/Gowun+Dodum
 - Gowun Batang: https://fonts.google.com/specimen/Gowun+Batang

@@ -17,6 +17,8 @@ export function createRenderer(deps) {
     strokeRoundedRect,
     drawCodeLine,
     sanitizeGitTextScale,
+    GIT_CODE_FONT_FAMILY = "JetBrains Mono",
+    GIT_CODE_FONT_WEIGHT = 600,
     isDynamicSlide,
     renderDynamicSlideToDataUrl,
     getDynamicSlideDuration,
@@ -27,6 +29,9 @@ export function createRenderer(deps) {
     drawSubtitleBox,
     getSubtitleTextForRender,
   } = deps;
+  const gitCodeFontFamily = String(GIT_CODE_FONT_FAMILY || "JetBrains Mono").replace(/"/g, "");
+  const gitCodeFontWeight = Number.isFinite(Number(GIT_CODE_FONT_WEIGHT)) ? Number(GIT_CODE_FONT_WEIGHT) : 600;
+  const gitCodeFontStack = `"${gitCodeFontFamily}", "SF Mono", ui-monospace, "Menlo", "Consolas", monospace`;
 
   function normalizeOpacity(value, fallback = 1) {
     const parsed = Number(value);
@@ -779,7 +784,7 @@ export function createRenderer(deps) {
     context.beginPath();
     context.rect(editorX, editorY, editorWidth, editorHeight);
     context.clip();
-    context.font = `600 ${codeSize}px "Pretendard"`;
+    context.font = `${gitCodeFontWeight} ${codeSize}px ${gitCodeFontStack}`;
     context.textAlign = "right";
     context.textBaseline = "top";
     for (const [index, line] of frame.lines.entries()) {

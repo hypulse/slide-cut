@@ -8,6 +8,8 @@ distributed builds.
 
 - Pretendard font files are provided by the `pretendard` npm package and are
   licensed under the SIL Open Font License 1.1 (`OFL-1.1`).
+- JetBrains Mono font files are bundled for Git slide code rendering and are
+  licensed under the SIL Open Font License 1.1 (`OFL-1.1`).
 - Lucide icons and the bundled `lucide.min.js` runtime are provided by the
   `lucide` npm package and are licensed under the ISC License.
 

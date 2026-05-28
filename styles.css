@@ -71,6 +71,22 @@
 }
 
 @font-face {
+  font-family: "JetBrains Mono";
+  src: url("./fonts/jetbrains-mono-latin-400-normal.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("./fonts/jetbrains-mono-latin-600-normal.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 600;
+  font-display: block;
+}
+
+@font-face {
   font-family: "Gmarket Sans";
   src: url("./fonts/GmarketSansTTFLight.ttf") format("truetype");
   font-style: normal;
@@ -255,6 +271,7 @@
 
   --font-ui: "Pretendard", system-ui, -apple-system, sans-serif;
   --font-mono: "SF Mono", ui-monospace, "Menlo", "Consolas", monospace;
+  --font-code: "JetBrains Mono", var(--font-mono);
 
   --shadow-modal: 0 20px 60px rgba(15, 20, 30, 0.22);
 }
@@ -2316,7 +2333,7 @@ input[type="checkbox"] {
   background: #1e1e1e;
   padding: 18px 22px;
   color: #d4d4d4;
-  font-family: "Pretendard";
+  font-family: var(--font-code);
   font-size: 16px;
   font-weight: 600;
   line-height: 1.45;

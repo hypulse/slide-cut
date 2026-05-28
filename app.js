@@ -1540,6 +1540,8 @@ const GIT_DIFF_MAX_LCS_CELLS = 220000;
 const MAX_GIT_COMMIT_OPTIONS = 80;
 const MAX_GIT_FILE_OPTIONS = 300;
 const GIT_INPUT_MODES = new Set(["git", "direct"]);
+const GIT_CODE_FONT_FAMILY = "JetBrains Mono";
+const GIT_CODE_FONT_WEIGHT = 600;
 const GIT_SLIDE_HELPER_TEXTS = new Set([
   "Choose a repository, then load commits and files.",
   "Load the commit history of the repository.",
@@ -1568,6 +1570,8 @@ const { drawTextLines, drawGitTypingSlide, renderSlideToDataUrl } = createRender
   strokeRoundedRect,
   drawCodeLine,
   sanitizeGitTextScale,
+  GIT_CODE_FONT_FAMILY,
+  GIT_CODE_FONT_WEIGHT,
   isDynamicSlide,
   renderDynamicSlideToDataUrl,
   getDynamicSlideDuration,
@@ -2241,7 +2245,12 @@ function getSubtitleFontRequest(options = {}) {
 
 function getSlideFontRequests(slide, options = {}) {
   const requests = [];
-  if (isDynamicSlide(slide)) {
+  if (sanitizeSlideKind(slide?.kind) === "gitTyping") {
+    requests.push(
+      { family: GIT_CODE_FONT_FAMILY, weight: GIT_CODE_FONT_WEIGHT },
+      { family: "Pretendard", weight: 700 }
+    );
+  } else if (isDynamicSlide(slide)) {
     requests.push({ family: "Pretendard", weight: 600 }, { family: "Pretendard", weight: 700 });
   }
   for (const object of slide?.objects || []) {
