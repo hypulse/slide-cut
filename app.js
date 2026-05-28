@@ -291,8 +291,6 @@ let isLoadingNativeProject = false;
 let lastSaveState = "Ready";
 let activeTextEditObject = null;
 let textEditButtonHandledPointer = false;
-const textMeasureCanvas = document.createElement("canvas");
-const textMeasureContext = textMeasureCanvas.getContext("2d");
 let canvasViewScale = 1;
 let appSettingsState = {
   openAiApiKey: "",
@@ -2814,7 +2812,6 @@ function statesEqual(a, b) {
 }
 
 function applyState(element, nextState) {
-  const previousWidth = Number(element.dataset.width);
   const state = {
     x: numberOr(nextState.x, 0),
     y: numberOr(nextState.y, 0),
@@ -2845,13 +2842,6 @@ function applyState(element, nextState) {
 
   if (element.dataset.type === "text") {
     renderTextObject(element);
-    if (
-      element.classList.contains("is-editing") &&
-      element.dataset.isFittingTextHeight !== "true" &&
-      state.width !== previousWidth
-    ) {
-      fitTextBoxToContent(element);
-    }
   }
 
   if (element.dataset.type === "shape") {
@@ -2987,11 +2977,10 @@ function syncTextEditorValue(element, options = {}) {
   if (isCodeTextElement(element) && editor.value !== previousText) {
     clearCodeTextGitTypingData(element);
   }
-  const fitted = fitTextBoxToContent(element);
-  if (!fitted && options.render !== false) {
+  if (options.render !== false) {
     renderTextObject(element);
   }
-  return fitted;
+  return previousText !== element.dataset.text;
 }
 
 function centerPosition(width, height) {
@@ -3996,61 +3985,6 @@ function renderCodeTextAnimationFrame(element, timeSeconds) {
   });
 }
 
-function getTextContentHeight(element) {
-  const state = getState(element);
-  const preset = getTextPreset(element);
-  const renderStyle = {
-    ...getTextRenderStyle({
-      fontFamily: element.dataset.fontFamily,
-      fontWeight: element.dataset.fontWeight,
-      textEffect: element.dataset.textEffect,
-      textColor: element.dataset.textColor,
-    }),
-    fontSize: preset.fontSize,
-    lineHeight: preset.lineHeight,
-  };
-  const outset = getTextEffectOutset(renderStyle);
-  textMeasureContext.font = `${renderStyle.fontWeight} ${preset.fontSize}px ${quoteFontFamily(renderStyle.fontFamily)}`;
-  const measureWidth = Math.max(1, state.width - outset.x * 2);
-  const lines = wrapTextLines(textMeasureContext, element.dataset.text || "", measureWidth);
-  const backgroundPadding = renderStyle.backgroundColor ? (renderStyle.backgroundPaddingY || 6) * 2 : 0;
-  return Math.max(16, Math.ceil(lines.length * preset.lineHeight + TEXT_PADDING_Y * 2 + backgroundPadding + outset.y * 2));
-}
-
-function fitTextBoxToContent(element) {
-  if (isCodeTextElement(element)) {
-    return false;
-  }
-  const state = getState(element);
-  const nextHeight = getTextContentHeight(element);
-  if (nextHeight === state.height) {
-    return false;
-  }
-
-  element.dataset.isFittingTextHeight = "true";
-  try {
-    applyState(element, {
-      ...state,
-      height: nextHeight,
-    });
-    return true;
-  } finally {
-    delete element.dataset.isFittingTextHeight;
-  }
-}
-
-function fitTextBoxToContentAfterWidthChange(element, previousWidth) {
-  if (
-    !element ||
-    !isPlainTextElement(element) ||
-    element.dataset.isFittingTextHeight === "true" ||
-    getState(element).width === previousWidth
-  ) {
-    return false;
-  }
-  return fitTextBoxToContent(element);
-}
-
 function wireTextEditor(element) {
   const editor = element.querySelector(".text-editor");
   editor.addEventListener("input", () => {
@@ -4268,7 +4202,6 @@ function handlePointerMove(event) {
     width,
     height,
   });
-  fitTextBoxToContentAfterWidthChange(element, state.width);
 }
 
 function handlePointerEnd(event) {
@@ -8986,7 +8919,6 @@ function applySelectedInputChange(changedField) {
     height,
     rotation: numberOr(selectedR.value, 0),
   });
-  fitTextBoxToContentAfterWidthChange(selectedObject, previousState.width);
 }
 
 function setAspectLockIcon() {
@@ -9021,9 +8953,7 @@ function applySelectedTextSizeChange(sizeKey) {
   const preset = getTextPreset(selectedObject);
   editor.style.fontSize = `${preset.fontSize}px`;
   editor.style.lineHeight = `${preset.lineHeight}px`;
-  if (!fitTextBoxToContent(selectedObject)) {
-    renderTextObject(selectedObject);
-  }
+  renderTextObject(selectedObject);
   setStatus(`Text size changed to ${preset.fontSize}px.`);
   renderSlideList();
   recordHistory();
@@ -9043,9 +8973,7 @@ function applySelectedTextFontChange(fontFamily, fontWeight) {
   const editor = selectedObject.querySelector(".text-editor");
   editor.style.fontFamily = quoteFontFamily(safeFamily);
   editor.style.fontWeight = String(safeWeight);
-  if (!fitTextBoxToContent(selectedObject)) {
-    renderTextObject(selectedObject);
-  }
+  renderTextObject(selectedObject);
   setStatus(`Text font changed to ${safeFamily}.`);
   renderSlideList();
   recordHistory();
@@ -9062,9 +8990,7 @@ function applySelectedTextWeightChange(fontWeight) {
   setActiveTextWeightButton(safeWeight);
   const editor = selectedObject.querySelector(".text-editor");
   editor.style.fontWeight = String(safeWeight);
-  if (!fitTextBoxToContent(selectedObject)) {
-    renderTextObject(selectedObject);
-  }
+  renderTextObject(selectedObject);
   setStatus(`Text weight changed to ${safeWeight}.`);
   renderSlideList();
   recordHistory();
@@ -9090,9 +9016,7 @@ function applySelectedTextStyleChange(effectKey) {
   editor.style.fontFamily = quoteFontFamily(sanitizeTextFontFamily(selectedObject.dataset.fontFamily));
   editor.style.fontWeight = selectedObject.dataset.fontWeight;
   editor.style.color = selectedObject.dataset.textColor || DEFAULT_TEXT_COLOR;
-  if (!fitTextBoxToContent(selectedObject)) {
-    renderTextObject(selectedObject);
-  }
+  renderTextObject(selectedObject);
   setStatus(`Text style changed to ${preset.label || safeEffect}.`);
   renderSlideList();
   recordHistory();
