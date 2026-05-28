@@ -37,7 +37,7 @@ The app is intentionally small. It focuses on arranging visual blocks, writing n
 - Translate regular slide text boxes and slide notes with OpenAI
 - Burn optional subtitles into exported video
 - Add per-slide start sounds and project background music
-- Create animated Git slides from a selected repository, commit, and file
+- Load Git commit history into Code Text and animate the code change
 - Create animated GPT conversation slides
 - Save and import `.slidecut` project packages with assets included
 
@@ -48,7 +48,7 @@ Planned development areas:
 - [x] Refine the editor UI and make common workflows easier to follow
 - [ ] Add presets and export options for vertical short-form videos
 - [ ] Add font controls for choosing typefaces, weights, and text styles
-- [ ] Let Git slides and GPT conversation slides use custom visual styles
+- [ ] Let Code Text typing and GPT conversation slides use custom visual styles
 - [ ] Provide an MCP interface so AI agents can create, inspect, and export Slide Cut projects
 - [ ] Expand Slide Cut so it can also be used for live presentations
 - [ ] Add per-object animations for text, images, shapes, and callouts
@@ -68,7 +68,7 @@ If macOS blocks the app because it is unsigned, open it from Finder with right c
 2. Arrange objects on the canvas.
 3. Add more slides from the slide list.
 4. Write slide notes if you want narration.
-5. Choose sounds, background music, or dynamic Git/GPT slides when needed.
+5. Choose sounds, background music, Code Text typing, or GPT conversation slides when needed.
 6. Export as PNG or MP4.
 7. Export a `.slidecut` project package when you want to move the editable project with its assets.
 
@@ -82,7 +82,7 @@ For narrated exports and slide translation, add an API key in Settings:
 - MiniMax for supported MiniMax speech models and voices
 
 Canvas size, narration defaults, subtitle settings, export folder, and background music are saved with the current project.
-Translation is available from the slide list footer for regular slides. It updates text boxes and slide notes on the selected slide only; Git slides and GPT conversation slides are skipped.
+Translation is available from the slide list footer for regular slides. It updates text boxes and slide notes on the selected slide only; GPT conversation slides are skipped.
 
 ## Local-First Projects
 
@@ -175,7 +175,7 @@ sequenceDiagram
 
   User->>Frontend: Click Export Video
   Frontend->>Frontend: Serialize slides and render PNG frames
-  Frontend->>Frontend: Render dynamic Git/GPT animation frames
+  Frontend->>Frontend: Render Code Text typing and GPT animation frames
   Frontend->>Tauri: export_video(payload)
   Tauri->>Rust: Pass frames, notes, sounds, settings
   Rust->>TTS: Request speech for slide notes
@@ -193,7 +193,7 @@ sequenceDiagram
 - `index.html`: static desktop UI structure
 - `styles.css`: app layout and editor styling
 - `app.js`: main frontend state, DOM wiring, editor interactions, export orchestration
-- `rendering.js`: canvas rendering helpers for text, dynamic Git slides, and export frames
+- `rendering.js`: canvas rendering helpers for text, GPT dynamic slides, and export frames
 - `project-model.js`: project serialization, cloning, and normalization
 - `src-tauri/src/main.rs`: Tauri startup and command registration
 - `src-tauri/src/project_store.rs`: local projects, settings, asset copying, `.slidecut` import/export

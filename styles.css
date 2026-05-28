@@ -990,7 +990,6 @@ button.danger:hover {
 }
 
 #addSlide,
-#addGitTypingSlide,
 #addChatTypingSlide {
   grid-column: span 2;
 }
@@ -1630,16 +1629,6 @@ select {
   gap: 6px;
 }
 
-.git-repository-fields {
-  display: grid;
-  gap: 6px;
-}
-
-.git-repository-fields[hidden],
-#gitBeforeContentField[hidden] {
-  display: none !important;
-}
-
 .dynamic-actions {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
@@ -1650,6 +1639,41 @@ select {
   height: 26px;
   font-size: 11px;
   font-weight: 600;
+}
+
+.code-git-controls {
+  display: grid;
+  gap: 6px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+}
+
+.code-git-header {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.code-git-header button {
+  height: 24px;
+  min-width: 54px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.code-git-subheader {
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .dynamic-textarea {
@@ -1719,22 +1743,12 @@ select {
 .subtitle-font-buttons,
 .subtitle-sticker-buttons,
 .animation-buttons,
-.git-mode-buttons,
-.git-size-buttons,
 .chat-size-buttons,
 .code-text-preset-buttons,
 .code-text-font-buttons {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 3px;
-}
-
-.git-mode-buttons {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.git-size-buttons {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .code-text-preset-buttons,
@@ -1879,8 +1893,6 @@ select {
 .subtitle-font-buttons button,
 .subtitle-sticker-buttons button,
 .animation-buttons button,
-.git-mode-buttons button,
-.git-size-buttons button,
 .animation-point-buttons button,
 .chat-size-buttons button,
 .code-text-preset-buttons button,
@@ -1919,8 +1931,6 @@ select {
 .subtitle-font-buttons button.is-active,
 .subtitle-sticker-buttons button.is-active,
 .animation-buttons button.is-active,
-.git-mode-buttons button.is-active,
-.git-size-buttons button.is-active,
 .chat-size-buttons button.is-active,
 .code-text-preset-buttons button.is-active,
 .code-text-font-buttons button.is-active {
@@ -1953,8 +1963,6 @@ select {
 .subtitle-sticker-buttons button:disabled,
 .animation-buttons button:disabled,
 .animation-point-buttons button:disabled,
-.git-mode-buttons button:disabled,
-.git-size-buttons button:disabled,
 .chat-size-buttons button:disabled,
 .code-text-preset-buttons button:disabled,
 .code-text-font-buttons button:disabled,
@@ -2328,83 +2336,11 @@ input[type="checkbox"] {
   font-family: "Pretendard";
 }
 
-.dynamic-preview-surface.git {
-  padding: 34px 48px;
-  background: #0b1020;
-}
-
 .dynamic-preview-surface.chat {
   display: block;
   padding: 18px 26px 24px;
   background: #ffffff;
   color: #111111;
-}
-
-.dynamic-preview-code {
-  overflow: hidden;
-  margin: 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  background: #1e1e1e;
-  padding: 18px 22px;
-  color: #d4d4d4;
-  font-family: var(--font-code);
-  font-size: 16px;
-  font-weight: 600;
-  line-height: 1.45;
-  white-space: pre;
-}
-
-.dynamic-preview-code-window {
-  overflow: hidden;
-  min-height: 0;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 22px;
-  background: #202632;
-  box-shadow: 0 22px 54px rgba(0, 0, 0, 0.46);
-}
-
-.dynamic-preview-code-titlebar {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 38px;
-  background: #2a303b;
-  color: #d7dce5;
-  font-size: 13px;
-  font-weight: 800;
-}
-
-.dynamic-preview-code-lights {
-  position: absolute;
-  left: 18px;
-  display: flex;
-  gap: 16px;
-}
-
-.dynamic-preview-code-light {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-}
-
-.dynamic-preview-code-light.red {
-  background: #ff5f56;
-}
-
-.dynamic-preview-code-light.yellow {
-  background: #ffbd2e;
-}
-
-.dynamic-preview-code-light.green {
-  background: #27c93f;
-}
-
-.dynamic-preview-code-filename {
-  max-width: 58%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .dynamic-preview-chat {

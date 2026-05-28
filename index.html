@@ -109,57 +109,6 @@
             <span>Continue after TTS</span>
             <input id="dynamicContinueAfterTts" type="checkbox" />
           </label>
-          <div id="gitTypingControls" class="dynamic-controls" hidden>
-            <label>
-              <span>Title</span>
-              <input id="gitSlideTitle" type="text" />
-            </label>
-            <label>
-              <span>Mode</span>
-              <div id="gitInputMode" class="git-mode-buttons" role="group" aria-label="Git slide input mode">
-                <button type="button" data-git-input-mode="git" class="is-active">Git</button>
-                <button type="button" data-git-input-mode="direct">Code</button>
-              </div>
-            </label>
-            <div id="gitRepositoryFields" class="git-repository-fields">
-              <label>
-                <span>Repository</span>
-                <input id="gitRepoPath" type="text" readonly />
-              </label>
-              <div class="dynamic-actions">
-                <button id="chooseGitRepo" type="button" data-icon="folder-git-2">Choose Repository</button>
-              </div>
-              <label>
-                <span>Commit</span>
-                <select id="gitCommitSelect"></select>
-              </label>
-              <label>
-                <span>File</span>
-                <select id="gitFileSelect"></select>
-              </label>
-            </div>
-            <label>
-              <span>Speed</span>
-              <input id="gitTypingSpeed" type="number" min="20" max="240" step="5" value="90" />
-            </label>
-            <label>
-              <span>Font Size</span>
-              <div id="gitTextScale" class="git-size-buttons" role="group" aria-label="Git slide code font size">
-                <button type="button" data-git-text-scale="0.85">85</button>
-                <button type="button" data-git-text-scale="1" class="is-active">100</button>
-                <button type="button" data-git-text-scale="1.15">115</button>
-                <button type="button" data-git-text-scale="1.3">130</button>
-              </div>
-            </label>
-            <label id="gitBeforeContentField" class="stacked-field">
-              <span>Before</span>
-              <textarea id="gitBeforeContent" class="dynamic-textarea compact" spellcheck="false" placeholder="Optional starting code"></textarea>
-            </label>
-            <label class="stacked-field">
-              <span id="gitAfterContentLabel">Code</span>
-              <textarea id="gitTypingContent" class="dynamic-textarea" spellcheck="false" placeholder="Selected file content appears here."></textarea>
-            </label>
-          </div>
           <div id="chatTypingControls" class="dynamic-controls" hidden>
             <label>
               <span>Title</span>
@@ -398,6 +347,38 @@
               <span>LaTeX Math</span>
               <input id="selectedCodeTextLatex" type="checkbox" />
             </label>
+            <div class="code-git-controls">
+              <div class="code-git-header">
+                <span>Typing Effect</span>
+                <button id="clearCodeTextGitAnimation" type="button" data-icon="x">Clear</button>
+              </div>
+              <label>
+                <span>Typing Speed</span>
+                <input id="codeTextGitTypingSpeed" type="number" min="20" max="240" step="5" value="90" />
+              </label>
+              <div class="dynamic-actions">
+                <button id="applyCodeTextTypingAnimation" type="button" data-icon="play">Apply Typing</button>
+              </div>
+              <div class="code-git-subheader">Git Source</div>
+              <label>
+                <span>Repository</span>
+                <input id="codeTextGitRepoPath" type="text" readonly />
+              </label>
+              <div class="dynamic-actions">
+                <button id="chooseCodeTextGitRepo" type="button" data-icon="folder-git-2">Choose Repository</button>
+              </div>
+              <label>
+                <span>Commit</span>
+                <select id="codeTextGitCommitSelect"></select>
+              </label>
+              <label>
+                <span>File</span>
+                <select id="codeTextGitFileSelect"></select>
+              </label>
+              <div class="dynamic-actions">
+                <button id="loadCodeTextGitHistory" type="button" data-icon="history">Load History</button>
+              </div>
+            </div>
           </div>
           <div class="subgroup" data-label="Layer" data-selection-section="layer">
             <div class="arrange-controls icon-only" aria-label="Layer order">
@@ -449,7 +430,6 @@
         <div class="slide-footer-actions">
           <button id="deleteSlide" class="danger" type="button" data-icon="trash-2">Delete</button>
           <button id="addSlide" class="add-slide-button" type="button" data-icon="plus">Add Slide</button>
-          <button id="addGitTypingSlide" type="button" data-icon="folder-git-2">Git Slide</button>
           <button id="addChatTypingSlide" type="button" data-icon="message-square">GPT Slide</button>
           <div class="slide-translation-controls" aria-label="Current slide translation">
             <div class="slide-language-row">

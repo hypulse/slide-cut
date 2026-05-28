@@ -1,4 +1,4 @@
-import { createRenderer } from "./rendering.js?v=20260528-git-direct-code";
+import { createRenderer } from "./rendering.js?v=20260528-code-text-typing";
 import { createProjectModel } from "./project-model.js";
 
 const canvas = document.querySelector("#canvas");
@@ -125,7 +125,6 @@ const pasteImage = document.querySelector("#pasteImage");
 const chooseImage = document.querySelector("#chooseImage");
 const addTextBox = document.querySelector("#addTextBox");
 const addCodeTextBox = document.querySelector("#addCodeTextBox");
-const addGitTypingSlide = document.querySelector("#addGitTypingSlide");
 const addChatTypingSlide = document.querySelector("#addChatTypingSlide");
 const chooseBackgroundMusic = document.querySelector("#chooseBackgroundMusic");
 const clearBackgroundMusic = document.querySelector("#clearBackgroundMusic");
@@ -156,23 +155,9 @@ const chooseSlideSound = document.querySelector("#chooseSlideSound");
 const clearSlideSound = document.querySelector("#clearSlideSound");
 const slideSoundInfo = document.querySelector("#slideSoundInfo");
 const dynamicSlidePreview = document.querySelector("#dynamicSlidePreview");
-const gitTypingControls = document.querySelector("#gitTypingControls");
 const chatTypingControls = document.querySelector("#chatTypingControls");
 const dynamicContinueAfterTts = document.querySelector("#dynamicContinueAfterTts");
 const canvasSlideHint = document.querySelector("#canvasSlideHint");
-const gitInputModeButtons = [...document.querySelectorAll("[data-git-input-mode]")];
-const gitRepositoryFields = document.querySelector("#gitRepositoryFields");
-const chooseGitRepo = document.querySelector("#chooseGitRepo");
-const gitRepoPath = document.querySelector("#gitRepoPath");
-const gitSlideTitle = document.querySelector("#gitSlideTitle");
-const gitCommitSelect = document.querySelector("#gitCommitSelect");
-const gitFileSelect = document.querySelector("#gitFileSelect");
-const gitTypingSpeed = document.querySelector("#gitTypingSpeed");
-const gitTextScaleButtons = [...document.querySelectorAll("[data-git-text-scale]")];
-const gitBeforeContentField = document.querySelector("#gitBeforeContentField");
-const gitBeforeContent = document.querySelector("#gitBeforeContent");
-const gitAfterContentLabel = document.querySelector("#gitAfterContentLabel");
-const gitTypingContent = document.querySelector("#gitTypingContent");
 const chatSlideTitle = document.querySelector("#chatSlideTitle");
 const chatTypingSpeed = document.querySelector("#chatTypingSpeed");
 const chatTextScaleButtons = [...document.querySelectorAll("[data-chat-text-scale]")];
@@ -233,6 +218,14 @@ const selectedAnimationInDelay = document.querySelector("#selectedAnimationInDel
 const selectedTextSize = document.querySelector("#selectedTextSize");
 const selectedCodeTextSize = document.querySelector("#selectedCodeTextSize");
 const selectedCodeTextLatex = document.querySelector("#selectedCodeTextLatex");
+const codeTextGitRepoPath = document.querySelector("#codeTextGitRepoPath");
+const chooseCodeTextGitRepo = document.querySelector("#chooseCodeTextGitRepo");
+const codeTextGitCommitSelect = document.querySelector("#codeTextGitCommitSelect");
+const codeTextGitFileSelect = document.querySelector("#codeTextGitFileSelect");
+const codeTextGitTypingSpeed = document.querySelector("#codeTextGitTypingSpeed");
+const applyCodeTextTypingAnimation = document.querySelector("#applyCodeTextTypingAnimation");
+const loadCodeTextGitHistory = document.querySelector("#loadCodeTextGitHistory");
+const clearCodeTextGitAnimation = document.querySelector("#clearCodeTextGitAnimation");
 const imageFlipButtons = [...document.querySelectorAll("[data-image-flip]")];
 const textSizeButtons = [...document.querySelectorAll("[data-text-size]")];
 const textFontButtons = [...document.querySelectorAll("[data-text-font]")];
@@ -1694,9 +1687,7 @@ const VIDEO_EXPORT_FPS = 30;
 const VIDEO_EXPORT_FALLBACK_DURATION = 3;
 const DYNAMIC_FRAME_RATE = VIDEO_EXPORT_FPS;
 const DYNAMIC_MAX_DURATION = 60;
-const DEFAULT_GIT_INPUT_MODE = "git";
 const DEFAULT_GIT_TYPING_SPEED = 90;
-const DEFAULT_GIT_TEXT_SCALE = 1;
 const DEFAULT_CHAT_TYPING_SPEED = 80;
 const DEFAULT_CHAT_TEXT_SCALE = 1.25;
 const CHAT_ANSWER_DELAY_SECONDS = 0.55;
@@ -1704,20 +1695,9 @@ const GIT_CODE_MAX_RENDER_LINES = 700;
 const GIT_DIFF_MAX_LCS_CELLS = 220000;
 const MAX_GIT_COMMIT_OPTIONS = 80;
 const MAX_GIT_FILE_OPTIONS = 300;
-const GIT_INPUT_MODES = new Set(["git", "direct"]);
-const GIT_CODE_FONT_FAMILY = "JetBrains Mono";
-const GIT_CODE_FONT_WEIGHT = 600;
-const GIT_SLIDE_HELPER_TEXTS = new Set([
-  "Choose a repository, then load commits and files.",
-  "Load the commit history of the repository.",
-  "Loading the list of files changed in this commit.",
-  "No readable commits were found in this repository.",
-  "Press Load Diff to load changes from the selected file.",
-  "No files were changed in this commit.",
-]);
-const SLIDE_KINDS = new Set(["canvas", "gitTyping", "chatTyping"]);
+const SLIDE_KINDS = new Set(["canvas", "chatTyping"]);
 
-const { drawTextLines, drawGitTypingSlide, renderSlideToDataUrl } = createRenderer({
+const { drawTextLines, renderSlideToDataUrl } = createRenderer({
   TEXT_PADDING_X,
   TEXT_PADDING_Y,
   DEFAULT_TEXT_COLOR,
@@ -1726,17 +1706,10 @@ const { drawTextLines, drawGitTypingSlide, renderSlideToDataUrl } = createRender
   getTextEffectOutset,
   sanitizeTextAlign,
   wrapTextLines,
-  getGitTypingData,
-  getGitEditorFrame,
-  getFileNameFromPath,
   clamp,
   fillRoundedRect,
   traceRoundedRect,
   strokeRoundedRect,
-  drawCodeLine,
-  sanitizeGitTextScale,
-  GIT_CODE_FONT_FAMILY,
-  GIT_CODE_FONT_WEIGHT,
   isDynamicSlide,
   renderDynamicSlideToDataUrl,
   getDynamicSlideDuration,
@@ -1770,7 +1743,6 @@ const { serializeObject, serializeCurrentSlide, cloneProjectValue, normalizeProj
   DEFAULT_TEXT_COLOR,
   TEXT_SIZE_PRESETS,
   PROJECT_FORMAT,
-  DEFAULT_GIT_TYPING_SPEED,
   DEFAULT_CHAT_TYPING_SPEED,
   clamp,
   numberOr,
@@ -1801,14 +1773,10 @@ const { serializeObject, serializeCurrentSlide, cloneProjectValue, normalizeProj
   normalizeContinueAfterTts,
   normalizeNoteSegments,
   createDefaultSlide,
-  createDefaultGitTypingData,
   createDefaultChatTypingData,
-  stripGitSlideHelperText,
-  sanitizeGitInputMode,
-  sanitizeGitCommitOptions,
-  sanitizeGitFileOptions,
+  getCodeTextGitTypingData,
+  codeTextGitTypingIsEnabled,
   sanitizeTypingSpeed,
-  sanitizeGitTextScale,
   sanitizeChatTextScale,
   normalizeProjectSettings,
 });
@@ -2172,19 +2140,11 @@ function sanitizeSlideKind(value) {
 
 function isDynamicSlide(slide) {
   const kind = sanitizeSlideKind(slide?.kind);
-  return kind === "gitTyping" || kind === "chatTyping";
+  return kind === "chatTyping";
 }
 
 function sanitizeTypingSpeed(value, fallback) {
   return clamp(numberOr(value, fallback), 20, 240);
-}
-
-function sanitizeGitInputMode(value) {
-  return GIT_INPUT_MODES.has(value) ? value : DEFAULT_GIT_INPUT_MODE;
-}
-
-function sanitizeGitTextScale(value) {
-  return clamp(numberOr(value, DEFAULT_GIT_TEXT_SCALE), 0.75, 1.6);
 }
 
 function sanitizeChatTextScale(value) {
@@ -2442,12 +2402,7 @@ function getSubtitleFontRequest(options = {}) {
 
 function getSlideFontRequests(slide, options = {}) {
   const requests = [];
-  if (sanitizeSlideKind(slide?.kind) === "gitTyping") {
-    requests.push(
-      { family: GIT_CODE_FONT_FAMILY, weight: GIT_CODE_FONT_WEIGHT },
-      { family: "Pretendard", weight: 700 }
-    );
-  } else if (isDynamicSlide(slide)) {
+  if (isDynamicSlide(slide)) {
     requests.push({ family: "Pretendard", weight: 600 }, { family: "Pretendard", weight: 700 });
   }
   for (const object of slide?.objects || []) {
@@ -2603,7 +2558,12 @@ function getCanvasObjectAnimationDuration() {
 }
 
 function shouldLoopAnimationFrames(slide) {
-  return !isDynamicSlide(slide) && slideHasLoopAnimations(slide) && getSlideObjectAnimationDuration(slide) <= 0;
+  return (
+    !isDynamicSlide(slide) &&
+    slideHasLoopAnimations(slide) &&
+    !slideHasCodeTextGitTyping(slide) &&
+    getSlideObjectAnimationDuration(slide) <= 0
+  );
 }
 
 function getBlinkOpacityForPhase(angle) {
@@ -2931,21 +2891,36 @@ function applyObjectRevealClip(context, state) {
 function updateObjectAnimationPreview(timeSeconds, durationSeconds) {
   for (const element of canvas.querySelectorAll(".object")) {
     const data = getElementAnimationData(element);
-    if (!canAnimateObjectData(data) || !hasObjectAnimation(data)) {
+    if (canAnimateObjectData(data) && hasObjectAnimation(data)) {
+      const animatedState = getObjectAnimationState(data, timeSeconds, durationSeconds);
+      element.style.transform = getAnimatedObjectTransform(animatedState, data);
+      element.style.opacity = String(animatedState.opacity);
+      element.style.clipPath = getObjectRevealClipPath(animatedState);
+    } else {
       resetObjectAnimationPreview(element);
-      continue;
     }
-    const animatedState = getObjectAnimationState(data, timeSeconds, durationSeconds);
-    element.style.transform = getAnimatedObjectTransform(animatedState, data);
-    element.style.opacity = String(animatedState.opacity);
-    element.style.clipPath = getObjectRevealClipPath(animatedState);
+    if (isCodeTextElement(element) && codeTextGitTypingIsEnabled(getCodeTextGitTypingData(element.dataset))) {
+      renderCodeTextAnimationFrame(element, timeSeconds);
+    }
   }
+}
+
+function getCanvasCodeTextGitTypingDuration() {
+  return Math.max(
+    0,
+    ...[...canvas.querySelectorAll(".text-object")]
+      .filter((element) => isCodeTextElement(element) && codeTextGitTypingIsEnabled(getCodeTextGitTypingData(element.dataset)))
+      .map((element) => getCodeTextGitTypingDuration(element.dataset))
+  );
 }
 
 function canvasHasObjectAnimations() {
   return [...canvas.querySelectorAll(".object")].some((element) => {
     const data = getElementAnimationData(element);
-    return canAnimateObjectData(data) && hasObjectAnimation(data);
+    return (
+      (canAnimateObjectData(data) && hasObjectAnimation(data)) ||
+      (isCodeTextElement(element) && codeTextGitTypingIsEnabled(getCodeTextGitTypingData(element.dataset)))
+    );
   });
 }
 
@@ -2964,6 +2939,9 @@ function stopObjectAnimationPreview() {
   objectAnimationPreviewStart = 0;
   for (const element of canvas.querySelectorAll(".object")) {
     resetObjectAnimationPreview(element);
+    if (isCodeTextElement(element)) {
+      renderTextObject(element);
+    }
   }
 }
 
@@ -2976,11 +2954,12 @@ function runObjectAnimationPreview(timestamp) {
     objectAnimationPreviewStart = timestamp;
   }
   const oneShotDuration = getCanvasObjectAnimationDuration();
+  const codeTypingDuration = getCanvasCodeTextGitTypingDuration();
   const hasLoop = canvasHasLoopAnimations();
   const time = (timestamp - objectAnimationPreviewStart) / 1000;
-  const duration = Math.max(VIDEO_EXPORT_FALLBACK_DURATION, oneShotDuration);
+  const duration = Math.max(VIDEO_EXPORT_FALLBACK_DURATION, oneShotDuration, codeTypingDuration);
   updateObjectAnimationPreview(time, duration);
-  if (!hasLoop && time >= Math.max(0.5, oneShotDuration)) {
+  if (!hasLoop && time >= Math.max(0.5, oneShotDuration, codeTypingDuration)) {
     objectAnimationPreviewFrame = null;
     objectAnimationPreviewStart = 0;
     return;
@@ -3003,7 +2982,11 @@ function syncTextEditorValue(element, options = {}) {
     return false;
   }
   const editor = element.querySelector(".text-editor");
+  const previousText = element.dataset.text || "";
   element.dataset.text = editor.value;
+  if (isCodeTextElement(element) && editor.value !== previousText) {
+    clearCodeTextGitTypingData(element);
+  }
   const fitted = fitTextBoxToContent(element);
   if (!fitted && options.render !== false) {
     renderTextObject(element);
@@ -3196,6 +3179,7 @@ function syncSelectedInputs() {
     selectedTextColor.value = defaultTextColor;
     selectedCodeTextSize.value = String(DEFAULT_CODE_TEXT_FONT_SIZE);
     selectedCodeTextLatex.checked = false;
+    syncCodeTextGitControls();
     updateStatusBar();
     return;
   }
@@ -3225,6 +3209,7 @@ function syncSelectedInputs() {
   selectedTextColor.value = selectedObject.dataset.textColor || defaultTextColor;
   selectedCodeTextSize.value = String(sanitizeCodeTextFontSize(selectedObject.dataset.codeFontSize));
   selectedCodeTextLatex.checked = normalizeCodeTextLatex(selectedObject.dataset.codeLatex);
+  syncCodeTextGitControls();
   if (selectedObject.dataset.type === "shape") {
     strokeColor.value = sanitizeColor(selectedObject.dataset.strokeColor, DEFAULT_STROKE_COLOR);
     strokeWidth.value = String(clamp(numberOr(selectedObject.dataset.strokeWidth, DEFAULT_STROKE_WIDTH), 1, 32));
@@ -3989,6 +3974,26 @@ function renderTextObject(element) {
   });
   delete context.__textColor;
   scheduleTextFontRerender(element);
+}
+
+function renderCodeTextAnimationFrame(element, timeSeconds) {
+  if (!isCodeTextElement(element) || element.classList.contains("is-editing")) {
+    return;
+  }
+  const textCanvas = element.querySelector(".text-canvas");
+  const width = Math.max(1, Math.round(Number(element.dataset.width) || element.clientWidth || 1));
+  const height = Math.max(1, Math.round(Number(element.dataset.height) || element.clientHeight || 1));
+  const pixelRatio = window.devicePixelRatio || 1;
+  textCanvas.width = Math.round(width * pixelRatio);
+  textCanvas.height = Math.round(height * pixelRatio);
+  textCanvas.style.width = `${width}px`;
+  textCanvas.style.height = `${height}px`;
+  const context = textCanvas.getContext("2d");
+  context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+  drawCodeTextObject(context, element.dataset, width, height, {
+    clear: true,
+    timeSeconds,
+  });
 }
 
 function getTextContentHeight(element) {
@@ -5152,6 +5157,14 @@ function getSlideAnimationFrameDuration(slide, notes = "") {
   return visualDuration;
 }
 
+function getCanvasSlideAnimationRenderDuration(slide, notes = "", hasNarration = false) {
+  const visualDuration = getSlideAnimationFrameDuration(slide, notes);
+  if (!hasNarration) {
+    return visualDuration;
+  }
+  return Math.max(visualDuration, getSlideCodeTextGitTypingDuration(slide));
+}
+
 function getSubtitleTextForRender(slide, options = {}) {
   return typeof options.subtitleText === "string" ? options.subtitleText : slide.notes;
 }
@@ -5188,28 +5201,6 @@ async function renderSubtitleImagesForSegments(slide, segments) {
       })
     )
   );
-}
-
-function getGitTypingData(slide) {
-  const data = {
-    ...createDefaultGitTypingData(),
-    ...(slide?.gitTyping || {}),
-  };
-  const content = stripGitSlideHelperText(typeof data.content === "string" ? data.content : "");
-  const rawAfterContent = stripGitSlideHelperText(typeof data.afterContent === "string" ? data.afterContent : content);
-  const afterContent = rawAfterContent || content;
-  return {
-    ...data,
-    inputMode: sanitizeGitInputMode(data.inputMode),
-    commits: sanitizeGitCommitOptions(data.commits),
-    files: sanitizeGitFileOptions(data.files),
-    typingSpeed: sanitizeTypingSpeed(slide?.gitTyping?.typingSpeed, DEFAULT_GIT_TYPING_SPEED),
-    textScale: sanitizeGitTextScale(slide?.gitTyping?.textScale),
-    beforeContent: typeof data.beforeContent === "string" ? data.beforeContent : "",
-    afterContent,
-    beforePath: typeof data.beforePath === "string" ? data.beforePath : "",
-    content: content || afterContent,
-  };
 }
 
 function getGitEditorModel(data) {
@@ -5323,10 +5314,6 @@ function getGitTypingCharacterCount(data) {
   return model.changedLineIndexes.reduce((sum, lineIndex) => sum + (model.afterLines[lineIndex]?.length || 0) + 1, 0);
 }
 
-function gitTypingDataHasChanges(data) {
-  return getGitEditorModel(data).changedLineIndexes.length > 0;
-}
-
 function getChatTypingData(slide) {
   return {
     ...createDefaultChatTypingData(),
@@ -5338,10 +5325,6 @@ function getChatTypingData(slide) {
 
 function getDynamicSlideDuration(slide) {
   const kind = sanitizeSlideKind(slide?.kind);
-  if (kind === "gitTyping") {
-    const data = getGitTypingData(slide);
-    return clamp(getGitTypingCharacterCount(data) / data.typingSpeed + 1.2, 4, DYNAMIC_MAX_DURATION);
-  }
   if (kind === "chatTyping") {
     const data = getChatTypingData(slide);
     return clamp(
@@ -5498,21 +5481,6 @@ function getSyntaxTokens(line) {
   return tokens;
 }
 
-function drawCodeLine(context, line, x, y, colorOverride = "") {
-  if (colorOverride) {
-    context.fillStyle = colorOverride;
-    context.fillText(line, x, y);
-    return;
-  }
-
-  let drawX = x;
-  for (const token of getSyntaxTokens(line)) {
-    context.fillStyle = token.color;
-    context.fillText(token.text, drawX, y);
-    drawX += context.measureText(token.text).width;
-  }
-}
-
 function getCodeTextRenderData(data = {}) {
   const presetKey = sanitizeCodeTextPreset(data.codePreset);
   const preset = CODE_TEXT_PRESETS[presetKey] || CODE_TEXT_PRESETS[DEFAULT_CODE_TEXT_PRESET];
@@ -5555,7 +5523,12 @@ function convertLatexText(value) {
     .replace(/~/g, " ");
 }
 
-function drawCodeTextLine(context, line, x, y, style) {
+function drawCodeTextLine(context, line, x, y, style, colorOverride = "") {
+  if (colorOverride) {
+    context.fillStyle = colorOverride;
+    context.fillText(line, x, y);
+    return;
+  }
   let drawX = x;
   const palette = {
     plain: style.textColor,
@@ -5571,19 +5544,70 @@ function drawCodeTextLine(context, line, x, y, style) {
   }
 }
 
+function drawFittedFillText(context, line, x, y, maxWidth) {
+  const width = context.measureText(line).width;
+  if (!Number.isFinite(width) || width <= maxWidth || width <= 1) {
+    context.fillText(line, x, y);
+    return 1;
+  }
+  const scaleX = clamp(maxWidth / width, 0.01, 1);
+  context.save();
+  context.translate(x, y);
+  context.scale(scaleX, 1);
+  context.fillText(line, 0, 0);
+  context.restore();
+  return scaleX;
+}
+
+function drawFittedCodeTextLine(context, line, x, y, maxWidth, style, colorOverride = "") {
+  const width = context.measureText(line).width;
+  if (!Number.isFinite(width) || width <= maxWidth || width <= 1) {
+    drawCodeTextLine(context, line, x, y, style, colorOverride);
+    return 1;
+  }
+  const scaleX = clamp(maxWidth / width, 0.01, 1);
+  context.save();
+  context.translate(x, y);
+  context.scale(scaleX, 1);
+  drawCodeTextLine(context, line, 0, 0, style, colorOverride);
+  context.restore();
+  return scaleX;
+}
+
 function drawCodeTextObject(context, data, width, height, options = {}) {
   const style = getCodeTextRenderData(data);
   const safeWidth = Math.max(1, width);
   const safeHeight = Math.max(1, height);
-  const fontSize = style.fontSize;
+  const timeSeconds = Number(options.timeSeconds);
+  const gitTyping = getCodeTextGitTypingData(data);
+  const gitFrame =
+    Number.isFinite(timeSeconds) && !style.latex && codeTextGitTypingIsEnabled(gitTyping)
+      ? getGitEditorFrame(gitTyping, timeSeconds)
+      : null;
+  const staticLines = String(style.text || "").split("\n");
+  const visibleLines = gitFrame ? gitFrame.lines : staticLines;
+  const targetLineCount = Math.max(1, visibleLines.length);
+  let fontSize = style.fontSize;
+  if (!gitFrame) {
+    const fitSize = Math.floor(safeHeight / (targetLineCount * 1.48 + 1.44));
+    fontSize = clamp(Math.min(style.fontSize, fitSize), 6, style.fontSize);
+  }
   const lineHeight = Math.round(fontSize * 1.48);
   const paddingX = Math.round(fontSize * 0.88);
   const paddingY = Math.round(fontSize * 0.72);
   const gutterWidth = style.showLineNumbers && !style.latex ? Math.round(fontSize * 2.6) : 0;
   const contentX = paddingX + gutterWidth;
   const contentY = paddingY;
-  const maxLineCount = Math.max(0, Math.floor((safeHeight - paddingY * 2) / lineHeight));
-  const lines = String(style.text || "").split("\n").slice(0, maxLineCount || 0);
+  const maxTextWidth = Math.max(1, safeWidth - contentX - paddingX);
+  const lines = visibleLines;
+  const viewportHeight = Math.max(1, safeHeight - paddingY * 2);
+  const scrollOffset = gitFrame
+    ? clamp(
+        gitFrame.activeLineIndex * lineHeight - viewportHeight * 0.52,
+        0,
+        Math.max(0, gitFrame.lines.length * lineHeight - viewportHeight)
+      )
+    : 0;
 
   if (options.clear) {
     context.clearRect(0, 0, safeWidth, safeHeight);
@@ -5614,9 +5638,19 @@ function drawCodeTextObject(context, data, width, height, options = {}) {
   context.textBaseline = "top";
   context.textAlign = "left";
   context.font = `${style.fontWeight} ${fontSize}px ${quoteFontFamily(style.fontFamily)}`;
-  for (const [index, rawLine] of lines.entries()) {
-    const y = contentY + index * lineHeight;
+  for (const [index, lineData] of lines.entries()) {
+    const y = contentY + index * lineHeight - scrollOffset;
+    if (y + lineHeight < paddingY || y > safeHeight - paddingY) {
+      continue;
+    }
+    const rawLine = gitFrame ? lineData.text : lineData;
     const line = style.latex ? convertLatexText(rawLine) : rawLine;
+    if (gitFrame && lineData.changed) {
+      context.fillStyle = lineData.pendingOld ? "rgba(248, 81, 73, 0.16)" : "rgba(46, 160, 67, 0.2)";
+      context.fillRect(paddingX, y - 2, Math.max(1, safeWidth - paddingX * 2), lineHeight);
+      context.fillStyle = lineData.pendingOld ? "#f85149" : "#3fb950";
+      context.fillRect(paddingX, y - 2, 3, lineHeight);
+    }
     if (style.showLineNumbers && !style.latex) {
       context.fillStyle = style.lineNumberColor;
       context.textAlign = "right";
@@ -5625,9 +5659,22 @@ function drawCodeTextObject(context, data, width, height, options = {}) {
     }
     if (style.latex) {
       context.fillStyle = style.textColor;
-      context.fillText(line, contentX, y);
+      drawFittedFillText(context, line, contentX, y, maxTextWidth);
     } else {
-      drawCodeTextLine(context, line, contentX, y, style);
+      const fitScale = drawFittedCodeTextLine(
+        context,
+        line,
+        contentX,
+        y,
+        maxTextWidth,
+        style,
+        gitFrame && lineData.pendingOld ? "#fca5a5" : ""
+      );
+      if (gitFrame && lineData.cursor) {
+        const cursorX = contentX + context.measureText(line.slice(0, gitFrame.cursorColumn)).width * fitScale + 1;
+        context.fillStyle = "#f8fafc";
+        context.fillRect(cursorX, y + 1, 2, Math.round(lineHeight * 0.82));
+      }
     }
   }
   context.restore();
@@ -5720,11 +5767,7 @@ function drawChatTypingSlide(context, slide, width, height, timeSeconds, options
 }
 
 function drawDynamicSlide(context, slide, width, height, timeSeconds, options = {}) {
-  if (sanitizeSlideKind(slide?.kind) === "gitTyping") {
-    drawGitTypingSlide(context, slide, width, height, timeSeconds);
-  } else {
-    drawChatTypingSlide(context, slide, width, height, timeSeconds, options);
-  }
+  drawChatTypingSlide(context, slide, width, height, timeSeconds, options);
   if (options.subtitles) {
     drawSubtitleBox(context, getSubtitleTextForRender(slide, options), width, height, options);
   }
@@ -5792,7 +5835,7 @@ async function drawSlideObjectsForExport(context, objects = [], options = {}) {
         drawFlippedFittedImage(context, image, renderState.width, renderState.height, object);
       } else if (object.type === "text" && isCodeTextData(object)) {
         context.globalAlpha = clamp(context.globalAlpha * renderState.opacity, 0, 1);
-        drawCodeTextObject(context, object, renderState.width, renderState.height);
+        drawCodeTextObject(context, object, renderState.width, renderState.height, { timeSeconds });
       } else if (object.type === "text") {
         context.__textColor = object.textColor || DEFAULT_TEXT_COLOR;
         drawTextLines(
@@ -5883,7 +5926,21 @@ async function renderDynamicSlideFrames(slide, options = {}) {
 }
 
 function slideHasObjectAnimations(slide) {
-  return (slide?.objects || []).some((object) => canAnimateObjectData(object) && hasObjectAnimation(object));
+  return (slide?.objects || []).some(
+    (object) => (canAnimateObjectData(object) && hasObjectAnimation(object)) || isGitTypingCodeTextData(object)
+  );
+}
+
+function isGitTypingCodeTextData(object) {
+  return object?.type === "text" && isCodeTextData(object) && codeTextGitTypingIsEnabled(getCodeTextGitTypingData(object));
+}
+
+function slideHasCodeTextGitTyping(slide) {
+  return (slide?.objects || []).some(isGitTypingCodeTextData);
+}
+
+function getSlideCodeTextGitTypingDuration(slide) {
+  return Math.max(0, ...(slide?.objects || []).filter(isGitTypingCodeTextData).map(getCodeTextGitTypingDuration));
 }
 
 async function renderCanvasSlideAnimationFrames(slide, options = {}) {
@@ -5923,41 +5980,6 @@ async function renderCanvasSlideAnimationFrames(slide, options = {}) {
     duration,
     framePng: frames[frames.length - 1],
   };
-}
-
-async function refreshGitTypingSlideForExport(slide) {
-  if (sanitizeSlideKind(slide?.kind) !== "gitTyping") {
-    return slide;
-  }
-  const data = getGitTypingData(slide);
-  if (data.inputMode === "direct") {
-    return slide;
-  }
-  if (gitTypingDataHasChanges(data) || !data.repoPath || !data.commitHash || !data.filePath) {
-    return slide;
-  }
-
-  try {
-    const result = await nativeApi.readGitCommitFileChange(data.repoPath, data.commitHash, data.filePath);
-    return {
-      ...slide,
-      gitTyping: {
-        ...data,
-        inputMode: "git",
-        repoPath: result.repoPath || data.repoPath,
-        commitHash: result.commitHash || data.commitHash,
-        commitLabel: data.commitLabel || result.commitHash || data.commitHash,
-        filePath: result.filePath || data.filePath,
-        title: result.title || data.title,
-        content: result.afterContent || result.beforeContent || result.content || data.content,
-        beforeContent: result.beforeContent || "",
-        afterContent: result.afterContent || result.content || "",
-        beforePath: result.beforePath || data.beforePath || "",
-      },
-    };
-  } catch {
-    return slide;
-  }
 }
 
 function drawShapeData(context, data, width, height) {
@@ -6052,30 +6074,119 @@ function createDefaultSlide() {
   };
 }
 
-function createDefaultGitTypingData() {
+function createDefaultCodeTextGitTypingData() {
   return {
-    title: "Git Diff",
-    inputMode: DEFAULT_GIT_INPUT_MODE,
+    enabled: false,
     repoPath: "",
     commitHash: "",
     commitLabel: "",
     filePath: "",
     commits: [],
     files: [],
-    content: "",
     beforeContent: "",
     afterContent: "",
     beforePath: "",
     typingSpeed: DEFAULT_GIT_TYPING_SPEED,
-    textScale: DEFAULT_GIT_TEXT_SCALE,
   };
 }
 
-function stripGitSlideHelperText(value) {
-  if (typeof value !== "string") {
-    return "";
+function parseCodeTextGitTypingSource(value) {
+  if (!value) {
+    return {};
   }
-  return GIT_SLIDE_HELPER_TEXTS.has(value.trim()) ? "" : value;
+  if (typeof value === "object") {
+    return value;
+  }
+  if (typeof value !== "string") {
+    return {};
+  }
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function getCodeTextGitTypingData(data = {}) {
+  const directSource =
+    data.enabled !== undefined ||
+    data.repoPath !== undefined ||
+    data.commitHash !== undefined ||
+    data.filePath !== undefined ||
+    data.beforeContent !== undefined ||
+    data.afterContent !== undefined
+      ? data
+      : {};
+  const source = {
+    ...directSource,
+    ...parseCodeTextGitTypingSource(data.gitTyping || data.codeGitTyping),
+  };
+  const fallbackText = typeof data.text === "string" ? data.text : "";
+  const beforeContent = typeof source.beforeContent === "string" ? source.beforeContent : "";
+  const afterContent = typeof source.afterContent === "string" ? source.afterContent : fallbackText;
+  return {
+    ...createDefaultCodeTextGitTypingData(),
+    enabled: Boolean(source.enabled) && Boolean(beforeContent || afterContent),
+    repoPath: typeof source.repoPath === "string" ? source.repoPath : "",
+    commitHash: typeof source.commitHash === "string" ? source.commitHash : "",
+    commitLabel: typeof source.commitLabel === "string" ? source.commitLabel : "",
+    filePath: typeof source.filePath === "string" ? source.filePath : "",
+    commits: sanitizeGitCommitOptions(source.commits),
+    files: sanitizeGitFileOptions(source.files),
+    beforeContent,
+    afterContent,
+    beforePath: typeof source.beforePath === "string" ? source.beforePath : "",
+    typingSpeed: sanitizeTypingSpeed(source.typingSpeed, DEFAULT_GIT_TYPING_SPEED),
+  };
+}
+
+function codeTextGitTypingIsEnabled(data = {}) {
+  const typing = data.beforeContent !== undefined || data.afterContent !== undefined ? data : getCodeTextGitTypingData(data);
+  return Boolean(typing.enabled && (typing.beforeContent || typing.afterContent));
+}
+
+function codeTextGitTypingHasStoredState(data = {}) {
+  const typing = data.beforeContent !== undefined || data.afterContent !== undefined ? data : getCodeTextGitTypingData(data);
+  return Boolean(
+    typing.enabled ||
+      typing.repoPath ||
+      typing.commitHash ||
+      typing.filePath ||
+      typing.commits?.length ||
+      typing.files?.length
+  );
+}
+
+function setCodeTextGitTypingData(element, data = {}) {
+  if (!isCodeTextElement(element)) {
+    return createDefaultCodeTextGitTypingData();
+  }
+  const normalized = getCodeTextGitTypingData({
+    ...data,
+    text: element.dataset.text || "",
+  });
+  if (codeTextGitTypingHasStoredState(normalized)) {
+    element.dataset.codeGitTyping = JSON.stringify(normalized);
+  } else {
+    delete element.dataset.codeGitTyping;
+  }
+  return normalized;
+}
+
+function clearCodeTextGitTypingData(element) {
+  if (!isCodeTextElement(element)) {
+    return;
+  }
+  delete element.dataset.codeGitTyping;
+}
+
+function getCodeTextGitTypingDuration(data = {}) {
+  const typing = getCodeTextGitTypingData(data);
+  if (!codeTextGitTypingIsEnabled(typing)) {
+    return 0;
+  }
+  return clamp(getGitTypingCharacterCount(typing) / typing.typingSpeed + 1.2, 0.5, DYNAMIC_MAX_DURATION);
 }
 
 function createDefaultChatTypingData() {
@@ -6088,20 +6199,13 @@ function createDefaultChatTypingData() {
   };
 }
 
-function createDynamicSlide(kind) {
+function createDynamicSlide() {
   const slide = createDefaultSlide();
-  slide.kind = kind;
+  slide.kind = "chatTyping";
   slide.continueAfterTts = false;
-  slide.color = kind === "gitTyping" ? "#0b1020" : "#f4f7fb";
-  slide.notes =
-    kind === "gitTyping"
-      ? "Shows Git changes as if they were being edited in a code editor."
-      : "Plays out a GPT question and answer as a live conversation.";
-  if (kind === "gitTyping") {
-    slide.gitTyping = createDefaultGitTypingData();
-  } else {
-    slide.chatTyping = createDefaultChatTypingData();
-  }
+  slide.color = "#f4f7fb";
+  slide.notes = "Plays out a GPT question and answer as a live conversation.";
+  slide.chatTyping = createDefaultChatTypingData();
   return slide;
 }
 
@@ -6293,9 +6397,9 @@ function replaceSelectOptions(select, placeholder, items, selectedValue, getValu
   select.value = selectedValue || "";
 }
 
-function updateGitSelectControls(data) {
+function updateCodeTextGitSelectControls(data) {
   replaceSelectOptions(
-    gitCommitSelect,
+    codeTextGitCommitSelect,
     data.repoPath ? "Select commit..." : "Choose repository...",
     data.commits,
     data.commitHash,
@@ -6303,7 +6407,7 @@ function updateGitSelectControls(data) {
     (commit) => commit.label || commit.hash
   );
   replaceSelectOptions(
-    gitFileSelect,
+    codeTextGitFileSelect,
     data.commitHash ? "Select file..." : "Select commit first...",
     data.files,
     data.filePath,
@@ -6312,68 +6416,33 @@ function updateGitSelectControls(data) {
   );
 }
 
-function syncGitInputModeButtons(value) {
-  const normalized = sanitizeGitInputMode(value);
-  for (const button of gitInputModeButtons) {
-    button.classList.toggle("is-active", sanitizeGitInputMode(button.dataset.gitInputMode) === normalized);
-  }
+function getSelectedCodeTextElement() {
+  return isCodeTextElement(selectedObject) ? selectedObject : null;
 }
 
-function getSelectedGitInputMode() {
-  const activeButton = gitInputModeButtons.find((button) => button.classList.contains("is-active"));
-  return sanitizeGitInputMode(activeButton?.dataset.gitInputMode);
-}
-
-function syncGitTextScaleButtons(value) {
-  const normalized = sanitizeGitTextScale(value);
-  for (const button of gitTextScaleButtons) {
-    const buttonValue = sanitizeGitTextScale(button.dataset.gitTextScale);
-    button.classList.toggle("is-active", Math.abs(buttonValue - normalized) < 0.01);
-  }
-}
-
-function getSelectedGitTextScale() {
-  const activeButton = gitTextScaleButtons.find((button) => button.classList.contains("is-active"));
-  return sanitizeGitTextScale(activeButton?.dataset.gitTextScale);
-}
-
-function syncGitInputModeVisibility(inputMode) {
-  const isDirect = sanitizeGitInputMode(inputMode) === "direct";
-  gitRepositoryFields.hidden = isDirect;
-  gitBeforeContentField.hidden = !isDirect;
-  gitAfterContentLabel.textContent = isDirect ? "After" : "Code";
-  gitTypingContent.placeholder = isDirect ? "Final code to type into the slide" : "Selected file content appears here.";
+function syncCodeTextGitControls() {
+  const element = getSelectedCodeTextElement();
+  const data = element ? getCodeTextGitTypingData(element.dataset) : createDefaultCodeTextGitTypingData();
+  codeTextGitRepoPath.value = data.repoPath;
+  codeTextGitTypingSpeed.value = String(data.typingSpeed);
+  updateCodeTextGitSelectControls(data);
+  const hasCodeText = Boolean(element);
+  const hasRepo = hasCodeText && Boolean(data.repoPath);
+  const hasCommit = hasRepo && Boolean(data.commitHash);
+  chooseCodeTextGitRepo.disabled = !hasCodeText;
+  codeTextGitRepoPath.disabled = !hasCodeText;
+  codeTextGitCommitSelect.disabled = !hasRepo || data.commits.length === 0;
+  codeTextGitFileSelect.disabled = !hasCommit || data.files.length === 0;
+  codeTextGitTypingSpeed.disabled = !hasCodeText;
+  applyCodeTextTypingAnimation.disabled = !hasCodeText || !String(element?.dataset.text || "").trim();
+  loadCodeTextGitHistory.disabled = !hasCommit || !data.filePath;
+  clearCodeTextGitAnimation.disabled = !hasCodeText || !codeTextGitTypingHasStoredState(data);
 }
 
 function renderDynamicSlidePreview(slide) {
   dynamicSlidePreview.replaceChildren();
   const kind = sanitizeSlideKind(slide?.kind);
   dynamicSlidePreview.classList.toggle("is-visible", isDynamicSlide(slide));
-  if (kind === "gitTyping") {
-    const data = getGitTypingData(slide);
-    const surface = createPreviewElement("div", "dynamic-preview-surface git");
-    const codeWindow = createPreviewElement("div", "dynamic-preview-code-window");
-    const titleBar = createPreviewElement("div", "dynamic-preview-code-titlebar");
-    const lights = createPreviewElement("div", "dynamic-preview-code-lights");
-    lights.append(
-      createPreviewElement("span", "dynamic-preview-code-light red"),
-      createPreviewElement("span", "dynamic-preview-code-light yellow"),
-      createPreviewElement("span", "dynamic-preview-code-light green")
-    );
-    const titleSource = data.inputMode === "direct" ? data.title : data.filePath || data.beforePath || data.title;
-    const title = createPreviewElement("div", "dynamic-preview-code-filename", getFileNameFromPath(titleSource));
-    const code = createPreviewElement(
-      "pre",
-      "dynamic-preview-code",
-      truncateText(typeof data.afterContent === "string" ? data.afterContent : data.content, 2400)
-    );
-    code.style.fontSize = `${Math.round(16 * data.textScale)}px`;
-    titleBar.append(lights, title);
-    codeWindow.append(titleBar, code);
-    surface.append(codeWindow);
-    dynamicSlidePreview.append(surface);
-    return;
-  }
   if (kind === "chatTyping") {
     const data = getChatTypingData(slide);
     const previewWidth = Math.max(1, roundedCanvasSize(slide?.width || canvas.offsetWidth || DEFAULT_CANVAS_WIDTH));
@@ -6420,25 +6489,13 @@ function syncDynamicSlidePanel() {
   const slide = slides[activeSlideIndex];
   const kind = sanitizeSlideKind(slide?.kind);
   syncSlideOptionPanels(kind);
-  gitTypingControls.hidden = kind !== "gitTyping";
   chatTypingControls.hidden = kind !== "chatTyping";
   canvasSlideHint.hidden = true;
   if (dynamicContinueAfterTts) {
     dynamicContinueAfterTts.checked = isDynamicSlide(slide) && normalizeContinueAfterTts(slide.continueAfterTts);
   }
 
-  if (kind === "gitTyping") {
-    const data = getGitTypingData(slide);
-    gitSlideTitle.value = data.title;
-    syncGitInputModeButtons(data.inputMode);
-    syncGitInputModeVisibility(data.inputMode);
-    gitRepoPath.value = data.repoPath;
-    updateGitSelectControls(data);
-    gitTypingSpeed.value = String(data.typingSpeed);
-    syncGitTextScaleButtons(data.textScale);
-    gitBeforeContent.value = data.beforeContent;
-    gitTypingContent.value = data.afterContent || data.content;
-  } else if (kind === "chatTyping") {
+  if (kind === "chatTyping") {
     const data = getChatTypingData(slide);
     chatSlideTitle.value = data.title;
     chatTypingSpeed.value = String(data.typingSpeed);
@@ -6509,6 +6566,15 @@ function addTextObjectFromData(data) {
     element.dataset.codePreset = sanitizeCodeTextPreset(data.codePreset);
     element.dataset.codeFontSize = String(sanitizeCodeTextFontSize(data.codeFontSize));
     element.dataset.codeLatex = String(normalizeCodeTextLatex(data.codeLatex));
+    const codeTextGitTyping = getCodeTextGitTypingData({
+      ...data,
+      text: element.dataset.text,
+    });
+    if (codeTextGitTypingIsEnabled(codeTextGitTyping) && typeof codeTextGitTyping.afterContent === "string") {
+      element.dataset.text = codeTextGitTyping.afterContent;
+      element.dataset.codeLatex = "false";
+    }
+    setCodeTextGitTypingData(element, codeTextGitTyping);
     if (!data.textColor && preset?.textColor) {
       element.dataset.textColor = preset.textColor;
     }
@@ -6937,7 +7003,7 @@ function addDynamicSlide(kind) {
   serializeCurrentSlide();
   slides.push(createDynamicSlide(kind));
   loadSlide(slides.length - 1, false);
-  setStatus(kind === "gitTyping" ? "Added a Git typing slide." : "Added a GPT chat typing slide.");
+  setStatus("Added a GPT chat typing slide.");
   recordHistory();
 }
 
@@ -7955,7 +8021,7 @@ function syncSlideTranslationControls() {
   slideTranslateSource.disabled = isTranslatingSlide;
   slideTranslateTarget.disabled = isTranslatingSlide;
   translateSlideButton.disabled = isTranslatingSlide || isBlockedSlide;
-  translateSlideButton.title = isBlockedSlide ? "Git / GPT slides cannot be translated." : "";
+  translateSlideButton.title = isBlockedSlide ? "GPT conversation slides cannot be translated." : "";
   setButtonLabel(translateSlideButton, isTranslatingSlide ? "Translating..." : "Translate Slide");
 }
 
@@ -8046,7 +8112,7 @@ async function translateCurrentSlideContent() {
 
   const slide = slides[activeSlideIndex];
   if (!slide || isDynamicSlide(slide)) {
-    setStatus("Git / GPT slides cannot be translated.");
+    setStatus("GPT conversation slides cannot be translated.");
     return;
   }
 
@@ -8396,26 +8462,6 @@ function syncDynamicTimingToSlide(options = {}) {
   }, options);
 }
 
-function syncGitTypingInputsToSlide(options = {}) {
-  updateActiveDynamicSlide((slide) => {
-    const inputMode = getSelectedGitInputMode();
-    slide.gitTyping = {
-      ...getGitTypingData(slide),
-      inputMode,
-      title: gitSlideTitle.value,
-      repoPath: gitRepoPath.value,
-      commitHash: gitCommitSelect.value,
-      commitLabel: gitCommitSelect.selectedOptions[0]?.textContent || "",
-      filePath: gitFileSelect.value,
-      typingSpeed: sanitizeTypingSpeed(gitTypingSpeed.value, DEFAULT_GIT_TYPING_SPEED),
-      textScale: getSelectedGitTextScale(),
-      content: gitTypingContent.value,
-      beforeContent: gitBeforeContent.value,
-      afterContent: gitTypingContent.value,
-    };
-  }, options);
-}
-
 function syncChatTextScaleButtons(value) {
   const normalized = sanitizeChatTextScale(value);
   for (const button of chatTextScaleButtons) {
@@ -8442,41 +8488,17 @@ function syncChatTypingInputsToSlide(options = {}) {
   }, options);
 }
 
-async function chooseGitRepositoryForSlide() {
-  const path = await nativeApi.selectDirectory();
-  if (!path) {
-    return;
-  }
-  updateActiveDynamicSlide((slide) => {
-    slide.gitTyping = {
-      ...getGitTypingData(slide),
-      inputMode: "git",
-      repoPath: path,
-      commitHash: "",
-      commitLabel: "",
-      filePath: "",
-      commits: [],
-      files: [],
-      content: "",
-      beforeContent: "",
-      afterContent: "",
-      beforePath: "",
-    };
-  }, { record: true });
-  syncDynamicSlidePanel();
-  await loadGitCommitsForSlide();
-}
-
-function getActiveGitTypingSlide() {
-  const slide = slides[activeSlideIndex];
-  if (!slide || sanitizeSlideKind(slide.kind) !== "gitTyping") {
+function requireCodeTextGitElement() {
+  const element = getSelectedCodeTextElement();
+  if (!element) {
+    setStatus("Select a Code Text box first.");
     return null;
   }
-  return slide;
+  return element;
 }
 
-function requireGitRepoPath() {
-  const repoPath = gitRepoPath.value.trim();
+function requireCodeTextGitRepoPath() {
+  const repoPath = codeTextGitRepoPath.value.trim();
   if (!repoPath) {
     setStatus("Please choose a Git repository folder first.");
     return "";
@@ -8484,40 +8506,78 @@ function requireGitRepoPath() {
   return repoPath;
 }
 
-async function loadGitCommitsForSlide() {
-  const slide = getActiveGitTypingSlide();
-  if (!slide) {
+function updateCodeTextGitTypingForElement(element, nextData, options = {}) {
+  if (!isCodeTextElement(element)) {
     return;
   }
-  const repoPath = requireGitRepoPath();
+  const normalized = setCodeTextGitTypingData(element, nextData);
+  if (options.applyAfterContent && typeof normalized.afterContent === "string") {
+    element.dataset.text = normalized.afterContent;
+    element.dataset.codeLatex = "false";
+  }
+  renderTextObject(element);
+  syncCodeTextGitControls();
+  renderSlideList();
+  syncObjectAnimationPreview();
+  if (options.record) {
+    recordHistory();
+  } else {
+    scheduleNativeProjectSave();
+  }
+}
+
+async function chooseCodeTextGitRepositoryForSelected() {
+  const element = requireCodeTextGitElement();
+  if (!element) {
+    return;
+  }
+  const path = await nativeApi.selectDirectory();
+  if (!path || selectedObject !== element) {
+    return;
+  }
+  const current = getCodeTextGitTypingData(element.dataset);
+  updateCodeTextGitTypingForElement(
+    element,
+    {
+      ...createDefaultCodeTextGitTypingData(),
+      repoPath: path,
+      typingSpeed: sanitizeTypingSpeed(codeTextGitTypingSpeed.value, DEFAULT_GIT_TYPING_SPEED),
+    },
+    { record: codeTextGitTypingIsEnabled(current) }
+  );
+  await loadCodeTextGitCommitsForSelected();
+}
+
+async function loadCodeTextGitCommitsForSelected() {
+  const element = requireCodeTextGitElement();
+  if (!element) {
+    return;
+  }
+  const repoPath = requireCodeTextGitRepoPath();
   if (!repoPath) {
     return;
   }
   try {
-    setStatus("Loading Git commit history...");
+    setStatus("Loading Git commit history for Code Text...");
     const result = await nativeApi.listGitCommits(repoPath);
+    if (selectedObject !== element) {
+      return;
+    }
     const commits = sanitizeGitCommitOptions(result.commits);
-    const current = getGitTypingData(slide);
+    const current = getCodeTextGitTypingData(element.dataset);
     const selectedCommit = commits.find((commit) => commit.hash === current.commitHash) || commits[0];
-    updateActiveDynamicSlide((activeSlide) => {
-      activeSlide.gitTyping = {
-        ...getGitTypingData(activeSlide),
-        inputMode: "git",
-        repoPath: result.repoPath || repoPath,
-        commitHash: selectedCommit?.hash || "",
-        commitLabel: selectedCommit?.label || "",
-        filePath: "",
-        commits,
-        files: [],
-        content: "",
-        beforeContent: "",
-        afterContent: "",
-        beforePath: "",
-      };
-    }, { record: !selectedCommit });
-    syncDynamicSlidePanel();
+    updateCodeTextGitTypingForElement(element, {
+      ...current,
+      enabled: false,
+      repoPath: result.repoPath || repoPath,
+      commitHash: selectedCommit?.hash || "",
+      commitLabel: selectedCommit?.label || "",
+      filePath: "",
+      commits,
+      files: [],
+    });
     if (selectedCommit) {
-      await loadGitFilesForSlide({ record: true, clearContent: true, autoLoadChange: true });
+      await loadCodeTextGitFilesForSelected();
     } else {
       setStatus("No readable commits were found in this repository.");
     }
@@ -8526,87 +8586,143 @@ async function loadGitCommitsForSlide() {
   }
 }
 
-async function loadGitFilesForSlide(options = {}) {
-  const slide = getActiveGitTypingSlide();
-  if (!slide) {
+async function loadCodeTextGitFilesForSelected() {
+  const element = requireCodeTextGitElement();
+  if (!element) {
     return;
   }
-  const repoPath = requireGitRepoPath();
-  const commitHash = gitCommitSelect.value;
+  const repoPath = requireCodeTextGitRepoPath();
+  const commitHash = codeTextGitCommitSelect.value;
   if (!repoPath || !commitHash) {
     setStatus("Please select a commit first.");
     return;
   }
   try {
-    setStatus("Loading the list of files changed in this commit...");
+    setStatus("Loading changed files for Code Text...");
     const result = await nativeApi.listGitCommitFiles(repoPath, commitHash);
-    const files = sanitizeGitFileOptions(result.files);
-    const current = getGitTypingData(slide);
-    const selectedFilePath = files.includes(current.filePath) ? current.filePath : files[0] || "";
-    const selectedCommit = current.commits.find((commit) => commit.hash === commitHash);
-    const shouldClearContent = options.clearContent || !current.content;
-    updateActiveDynamicSlide((activeSlide) => {
-      activeSlide.gitTyping = {
-        ...getGitTypingData(activeSlide),
-        inputMode: "git",
-        repoPath: result.repoPath || repoPath,
-        commitHash,
-        commitLabel: selectedCommit?.label || current.commitLabel || commitHash,
-        filePath: selectedFilePath,
-        files,
-        content: shouldClearContent ? "" : current.content,
-        beforeContent: "",
-        afterContent: shouldClearContent ? "" : current.afterContent,
-        beforePath: "",
-      };
-    }, { record: Boolean(options.record) });
-    syncDynamicSlidePanel();
-    if (selectedFilePath && options.autoLoadChange) {
-      await loadGitFileChangeForSlide({ record: Boolean(options.record) });
+    if (selectedObject !== element) {
       return;
     }
-    setStatus(files.length ? "Loaded the list of changed files." : "No files were changed in this commit.");
+    const files = sanitizeGitFileOptions(result.files);
+    const current = getCodeTextGitTypingData(element.dataset);
+    const selectedCommit = current.commits.find((commit) => commit.hash === commitHash);
+    const selectedFilePath = files.includes(current.filePath) ? current.filePath : files[0] || "";
+    updateCodeTextGitTypingForElement(element, {
+      ...current,
+      enabled: false,
+      repoPath: result.repoPath || repoPath,
+      commitHash,
+      commitLabel: selectedCommit?.label || current.commitLabel || commitHash,
+      filePath: selectedFilePath,
+      files,
+    });
+    setStatus(files.length ? "Loaded changed files for Code Text." : "No files were changed in this commit.");
   } catch (error) {
     setStatus(error?.message || "Failed to read Git changed files.");
   }
 }
 
-async function loadGitFileChangeForSlide(options = {}) {
-  const slide = getActiveGitTypingSlide();
-  if (!slide) {
+async function loadCodeTextGitHistoryForSelected() {
+  const element = requireCodeTextGitElement();
+  if (!element) {
     return;
   }
-  const repoPath = requireGitRepoPath();
-  const commitHash = gitCommitSelect.value;
-  const filePath = gitFileSelect.value;
+  const repoPath = requireCodeTextGitRepoPath();
+  const commitHash = codeTextGitCommitSelect.value;
+  const filePath = codeTextGitFileSelect.value;
   if (!repoPath || !commitHash || !filePath) {
     setStatus("Please select a repository, commit, and file.");
     return;
   }
   try {
-    setStatus("Loading changes for the selected file...");
+    setStatus("Loading Git history into Code Text...");
     const result = await nativeApi.readGitCommitFileChange(repoPath, commitHash, filePath);
-    const current = getGitTypingData(slide);
-    updateActiveDynamicSlide((activeSlide) => {
-      activeSlide.gitTyping = {
-        ...getGitTypingData(activeSlide),
-        inputMode: "git",
+    if (selectedObject !== element) {
+      return;
+    }
+    const current = getCodeTextGitTypingData(element.dataset);
+    const afterContent = typeof result.afterContent === "string" ? result.afterContent : "";
+    updateCodeTextGitTypingForElement(
+      element,
+      {
+        ...current,
+        enabled: true,
         repoPath: result.repoPath || repoPath,
         commitHash: result.commitHash || commitHash,
         commitLabel: current.commitLabel || result.commitHash || commitHash,
         filePath: result.filePath || filePath,
-        title: result.title || "Git Diff",
-        content: result.afterContent || result.beforeContent || result.content || "",
-        beforeContent: result.beforeContent || "",
-        afterContent: result.afterContent || result.content || "",
         beforePath: result.beforePath || "",
-      };
-    }, { record: options.record !== false });
-    syncDynamicSlidePanel();
-    setStatus("Loaded changes for the selected file into the typing slide.");
+        beforeContent: result.beforeContent || "",
+        afterContent,
+        typingSpeed: sanitizeTypingSpeed(codeTextGitTypingSpeed.value, DEFAULT_GIT_TYPING_SPEED),
+      },
+      {
+        applyAfterContent: true,
+        record: true,
+      }
+    );
+    setStatus("Loaded Git history as a Code Text typing animation.");
   } catch (error) {
-    setStatus(error?.message || "Failed to read Git file changes.");
+    setStatus(error?.message || "Failed to load Git history into Code Text.");
   }
+}
+
+function applyCodeTextTypingAnimationForSelected() {
+  const element = requireCodeTextGitElement();
+  if (!element) {
+    return;
+  }
+  const text = element.dataset.text || "";
+  if (!text.trim()) {
+    setStatus("No code text to animate.");
+    return;
+  }
+  updateCodeTextGitTypingForElement(
+    element,
+    {
+      ...createDefaultCodeTextGitTypingData(),
+      enabled: true,
+      beforeContent: "",
+      afterContent: text,
+      typingSpeed: sanitizeTypingSpeed(codeTextGitTypingSpeed.value, DEFAULT_GIT_TYPING_SPEED),
+    },
+    {
+      applyAfterContent: true,
+      record: true,
+    }
+  );
+  setStatus("Code Text typing animation applied.");
+}
+
+function clearCodeTextGitAnimationForSelected() {
+  const element = requireCodeTextGitElement();
+  if (!element) {
+    return;
+  }
+  clearCodeTextGitTypingData(element);
+  renderTextObject(element);
+  syncCodeTextGitControls();
+  renderSlideList();
+  syncObjectAnimationPreview();
+  setStatus("Code Text typing animation cleared.");
+  recordHistory();
+}
+
+function syncCodeTextGitTypingSpeedForSelected(shouldRecord = false) {
+  const element = getSelectedCodeTextElement();
+  if (!element) {
+    syncCodeTextGitControls();
+    return;
+  }
+  const current = getCodeTextGitTypingData(element.dataset);
+  updateCodeTextGitTypingForElement(
+    element,
+    {
+      ...current,
+      typingSpeed: sanitizeTypingSpeed(codeTextGitTypingSpeed.value, DEFAULT_GIT_TYPING_SPEED),
+    },
+    { record: shouldRecord && codeTextGitTypingHasStoredState(current) }
+  );
 }
 
 function createExportId() {
@@ -8709,10 +8825,7 @@ async function exportProjectAsMp4() {
     const renderedSlides = [];
     for (let index = 0; index < slides.length; index += 1) {
       throwIfExportCancelled();
-      let slide = slides[index];
-      if (sanitizeSlideKind(slide?.kind) === "gitTyping") {
-        slide = await refreshGitTypingSlideForExport(slide);
-      }
+      const slide = slides[index];
       const video = normalizeSlideVideo(slide.video);
       const startSound = normalizeSlideStartSound(slide.startSound);
       setExportModalProgress("Rendering", `Rendering slide ${index + 1} / ${slides.length}...`, index, slides.length);
@@ -8779,7 +8892,7 @@ async function exportProjectAsMp4() {
           const loopAnimationFrames = shouldLoopAnimationFrames(slide);
           const animation = await renderCanvasSlideAnimationFrames(slide, {
             ...renderOptions,
-            durationSeconds: getSlideAnimationFrameDuration(slide, notes),
+            durationSeconds: getCanvasSlideAnimationRenderDuration(slide, notes, hasNarration),
             loopFrames: loopAnimationFrames,
           });
           renderedSlides.push({
@@ -9026,6 +9139,7 @@ function refreshSelectedCodeTextObject(statusMessage, shouldRecord = true) {
   renderTextObject(selectedObject);
   syncSelectedInputs();
   renderSlideList();
+  syncObjectAnimationPreview();
   if (statusMessage) {
     setStatus(statusMessage);
   }
@@ -9078,6 +9192,9 @@ function applySelectedCodeTextLatexChange(shouldRecord = true) {
     return;
   }
   selectedObject.dataset.codeLatex = String(selectedCodeTextLatex.checked);
+  if (selectedCodeTextLatex.checked) {
+    clearCodeTextGitTypingData(selectedObject);
+  }
   refreshSelectedCodeTextObject(selectedCodeTextLatex.checked ? "LaTeX Math enabled for code text." : "LaTeX Math disabled for code text.", shouldRecord);
 }
 
@@ -9336,48 +9453,8 @@ addCodeTextBox.addEventListener("click", () => {
   addCodeTextObject();
   startTextEdit(selectedObject);
 });
-addGitTypingSlide.addEventListener("click", () => addDynamicSlide("gitTyping"));
 addChatTypingSlide.addEventListener("click", () => addDynamicSlide("chatTyping"));
 translateSlideButton.addEventListener("click", translateCurrentSlideContent);
-chooseGitRepo.addEventListener("click", () => {
-  chooseGitRepositoryForSlide();
-});
-gitCommitSelect.addEventListener("change", () => {
-  gitTypingContent.value = "";
-  syncGitTypingInputsToSlide({ record: true });
-  loadGitFilesForSlide({ record: true, clearContent: true, autoLoadChange: true });
-});
-gitFileSelect.addEventListener("change", () => {
-  gitTypingContent.value = "";
-  syncGitTypingInputsToSlide({ record: true });
-  loadGitFileChangeForSlide({ record: true });
-});
-for (const input of [gitSlideTitle, gitRepoPath, gitTypingSpeed, gitTypingContent]) {
-  input.addEventListener("input", () => syncGitTypingInputsToSlide());
-  input.addEventListener("change", () => syncGitTypingInputsToSlide({ record: true }));
-}
-for (const input of [gitBeforeContent]) {
-  input.addEventListener("input", () => syncGitTypingInputsToSlide());
-  input.addEventListener("change", () => syncGitTypingInputsToSlide({ record: true }));
-}
-for (const button of gitInputModeButtons) {
-  button.addEventListener("click", () => {
-    syncGitInputModeButtons(button.dataset.gitInputMode);
-    syncGitInputModeVisibility(button.dataset.gitInputMode);
-    syncGitTypingInputsToSlide({ record: true });
-    setStatus(
-      sanitizeGitInputMode(button.dataset.gitInputMode) === "direct"
-        ? "Git Slide now uses directly entered code."
-        : "Git Slide now reads code from a commit."
-    );
-  });
-}
-for (const button of gitTextScaleButtons) {
-  button.addEventListener("click", () => {
-    syncGitTextScaleButtons(button.dataset.gitTextScale);
-    syncGitTypingInputsToSlide({ record: true });
-  });
-}
 dynamicContinueAfterTts.addEventListener("change", () => {
   syncDynamicTimingToSlide({ record: true });
   setStatus(dynamicContinueAfterTts.checked ? "Slide continues after TTS finishes." : "Slide advances when TTS finishes.");
@@ -9488,6 +9565,56 @@ selectedTextColor.addEventListener("change", () => applySelectedTextColorChange(
 selectedCodeTextSize.addEventListener("input", () => applySelectedCodeTextSizeChange());
 selectedCodeTextSize.addEventListener("change", () => applySelectedCodeTextSizeChange(true));
 selectedCodeTextLatex.addEventListener("change", () => applySelectedCodeTextLatexChange(true));
+chooseCodeTextGitRepo.addEventListener("click", () => {
+  chooseCodeTextGitRepositoryForSelected();
+});
+codeTextGitCommitSelect.addEventListener("change", () => {
+  const element = requireCodeTextGitElement();
+  if (!element) {
+    return;
+  }
+  const current = getCodeTextGitTypingData(element.dataset);
+  const commitHash = codeTextGitCommitSelect.value;
+  const selectedCommit = current.commits.find((commit) => commit.hash === commitHash);
+  updateCodeTextGitTypingForElement(element, {
+    ...current,
+    enabled: false,
+    commitHash,
+    commitLabel: selectedCommit?.label || commitHash,
+    filePath: "",
+    files: [],
+    beforeContent: "",
+    afterContent: "",
+    beforePath: "",
+  }, { record: codeTextGitTypingIsEnabled(current) });
+  loadCodeTextGitFilesForSelected();
+});
+codeTextGitFileSelect.addEventListener("change", () => {
+  const element = requireCodeTextGitElement();
+  if (!element) {
+    return;
+  }
+  const current = getCodeTextGitTypingData(element.dataset);
+  updateCodeTextGitTypingForElement(element, {
+    ...current,
+    enabled: false,
+    filePath: codeTextGitFileSelect.value,
+    beforeContent: "",
+    afterContent: "",
+    beforePath: "",
+  }, { record: codeTextGitTypingIsEnabled(current) });
+});
+codeTextGitTypingSpeed.addEventListener("input", () => syncCodeTextGitTypingSpeedForSelected());
+codeTextGitTypingSpeed.addEventListener("change", () => syncCodeTextGitTypingSpeedForSelected(true));
+applyCodeTextTypingAnimation.addEventListener("click", () => {
+  applyCodeTextTypingAnimationForSelected();
+});
+loadCodeTextGitHistory.addEventListener("click", () => {
+  loadCodeTextGitHistoryForSelected();
+});
+clearCodeTextGitAnimation.addEventListener("click", () => {
+  clearCodeTextGitAnimationForSelected();
+});
 
 deleteSelected.addEventListener("click", () => {
   deleteSelectedObjects();

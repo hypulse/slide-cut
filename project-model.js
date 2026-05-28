@@ -16,7 +16,6 @@ export function createProjectModel(deps) {
     DEFAULT_TEXT_COLOR,
     TEXT_SIZE_PRESETS,
     PROJECT_FORMAT,
-    DEFAULT_GIT_TYPING_SPEED,
     DEFAULT_CHAT_TYPING_SPEED,
     clamp,
     numberOr,
@@ -47,14 +46,10 @@ export function createProjectModel(deps) {
     normalizeContinueAfterTts,
     normalizeNoteSegments,
     createDefaultSlide,
-    createDefaultGitTypingData,
     createDefaultChatTypingData,
-    stripGitSlideHelperText,
-    sanitizeGitInputMode,
-    sanitizeGitCommitOptions,
-    sanitizeGitFileOptions,
+    getCodeTextGitTypingData,
+    codeTextGitTypingIsEnabled,
     sanitizeTypingSpeed,
-    sanitizeGitTextScale,
     sanitizeChatTextScale,
     normalizeProjectSettings,
   } = deps;
@@ -129,6 +124,7 @@ export function createProjectModel(deps) {
     }
 
     const textKind = sanitizeTextKind(object.dataset.textKind);
+    const codeTextGitTyping = textKind === "code" ? getCodeTextGitTypingData(object.dataset) : null;
     return {
       ...base,
       text: object.dataset.text || "",
@@ -144,6 +140,7 @@ export function createProjectModel(deps) {
             codePreset: sanitizeCodeTextPreset(object.dataset.codePreset),
             codeFontSize: sanitizeCodeTextFontSize(object.dataset.codeFontSize),
             codeLatex: normalizeCodeTextLatex(object.dataset.codeLatex),
+            ...(codeTextGitTypingIsEnabled(codeTextGitTyping) ? { gitTyping: codeTextGitTyping } : {}),
           }
         : {}),
       ...serializeAnimationData(object),
@@ -223,9 +220,20 @@ export function createProjectModel(deps) {
     }
 
     const textKind = sanitizeTextKind(object.textKind);
+    const sourceText = typeof object.text === "string" ? object.text : "";
+    const codeTextGitTyping =
+      textKind === "code"
+        ? getCodeTextGitTypingData({
+            ...object,
+            text: sourceText,
+          })
+        : null;
     return {
       ...base,
-      text: typeof object.text === "string" ? object.text : "",
+      text:
+        textKind === "code" && codeTextGitTypingIsEnabled(codeTextGitTyping) && typeof codeTextGitTyping.afterContent === "string"
+          ? codeTextGitTyping.afterContent
+          : sourceText,
       textKind,
       textSize: TEXT_SIZE_PRESETS[object.textSize] ? object.textSize : "h3",
       textAlign: sanitizeTextAlign(object.textAlign),
@@ -238,6 +246,7 @@ export function createProjectModel(deps) {
             codePreset: sanitizeCodeTextPreset(object.codePreset),
             codeFontSize: sanitizeCodeTextFontSize(object.codeFontSize),
             codeLatex: normalizeCodeTextLatex(object.codeLatex),
+            ...(codeTextGitTypingIsEnabled(codeTextGitTyping) ? { gitTyping: codeTextGitTyping } : {}),
           }
         : {}),
       ...normalizeAnimationData(object),
@@ -260,35 +269,6 @@ export function createProjectModel(deps) {
       video: normalizeSlideVideo(slide.video),
       startSound: normalizeSlideStartSound(slide.startSound),
       continueAfterTts: isDynamicSlide(slide) ? normalizeContinueAfterTts(slide.continueAfterTts) : false,
-      gitTyping:
-        sanitizeSlideKind(slide.kind) === "gitTyping"
-          ? {
-              ...createDefaultGitTypingData(),
-              ...(slide.gitTyping || {}),
-              title: typeof slide.gitTyping?.title === "string" ? slide.gitTyping.title : createDefaultGitTypingData().title,
-              inputMode: sanitizeGitInputMode(slide.gitTyping?.inputMode),
-              repoPath: typeof slide.gitTyping?.repoPath === "string" ? slide.gitTyping.repoPath : "",
-              commitHash: typeof slide.gitTyping?.commitHash === "string" ? slide.gitTyping.commitHash : "",
-              commitLabel: typeof slide.gitTyping?.commitLabel === "string" ? slide.gitTyping.commitLabel : "",
-              filePath: typeof slide.gitTyping?.filePath === "string" ? slide.gitTyping.filePath : "",
-              commits: sanitizeGitCommitOptions(slide.gitTyping?.commits),
-              files: sanitizeGitFileOptions(slide.gitTyping?.files),
-              content: stripGitSlideHelperText(
-                typeof slide.gitTyping?.content === "string" ? slide.gitTyping.content : createDefaultGitTypingData().content
-              ),
-              beforeContent: typeof slide.gitTyping?.beforeContent === "string" ? slide.gitTyping.beforeContent : "",
-              afterContent: stripGitSlideHelperText(
-                typeof slide.gitTyping?.afterContent === "string"
-                  ? slide.gitTyping.afterContent
-                  : typeof slide.gitTyping?.content === "string"
-                    ? slide.gitTyping.content
-                    : createDefaultGitTypingData().afterContent
-              ),
-              beforePath: typeof slide.gitTyping?.beforePath === "string" ? slide.gitTyping.beforePath : "",
-              typingSpeed: sanitizeTypingSpeed(slide.gitTyping?.typingSpeed, DEFAULT_GIT_TYPING_SPEED),
-              textScale: sanitizeGitTextScale(slide.gitTyping?.textScale),
-            }
-          : undefined,
       chatTyping:
         sanitizeSlideKind(slide.kind) === "chatTyping"
           ? {
