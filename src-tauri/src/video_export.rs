@@ -43,6 +43,7 @@ pub(crate) struct VideoExportSlide {
     start_sound_path: Option<String>,
     frame_png: String,
     tts_segments: Option<Vec<String>>,
+    narration_segments: Option<Vec<NarrationSegment>>,
     animation_frames: Option<Vec<String>>,
     frame_rate: Option<f64>,
     animation_duration_seconds: Option<f64>,
@@ -57,6 +58,19 @@ pub(crate) struct VideoExportSlide {
     subtitle_font_family: Option<String>,
     subtitle_font_weight: Option<f64>,
     gif_overlays: Option<Vec<GifOverlay>>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct NarrationSegment {
+    text: String,
+    audio_path: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+struct PreparedNarrationSegment {
+    text: String,
+    audio_path: Option<PathBuf>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -760,7 +774,30 @@ fn split_notes_for_tts(notes: &str) -> Vec<String> {
         .collect()
 }
 
-fn get_slide_tts_segments(slide: &VideoExportSlide) -> Vec<String> {
+fn get_slide_narration_segments(slide: &VideoExportSlide) -> Vec<PreparedNarrationSegment> {
+    if let Some(segments) = slide.narration_segments.as_ref() {
+        let normalized = segments
+            .iter()
+            .filter_map(|segment| {
+                let text = segment.text.trim().to_string();
+                let audio_path = segment
+                    .audio_path
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|path| !path.is_empty())
+                    .map(PathBuf::from);
+                if text.is_empty() && audio_path.is_none() {
+                    None
+                } else {
+                    Some(PreparedNarrationSegment { text, audio_path })
+                }
+            })
+            .collect::<Vec<_>>();
+        if !normalized.is_empty() {
+            return normalized;
+        }
+    }
+
     let segments = slide
         .tts_segments
         .as_ref()
@@ -769,18 +806,59 @@ fn get_slide_tts_segments(slide: &VideoExportSlide) -> Vec<String> {
                 .iter()
                 .map(|segment| segment.trim())
                 .filter(|segment| !segment.is_empty())
-                .map(ToString::to_string)
+                .map(|text| PreparedNarrationSegment {
+                    text: text.to_string(),
+                    audio_path: None,
+                })
                 .collect::<Vec<_>>()
         })
         .unwrap_or_default();
     if segments.is_empty() {
         split_notes_for_tts(&slide.notes)
+            .into_iter()
+            .map(|text| PreparedNarrationSegment {
+                text,
+                audio_path: None,
+            })
+            .collect()
     } else {
         segments
     }
 }
 
-fn concat_tts_audio_segments(
+fn slide_needs_tts(slide: &VideoExportSlide) -> bool {
+    get_slide_narration_segments(slide)
+        .iter()
+        .any(|segment| segment.audio_path.is_none() && !segment.text.trim().is_empty())
+}
+
+fn normalize_narration_audio_segment(
+    ffmpeg: &Path,
+    source_path: &Path,
+    output_path: &Path,
+    export_id: &str,
+) -> Result<(), String> {
+    let mut command = Command::new(ffmpeg);
+    command
+        .arg("-y")
+        .arg("-i")
+        .arg(source_path)
+        .args([
+            "-vn",
+            "-ar",
+            EXPORT_AUDIO_SAMPLE_RATE,
+            "-ac",
+            EXPORT_AUDIO_CHANNELS,
+            "-c:a",
+            "aac",
+            "-b:a",
+            "192k",
+        ])
+        .arg(output_path);
+    run_command(command, "내레이션 오디오 정규화", export_id)
+}
+
+fn concat_narration_audio_segments(
     ffmpeg: &Path,
     work_dir: &Path,
     slide_index: usize,
@@ -788,14 +866,14 @@ fn concat_tts_audio_segments(
     export_id: &str,
 ) -> Result<PathBuf, String> {
     if paths.is_empty() {
-        return Err("연결할 TTS 오디오가 없습니다.".to_string());
+        return Err("연결할 내레이션 오디오가 없습니다.".to_string());
     }
     if paths.len() == 1 {
         return Ok(paths[0].clone());
     }
 
-    let filelist_path = work_dir.join(format!("tts-segments-{slide_index:04}.txt"));
-    let output_path = work_dir.join(format!("tts-combined-{slide_index:04}.m4a"));
+    let filelist_path = work_dir.join(format!("narration-segments-{slide_index:04}.txt"));
+    let output_path = work_dir.join(format!("narration-combined-{slide_index:04}.m4a"));
     let mut filelist = String::new();
     for path in paths {
         let path = path.to_string_lossy().replace('\'', "'\\''");
@@ -820,7 +898,7 @@ fn concat_tts_audio_segments(
             "192k",
         ])
         .arg(&output_path);
-    run_command(command, "TTS 오디오 조각 병합", export_id)?;
+    run_command(command, "내레이션 오디오 조각 병합", export_id)?;
     Ok(output_path)
 }
 
@@ -1821,10 +1899,7 @@ pub(crate) fn export_video(
         );
         let ffmpeg = find_tool("ffmpeg", "SLIDE_CUT_FFMPEG", "-version")?;
         let ffprobe = find_tool("ffprobe", "SLIDE_CUT_FFPROBE", "-version")?;
-        let needs_tts = payload
-            .slides
-            .iter()
-            .any(|slide| !get_slide_tts_segments(slide).is_empty());
+        let needs_tts = payload.slides.iter().any(slide_needs_tts);
         check_export_cancelled(&export_id)?;
         let curl = if needs_tts {
             Some(find_tool("curl", "SLIDE_CUT_CURL", "--version")?)
@@ -1907,41 +1982,65 @@ pub(crate) fn export_video(
                         .as_ref()
                         .map(|frames| frames.len() as f64 / frame_rate)
                 });
-            let tts_segments = get_slide_tts_segments(slide);
-            let mut tts_audio_paths = Vec::new();
+            let narration_segments = get_slide_narration_segments(slide);
+            let mut narration_audio_paths = Vec::new();
             let mut subtitle_segments = Vec::new();
-            let mut tts_duration = 0.0;
-            for segment in &tts_segments {
-                let path = generate_tts_audio(
-                    &app,
-                    curl.as_ref().unwrap(),
-                    &work_dir,
-                    &payload.tts,
-                    segment,
+            let mut narration_duration = 0.0;
+            for (segment_index, segment) in narration_segments.iter().enumerate() {
+                let source_path = if let Some(audio_path) = segment.audio_path.as_ref() {
+                    if !audio_path.exists() {
+                        return Err(format!(
+                            "내레이션 오디오 파일을 찾지 못했습니다: {}",
+                            audio_path.to_string_lossy()
+                        ));
+                    }
+                    audio_path.clone()
+                } else if segment.text.trim().is_empty() {
+                    continue;
+                } else {
+                    let curl = curl.as_ref().ok_or_else(|| {
+                        "TTS 생성을 위한 curl 도구가 준비되지 않았습니다.".to_string()
+                    })?;
+                    generate_tts_audio(
+                        &app,
+                        curl,
+                        &work_dir,
+                        &payload.tts,
+                        &segment.text,
+                        &export_id,
+                    )?
+                };
+                let normalized_path =
+                    work_dir.join(format!("narration-{index:04}-{segment_index:04}.m4a"));
+                normalize_narration_audio_segment(
+                    &ffmpeg,
+                    &source_path,
+                    &normalized_path,
                     &export_id,
                 )?;
-                let segment_duration = probe_audio_duration(&ffprobe, &path, fallback_duration)?;
+                let segment_duration =
+                    probe_audio_duration(&ffprobe, &normalized_path, fallback_duration)?;
                 subtitle_segments.push(PreparedSubtitleSegment {
-                    text: segment.clone(),
-                    start_seconds: tts_duration,
-                    end_seconds: tts_duration + segment_duration,
+                    text: segment.text.clone(),
+                    start_seconds: narration_duration,
+                    end_seconds: narration_duration + segment_duration,
                 });
-                tts_duration += segment_duration;
-                tts_audio_paths.push(path);
+                narration_duration += segment_duration;
+                narration_audio_paths.push(normalized_path);
             }
-            let tts_audio_path = if tts_audio_paths.is_empty() {
+            let narration_audio_path = if narration_audio_paths.is_empty() {
                 None
             } else {
-                Some(concat_tts_audio_segments(
+                Some(concat_narration_audio_segments(
                     &ffmpeg,
                     &work_dir,
                     index,
-                    &tts_audio_paths,
+                    &narration_audio_paths,
                     &export_id,
                 )?)
             };
-            let base_audio_duration = if tts_audio_path.is_some() {
-                tts_duration.max(0.5)
+            let base_audio_duration = if narration_audio_path.is_some() {
+                narration_duration.max(0.5)
             } else {
                 fallback_duration
             };
@@ -1951,7 +2050,7 @@ pub(crate) fn export_video(
             } else {
                 base_audio_duration.max(animation_duration.unwrap_or(0.0))
             };
-            let base_audio_path = if let Some(path) = tts_audio_path {
+            let base_audio_path = if let Some(path) = narration_audio_path {
                 path
             } else {
                 let path = work_dir.join(format!("silence-{index:04}.m4a"));

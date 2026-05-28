@@ -1607,6 +1607,7 @@ const { serializeObject, serializeCurrentSlide, cloneProjectValue, normalizeProj
   sanitizeSlideKind,
   isDynamicSlide,
   normalizeContinueAfterTts,
+  normalizeNoteSegments,
   createDefaultSlide,
   createDefaultGitTypingData,
   createDefaultChatTypingData,
@@ -4281,6 +4282,57 @@ function splitNotesForEditorSegments(notes) {
     .filter(Boolean);
 }
 
+function normalizeNoteSegmentAudio(value) {
+  return normalizeAudioAsset(value);
+}
+
+function createNoteSegmentsFromNotes(notes) {
+  return splitNotesForEditorSegments(notes).map((text) => ({
+    text,
+    audio: null,
+  }));
+}
+
+function normalizeNoteSegment(value) {
+  if (typeof value === "string") {
+    return {
+      text: sanitizeNoteSegmentValue(value),
+      audio: null,
+    };
+  }
+  return {
+    text: sanitizeNoteSegmentValue(value?.text),
+    audio: normalizeNoteSegmentAudio(value?.audio),
+  };
+}
+
+function normalizeNoteSegments(value, fallbackNotes = "") {
+  const segments = Array.isArray(value)
+    ? value.map(normalizeNoteSegment).filter((segment) => segment.text || segment.audio)
+    : [];
+  return segments.length ? segments : createNoteSegmentsFromNotes(fallbackNotes);
+}
+
+function noteSegmentsEqual(a, b) {
+  const left = normalizeNoteSegments(a);
+  const right = normalizeNoteSegments(b);
+  if (left.length !== right.length) {
+    return false;
+  }
+  return left.every((segment, index) => {
+    const other = right[index];
+    return (
+      segment.text === other.text &&
+      (segment.audio?.path || "") === (other.audio?.path || "") &&
+      (segment.audio?.name || "") === (other.audio?.name || "")
+    );
+  });
+}
+
+function getSlideNoteSegments(slide) {
+  return normalizeNoteSegments(slide?.noteSegments, slide?.notes);
+}
+
 function getNoteSegmentRows() {
   return noteSegmentList ? [...noteSegmentList.querySelectorAll(".note-segment-row")] : [];
 }
@@ -4316,9 +4368,72 @@ function renumberNoteSegments() {
   });
 }
 
-function collectNoteSegmentText() {
-  return getNoteSegmentInputs()
-    .map((input) => sanitizeNoteSegmentValue(input.value))
+function getNoteSegmentRowAudio(row) {
+  if (!row?.dataset.audioPath) {
+    return null;
+  }
+  return normalizeNoteSegmentAudio({
+    path: row.dataset.audioPath,
+    name: row.dataset.audioName,
+  });
+}
+
+function setNoteSegmentRowAudio(row, audio) {
+  if (!row) {
+    return;
+  }
+  const normalized = normalizeNoteSegmentAudio(audio);
+  if (normalized) {
+    row.dataset.audioPath = normalized.path;
+    row.dataset.audioName = normalized.name;
+  } else {
+    delete row.dataset.audioPath;
+    delete row.dataset.audioName;
+  }
+  updateNoteSegmentAudioView(row);
+}
+
+function updateNoteSegmentAudioView(row) {
+  if (!row) {
+    return;
+  }
+  const audio = getNoteSegmentRowAudio(row);
+  const audioName = row.querySelector(".note-segment-audio-name");
+  const attachButton = row.querySelector("[data-note-segment-audio-action='attach']");
+  const playButton = row.querySelector("[data-note-segment-audio-action='play']");
+  const clearButton = row.querySelector("[data-note-segment-audio-action='clear']");
+  row.classList.toggle("has-audio", Boolean(audio));
+  if (audioName) {
+    audioName.textContent = audio?.name || "TTS";
+    audioName.title = audio?.name || "Uses generated TTS";
+  }
+  if (attachButton) {
+    attachButton.title = audio ? "Replace narration audio" : "Attach narration audio";
+    attachButton.setAttribute("aria-label", attachButton.title);
+  }
+  if (playButton) {
+    playButton.disabled = !audio;
+  }
+  if (clearButton) {
+    clearButton.disabled = !audio;
+  }
+}
+
+function collectNoteSegments() {
+  return getNoteSegmentRows()
+    .map((row) => {
+      const input = row.querySelector(".note-segment-input");
+      return {
+        text: sanitizeNoteSegmentValue(input?.value),
+        audio: getNoteSegmentRowAudio(row),
+      };
+    })
+    .filter((segment) => segment.text || segment.audio);
+}
+
+function collectNoteSegmentText(segments = collectNoteSegments()) {
+  return segments
+    .map((segment) => sanitizeNoteSegmentValue(segment.text))
     .filter(Boolean)
     .join("\n");
 }
@@ -4327,11 +4442,16 @@ function syncSlideNotesFromSegments({ save = false, record = false } = {}) {
   if (isRenderingNoteSegments) {
     return;
   }
-  const nextNotes = collectNoteSegmentText();
-  const changed = slideNotes.value !== nextNotes;
+  const nextSegments = collectNoteSegments();
+  const nextNotes = collectNoteSegmentText(nextSegments);
+  const activeSlide = slides[activeSlideIndex];
+  const changed =
+    slideNotes.value !== nextNotes ||
+    !noteSegmentsEqual(activeSlide?.noteSegments, nextSegments);
   slideNotes.value = nextNotes;
-  if (slides[activeSlideIndex]) {
-    slides[activeSlideIndex].notes = nextNotes;
+  if (activeSlide) {
+    activeSlide.notes = nextNotes;
+    activeSlide.noteSegments = nextSegments;
   }
   updateNoteSegmentSummary();
   if (!changed) {
@@ -4354,7 +4474,51 @@ function focusNoteSegmentInput(input) {
   input.setSelectionRange(cursor, cursor);
 }
 
+async function chooseAudioForNoteSegment(row) {
+  try {
+    const path = await nativeApi.selectAudioFile();
+    if (!path || !row) {
+      return;
+    }
+    if (!activeProjectId) {
+      await saveActiveNativeProject({ forceCreate: true });
+    }
+    const importedAsset = activeProjectId
+      ? await nativeApi.importProjectAsset(activeProjectId, path)
+      : { path, name: getFileNameFromPath(path) };
+    setNoteSegmentRowAudio(row, {
+      path: importedAsset.path,
+      name: importedAsset.name || getFileNameFromPath(path),
+    });
+    syncSlideNotesFromSegments({ save: true, record: true });
+    setStatus("Narration audio copied into the project and linked.");
+  } catch (error) {
+    setStatus(error?.message || "Failed to attach narration audio.");
+  }
+}
+
+function playNoteSegmentAudio(row) {
+  const audio = getNoteSegmentRowAudio(row);
+  if (!audio) {
+    return;
+  }
+  const player = new Audio(getDisplayAssetUrl(audio.path));
+  player.play().catch((error) => {
+    setStatus(error?.message || "Failed to play narration audio.");
+  });
+}
+
+function clearNoteSegmentAudio(row) {
+  if (!getNoteSegmentRowAudio(row)) {
+    return;
+  }
+  setNoteSegmentRowAudio(row, null);
+  syncSlideNotesFromSegments({ save: true, record: true });
+  setStatus("Narration audio removed from this line.");
+}
+
 function createNoteSegmentRow(value = "") {
+  const segment = normalizeNoteSegment(value);
   const row = document.createElement("div");
   row.className = "note-segment-row";
 
@@ -4367,11 +4531,44 @@ function createNoteSegmentRow(value = "") {
   input.rows = 1;
   input.spellcheck = false;
   input.placeholder = "Subtitle line";
-  input.value = sanitizeNoteSegmentValue(value);
+  input.value = segment.text;
   input.addEventListener("input", () => handleNoteSegmentInput(input));
   input.addEventListener("change", () => syncSlideNotesFromSegments({ record: true }));
   input.addEventListener("keydown", (event) => handleNoteSegmentKeyDown(event, input));
   input.addEventListener("paste", (event) => handleNoteSegmentPaste(event, input));
+
+  const audioControls = document.createElement("div");
+  audioControls.className = "note-segment-audio";
+
+  const audioName = document.createElement("span");
+  audioName.className = "note-segment-audio-name";
+
+  const attachAudioButton = document.createElement("button");
+  attachAudioButton.className = "note-segment-audio-button";
+  attachAudioButton.type = "button";
+  attachAudioButton.dataset.icon = "paperclip";
+  attachAudioButton.dataset.noteSegmentAudioAction = "attach";
+  attachAudioButton.addEventListener("click", () => chooseAudioForNoteSegment(row));
+
+  const playAudioButton = document.createElement("button");
+  playAudioButton.className = "note-segment-audio-button";
+  playAudioButton.type = "button";
+  playAudioButton.dataset.icon = "play";
+  playAudioButton.dataset.noteSegmentAudioAction = "play";
+  playAudioButton.title = "Play narration audio";
+  playAudioButton.setAttribute("aria-label", "Play narration audio");
+  playAudioButton.addEventListener("click", () => playNoteSegmentAudio(row));
+
+  const clearAudioButton = document.createElement("button");
+  clearAudioButton.className = "note-segment-audio-button danger";
+  clearAudioButton.type = "button";
+  clearAudioButton.dataset.icon = "x";
+  clearAudioButton.dataset.noteSegmentAudioAction = "clear";
+  clearAudioButton.title = "Remove narration audio";
+  clearAudioButton.setAttribute("aria-label", "Remove narration audio");
+  clearAudioButton.addEventListener("click", () => clearNoteSegmentAudio(row));
+
+  audioControls.append(audioName, attachAudioButton, playAudioButton, clearAudioButton);
 
   const removeButton = document.createElement("button");
   removeButton.className = "note-segment-remove danger";
@@ -4381,7 +4578,8 @@ function createNoteSegmentRow(value = "") {
   removeButton.setAttribute("aria-label", "Remove subtitle line");
   removeButton.addEventListener("click", () => removeNoteSegmentRow(row));
 
-  row.append(marker, input, removeButton);
+  row.append(marker, input, audioControls, removeButton);
+  setNoteSegmentRowAudio(row, segment.audio);
   return row;
 }
 
@@ -4493,24 +4691,35 @@ function addNoteSegment(value = "", { focus = true, record = false } = {}) {
   return row;
 }
 
-function renderNoteSegmentsFromText(notes) {
+function renderNoteSegmentsFromSlide(slide) {
   if (!noteSegmentList) {
     return;
   }
   isRenderingNoteSegments = true;
-  const segments = splitNotesForEditorSegments(notes);
+  const segments = getSlideNoteSegments(slide);
   noteSegmentList.replaceChildren(...(segments.length ? segments : [""]).map((segment) => createNoteSegmentRow(segment)));
   hydrateButtonIcons(noteSegmentList);
   renumberNoteSegments();
   for (const input of getNoteSegmentInputs()) {
     resizeNoteSegmentInput(input);
   }
-  slideNotes.value = collectNoteSegmentText();
+  const normalizedSegments = collectNoteSegments();
+  slideNotes.value = collectNoteSegmentText(normalizedSegments);
   if (slides[activeSlideIndex]) {
     slides[activeSlideIndex].notes = slideNotes.value;
+    slides[activeSlideIndex].noteSegments = normalizedSegments;
   }
   updateNoteSegmentSummary();
   isRenderingNoteSegments = false;
+}
+
+function getNarrationSegmentsForExport(slide) {
+  return getSlideNoteSegments(slide)
+    .map((segment) => ({
+      text: sanitizeNoteSegmentValue(segment.text),
+      audioPath: segment.audio?.path || null,
+    }))
+    .filter((segment) => segment.text || segment.audioPath);
 }
 
 function estimateNoteFrameDuration(notes) {
@@ -5294,6 +5503,7 @@ function createDefaultSlide() {
     height: projectSettingsState.canvasHeight,
     color: projectSettingsState.canvasColor,
     notes: "",
+    noteSegments: [],
     video: null,
     startSound: null,
     continueAfterTts: false,
@@ -5743,7 +5953,7 @@ function loadSlide(index, shouldSaveCurrent = true) {
   clearCanvasObjects();
   applyCanvasFrame(slide.width, slide.height, slide.color);
   slideNotes.value = typeof slide.notes === "string" ? slide.notes : "";
-  renderNoteSegmentsFromText(slideNotes.value);
+  renderNoteSegmentsFromSlide(slide);
   slides[activeSlideIndex].video = normalizeSlideVideo(slide.video);
   slides[activeSlideIndex].startSound = normalizeSlideStartSound(slide.startSound);
   updateSlideVideoView();
@@ -6399,6 +6609,16 @@ function applyMaterializedAssetPaths(savedData) {
       shouldRefreshSlides = true;
       if (index === activeSlideIndex) {
         shouldRefreshActiveSound = true;
+      }
+    }
+
+    const savedNoteSegments = normalizeNoteSegments(savedSlide.noteSegments, savedSlide.notes);
+    const currentNoteSegments = normalizeNoteSegments(slides[index].noteSegments, slides[index].notes);
+    if (!noteSegmentsEqual(savedNoteSegments, currentNoteSegments)) {
+      slides[index].noteSegments = savedNoteSegments;
+      shouldRefreshSlides = true;
+      if (index === activeSlideIndex) {
+        renderNoteSegmentsFromSlide(slides[index]);
       }
     }
 
@@ -7876,8 +8096,9 @@ async function exportProjectAsMp4() {
       const startSound = normalizeSlideStartSound(slide.startSound);
       setExportModalProgress("Rendering", `Rendering slide ${index + 1} / ${slides.length}...`, index, slides.length);
       const notes = getExportNotesText(slide.notes);
-      const ttsSegments = splitNotesForTtsSegments(slide.notes);
-      const hasTtsNotes = ttsSegments.length > 0;
+      const narrationSegments = getNarrationSegmentsForExport(slide);
+      const subtitleSegments = narrationSegments.map((segment) => segment.text);
+      const hasNarration = narrationSegments.length > 0;
       const gifOverlays = getAnimatedGifOverlays(slide);
       const subtitleRenderOptions = getProjectSubtitleRenderOptions();
       await ensureSlideFontsReady(slide, {
@@ -7885,7 +8106,7 @@ async function exportProjectAsMp4() {
         subtitleText: notes,
         ...subtitleRenderOptions,
       });
-      const subtitleImages = await renderSubtitleImagesForSegments(slide, ttsSegments);
+      const subtitleImages = await renderSubtitleImagesForSegments(slide, subtitleSegments);
       const baseSlidePayload = {
         index,
         width: roundedCanvasSize(slide.width),
@@ -7895,7 +8116,8 @@ async function exportProjectAsMp4() {
         videoFit: video?.fit || DEFAULT_VIDEO_FIT,
         videoFrameRatio: video?.frameRatio || DEFAULT_VIDEO_FRAME_RATIO,
         notes,
-        ttsSegments,
+        ttsSegments: subtitleSegments,
+        narrationSegments,
         subtitleImages,
         subtitleEnabled: projectSettingsState.subtitleEnabled,
         subtitleSize: subtitleRenderOptions.subtitleSize,
@@ -7921,7 +8143,7 @@ async function exportProjectAsMp4() {
           animationFrames: animation.frames,
           frameRate: animation.frameRate,
           animationDurationSeconds: animation.duration,
-          animationAffectsDuration: !hasTtsNotes,
+          animationAffectsDuration: !hasNarration,
           ...(gifOverlays.length ? { gifOverlays } : {}),
         });
       } else {
@@ -7949,7 +8171,7 @@ async function exportProjectAsMp4() {
             animationDurationSeconds: animation.duration,
             loopAnimationFrames,
             fitAnimationToDuration: false,
-            animationAffectsDuration: !hasTtsNotes,
+            animationAffectsDuration: !hasNarration,
           });
         } else {
           renderedSlides.push({

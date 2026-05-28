@@ -401,6 +401,20 @@ where
             }
         }
 
+        if let Some(note_segments) = slide.get_mut("noteSegments").and_then(Value::as_array_mut) {
+            for segment in note_segments {
+                if let Some(audio) = segment.get_mut("audio").and_then(Value::as_object_mut) {
+                    if let Some(path_value) = audio.get_mut("path") {
+                        if let Some(path) = path_value.as_str() {
+                            if let Some(next_path) = rewrite(path)? {
+                                *path_value = Value::String(next_path);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         if let Some(objects) = slide.get_mut("objects").and_then(Value::as_array_mut) {
             for object in objects {
                 let is_image = object

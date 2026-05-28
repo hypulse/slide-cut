@@ -2130,7 +2130,7 @@ input[type="checkbox"] {
 
 .note-segment-row {
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) 26px;
+  grid-template-columns: 24px minmax(0, 1fr) minmax(118px, 172px) 26px;
   align-items: start;
   gap: 6px;
 }
@@ -2171,6 +2171,48 @@ input[type="checkbox"] {
   border-color: var(--accent);
   background: var(--surface-raised);
   box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.note-segment-audio {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) repeat(3, 24px);
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.note-segment-audio-name {
+  display: block;
+  min-width: 0;
+  height: 28px;
+  overflow: hidden;
+  border: 1px solid var(--border-soft);
+  border-radius: 3px;
+  padding: 0 6px;
+  background: var(--surface-panel);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 26px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.note-segment-row.has-audio .note-segment-audio-name {
+  border-color: var(--accent-soft);
+  color: var(--accent-hover);
+}
+
+.note-segment-audio-button {
+  width: 24px;
+  height: 28px;
+  padding: 0;
+}
+
+.note-segment-audio-button .button-icon {
+  width: 11px;
+  height: 11px;
 }
 
 .note-segment-remove {
