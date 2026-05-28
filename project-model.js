@@ -25,6 +25,8 @@ export function createProjectModel(deps) {
     sanitizeTextFontWeight,
     sanitizeTextKind,
     sanitizeTextEffect,
+    normalizeTextTypingEnabled,
+    sanitizeTextTypingSpeed,
     sanitizeCodeTextPreset,
     sanitizeCodeTextFontSize,
     normalizeCodeTextLatex,
@@ -135,6 +137,12 @@ export function createProjectModel(deps) {
       fontFamily: sanitizeTextFontFamily(object.dataset.fontFamily),
       fontWeight: sanitizeTextFontWeight(object.dataset.fontWeight),
       textEffect: sanitizeTextEffect(object.dataset.textEffect),
+      ...(textKind === "plain" && normalizeTextTypingEnabled(object.dataset.textTypingEnabled)
+        ? {
+            textTypingEnabled: true,
+            textTypingSpeed: sanitizeTextTypingSpeed(object.dataset.textTypingSpeed),
+          }
+        : {}),
       ...(textKind === "code"
         ? {
             codePreset: sanitizeCodeTextPreset(object.dataset.codePreset),
@@ -241,6 +249,12 @@ export function createProjectModel(deps) {
       fontFamily: sanitizeTextFontFamily(object.fontFamily),
       fontWeight: sanitizeTextFontWeight(object.fontWeight),
       textEffect: sanitizeTextEffect(object.textEffect),
+      ...(textKind === "plain" && normalizeTextTypingEnabled(object.textTypingEnabled)
+        ? {
+            textTypingEnabled: true,
+            textTypingSpeed: sanitizeTextTypingSpeed(object.textTypingSpeed),
+          }
+        : {}),
       ...(textKind === "code"
         ? {
             codePreset: sanitizeCodeTextPreset(object.codePreset),

@@ -242,6 +242,8 @@ const animationMoveButtons = [...document.querySelectorAll("[data-animation-move
 const animationMoveEasingButtons = [...document.querySelectorAll("[data-animation-move-easing]")];
 const animationMovePointButtons = [...document.querySelectorAll("[data-animation-move-point]")];
 const selectedTextColor = document.querySelector("#selectedTextColor");
+const selectedTextTypingEnabled = document.querySelector("#selectedTextTypingEnabled");
+const selectedTextTypingSpeed = document.querySelector("#selectedTextTypingSpeed");
 const duplicateSelected = document.querySelector("#duplicateSelected");
 const editSelectedText = document.querySelector("#editSelectedText");
 const deleteSelected = document.querySelector("#deleteSelected");
@@ -1688,6 +1690,7 @@ const VIDEO_EXPORT_FALLBACK_DURATION = 3;
 const DYNAMIC_FRAME_RATE = VIDEO_EXPORT_FPS;
 const DYNAMIC_MAX_DURATION = 60;
 const DEFAULT_GIT_TYPING_SPEED = 90;
+const DEFAULT_TEXT_TYPING_SPEED = 80;
 const DEFAULT_CHAT_TYPING_SPEED = 80;
 const DEFAULT_CHAT_TEXT_SCALE = 1.25;
 const CHAT_ANSWER_DELAY_SECONDS = 0.55;
@@ -1752,6 +1755,8 @@ const { serializeObject, serializeCurrentSlide, cloneProjectValue, normalizeProj
   sanitizeTextFontWeight,
   sanitizeTextKind,
   sanitizeTextEffect,
+  normalizeTextTypingEnabled,
+  sanitizeTextTypingSpeed,
   sanitizeCodeTextPreset,
   sanitizeCodeTextFontSize,
   normalizeCodeTextLatex,
@@ -1968,6 +1973,14 @@ function sanitizeTextKind(value) {
   return TEXT_KINDS.has(value) ? value : TEXT_KIND_PLAIN;
 }
 
+function normalizeTextTypingEnabled(value) {
+  return value === true || value === "true";
+}
+
+function sanitizeTextTypingSpeed(value) {
+  return sanitizeTypingSpeed(value, DEFAULT_TEXT_TYPING_SPEED);
+}
+
 function isCodeTextData(data) {
   return sanitizeTextKind(data?.textKind) === TEXT_KIND_CODE;
 }
@@ -1978,6 +1991,10 @@ function isCodeTextElement(element) {
 
 function isPlainTextElement(element) {
   return element?.dataset.type === "text" && !isCodeTextElement(element);
+}
+
+function plainTextTypingIsEnabled(data = {}) {
+  return sanitizeTextKind(data.textKind) !== TEXT_KIND_CODE && normalizeTextTypingEnabled(data.textTypingEnabled);
 }
 
 function sanitizeCodeTextPreset(value) {
@@ -2517,6 +2534,10 @@ function getElementAnimationData(element) {
     animationMoveToY: element.dataset.animationMoveToY,
     animationMoveDuration: element.dataset.animationMoveDuration,
     animationMoveEasing: element.dataset.animationMoveEasing,
+    textKind: element.dataset.textKind,
+    text: element.dataset.text,
+    textTypingEnabled: element.dataset.textTypingEnabled,
+    textTypingSpeed: element.dataset.textTypingSpeed,
   };
 }
 
@@ -2960,6 +2981,8 @@ function updateObjectAnimationPreview(timeSeconds, durationSeconds) {
     }
     if (isCodeTextElement(element) && codeTextGitTypingIsEnabled(getCodeTextGitTypingData(element.dataset))) {
       renderCodeTextAnimationFrame(element, timeSeconds);
+    } else if (isPlainTextElement(element) && plainTextTypingIsEnabled(element.dataset)) {
+      renderTextObject(element, { timeSeconds });
     }
   }
 }
@@ -2973,12 +2996,30 @@ function getCanvasCodeTextGitTypingDuration() {
   );
 }
 
+function getPlainTextTypingDuration(data = {}) {
+  if (!plainTextTypingIsEnabled(data)) {
+    return 0;
+  }
+  const text = typeof data.text === "string" ? data.text : "";
+  return clamp(text.length / sanitizeTextTypingSpeed(data.textTypingSpeed) + 0.4, 0.5, DYNAMIC_MAX_DURATION);
+}
+
+function getCanvasPlainTextTypingDuration() {
+  return Math.max(
+    0,
+    ...[...canvas.querySelectorAll(".text-object")]
+      .filter((element) => isPlainTextElement(element) && plainTextTypingIsEnabled(element.dataset))
+      .map((element) => getPlainTextTypingDuration(element.dataset))
+  );
+}
+
 function canvasHasObjectAnimations() {
   return [...canvas.querySelectorAll(".object")].some((element) => {
     const data = getElementAnimationData(element);
     return (
       (canAnimateObjectData(data) && hasObjectAnimation(data)) ||
-      (isCodeTextElement(element) && codeTextGitTypingIsEnabled(getCodeTextGitTypingData(element.dataset)))
+      (isCodeTextElement(element) && codeTextGitTypingIsEnabled(getCodeTextGitTypingData(element.dataset))) ||
+      (isPlainTextElement(element) && plainTextTypingIsEnabled(element.dataset))
     );
   });
 }
@@ -2998,7 +3039,7 @@ function stopObjectAnimationPreview() {
   objectAnimationPreviewStart = 0;
   for (const element of canvas.querySelectorAll(".object")) {
     resetObjectAnimationPreview(element);
-    if (isCodeTextElement(element)) {
+    if (element.dataset.type === "text") {
       renderTextObject(element);
     }
   }
@@ -3014,11 +3055,12 @@ function runObjectAnimationPreview(timestamp) {
   }
   const oneShotDuration = getCanvasObjectAnimationDuration();
   const codeTypingDuration = getCanvasCodeTextGitTypingDuration();
+  const textTypingDuration = getCanvasPlainTextTypingDuration();
   const hasLoop = canvasHasLoopAnimations();
   const time = (timestamp - objectAnimationPreviewStart) / 1000;
-  const duration = Math.max(VIDEO_EXPORT_FALLBACK_DURATION, oneShotDuration, codeTypingDuration);
+  const duration = Math.max(VIDEO_EXPORT_FALLBACK_DURATION, oneShotDuration, codeTypingDuration, textTypingDuration);
   updateObjectAnimationPreview(time, duration);
-  if (!hasLoop && time >= Math.max(0.5, oneShotDuration, codeTypingDuration)) {
+  if (!hasLoop && time >= Math.max(0.5, oneShotDuration, codeTypingDuration, textTypingDuration)) {
     objectAnimationPreviewFrame = null;
     objectAnimationPreviewStart = 0;
     return;
@@ -3045,6 +3087,9 @@ function syncTextEditorValue(element, options = {}) {
   element.dataset.text = editor.value;
   if (isCodeTextElement(element) && editor.value !== previousText) {
     clearCodeTextGitTypingData(element);
+  }
+  if (isPlainTextElement(element) && editor.value !== previousText && plainTextTypingIsEnabled(element.dataset)) {
+    syncObjectAnimationPreview();
   }
   if (options.render !== false) {
     renderTextObject(element);
@@ -3199,6 +3244,8 @@ function syncSelectedInputs() {
   }
   duplicateSelected.disabled = !hasSelection;
   selectedTextColor.disabled = !hasPlainTextSelection;
+  selectedTextTypingEnabled.disabled = !hasPlainTextSelection;
+  selectedTextTypingSpeed.disabled = !hasPlainTextSelection || !normalizeTextTypingEnabled(selectedObject?.dataset.textTypingEnabled);
   selectedCodeTextSize.disabled = !hasCodeTextSelection;
   selectedCodeTextLatex.disabled = !hasCodeTextSelection;
   editSelectedText.disabled = !hasTextSelection;
@@ -3235,6 +3282,8 @@ function syncSelectedInputs() {
     selectedMoveDuration.value = "";
     selectedAnimationInDelay.value = "";
     selectedTextColor.value = defaultTextColor;
+    selectedTextTypingEnabled.checked = false;
+    selectedTextTypingSpeed.value = String(DEFAULT_TEXT_TYPING_SPEED);
     selectedCodeTextSize.value = String(DEFAULT_CODE_TEXT_FONT_SIZE);
     selectedCodeTextLatex.checked = false;
     syncCodeTextGitControls();
@@ -3265,6 +3314,8 @@ function syncSelectedInputs() {
   selectedMoveToY.value = Math.round(hasMoveAnimation ? sanitizeAnimationMoveCoordinate(animationData.animationMoveToY) : state.y);
   selectedMoveDuration.value = String(sanitizeAnimationMoveDuration(animationData.animationMoveDuration));
   selectedTextColor.value = selectedObject.dataset.textColor || defaultTextColor;
+  selectedTextTypingEnabled.checked = normalizeTextTypingEnabled(selectedObject.dataset.textTypingEnabled);
+  selectedTextTypingSpeed.value = String(sanitizeTextTypingSpeed(selectedObject.dataset.textTypingSpeed));
   selectedCodeTextSize.value = String(sanitizeCodeTextFontSize(selectedObject.dataset.codeFontSize));
   selectedCodeTextLatex.checked = normalizeCodeTextLatex(selectedObject.dataset.codeLatex);
   syncCodeTextGitControls();
@@ -3641,6 +3692,8 @@ function addTextObject(text, statusMessage = "Text pasted. The font is fixed to 
   element.dataset.fontFamily = DEFAULT_TEXT_FONT_FAMILY;
   element.dataset.fontWeight = String(DEFAULT_TEXT_FONT_WEIGHT);
   element.dataset.textEffect = DEFAULT_TEXT_EFFECT;
+  element.dataset.textTypingEnabled = "false";
+  element.dataset.textTypingSpeed = String(DEFAULT_TEXT_TYPING_SPEED);
   setDefaultAnimationDataset(element);
   canvas.append(element);
   attachObjectEvents(element);
@@ -4005,8 +4058,13 @@ function selectEditableContent(element) {
   element.select();
 }
 
-function renderTextObject(element) {
-  const text = element.dataset.text || "";
+function renderTextObject(element, options = {}) {
+  const sourceText = element.dataset.text || "";
+  const timeSeconds = Number(options.timeSeconds);
+  const text =
+    Number.isFinite(timeSeconds) && plainTextTypingIsEnabled(element.dataset)
+      ? sourceText.slice(0, clamp(Math.floor(timeSeconds * sanitizeTextTypingSpeed(element.dataset.textTypingSpeed)), 0, sourceText.length))
+      : sourceText;
   const textCanvas = element.querySelector(".text-canvas");
   const width = Math.max(1, Math.round(Number(element.dataset.width) || element.clientWidth || 1));
   const height = Math.max(1, Math.round(Number(element.dataset.height) || element.clientHeight || 1));
@@ -5163,10 +5221,11 @@ function getSlideAnimationFrameDuration(slide, notes = "") {
 
 function getCanvasSlideAnimationRenderDuration(slide, notes = "", hasNarration = false) {
   const visualDuration = getSlideAnimationFrameDuration(slide, notes);
+  const textTypingDuration = getSlidePlainTextTypingDuration(slide);
   if (!hasNarration) {
-    return visualDuration;
+    return Math.max(visualDuration, textTypingDuration);
   }
-  return Math.max(visualDuration, getSlideCodeTextGitTypingDuration(slide));
+  return Math.max(visualDuration, getSlideCodeTextGitTypingDuration(slide), textTypingDuration);
 }
 
 function getSubtitleTextForRender(slide, options = {}) {
@@ -5841,10 +5900,14 @@ async function drawSlideObjectsForExport(context, objects = [], options = {}) {
         context.globalAlpha = clamp(context.globalAlpha * renderState.opacity, 0, 1);
         drawCodeTextObject(context, object, renderState.width, renderState.height, { timeSeconds });
       } else if (object.type === "text") {
+        const sourceText = object.text || "";
+        const text = plainTextTypingIsEnabled(object)
+          ? sourceText.slice(0, clamp(Math.floor(timeSeconds * sanitizeTextTypingSpeed(object.textTypingSpeed)), 0, sourceText.length))
+          : sourceText;
         context.__textColor = object.textColor || DEFAULT_TEXT_COLOR;
         drawTextLines(
           context,
-          object.text || "",
+          text,
           renderState.width,
           renderState.height,
           false,
@@ -5931,7 +5994,10 @@ async function renderDynamicSlideFrames(slide, options = {}) {
 
 function slideHasObjectAnimations(slide) {
   return (slide?.objects || []).some(
-    (object) => (canAnimateObjectData(object) && hasObjectAnimation(object)) || isGitTypingCodeTextData(object)
+    (object) =>
+      (canAnimateObjectData(object) && hasObjectAnimation(object)) ||
+      isGitTypingCodeTextData(object) ||
+      (object?.type === "text" && plainTextTypingIsEnabled(object))
   );
 }
 
@@ -5945,6 +6011,15 @@ function slideHasCodeTextGitTyping(slide) {
 
 function getSlideCodeTextGitTypingDuration(slide) {
   return Math.max(0, ...(slide?.objects || []).filter(isGitTypingCodeTextData).map(getCodeTextGitTypingDuration));
+}
+
+function getSlidePlainTextTypingDuration(slide) {
+  return Math.max(
+    0,
+    ...(slide?.objects || [])
+      .filter((object) => object?.type === "text" && plainTextTypingIsEnabled(object))
+      .map(getPlainTextTypingDuration)
+  );
 }
 
 async function renderCanvasSlideAnimationFrames(slide, options = {}) {
@@ -6577,6 +6652,8 @@ function addTextObjectFromData(data) {
     sanitizeTextFontWeight(data.fontWeight, isCodeTextData(element.dataset) ? DEFAULT_CODE_TEXT_FONT_WEIGHT : DEFAULT_TEXT_FONT_WEIGHT)
   );
   element.dataset.textEffect = sanitizeTextEffect(data.textEffect);
+  element.dataset.textTypingEnabled = String(plainTextTypingIsEnabled(data));
+  element.dataset.textTypingSpeed = String(sanitizeTextTypingSpeed(data.textTypingSpeed));
   if (isCodeTextData(element.dataset)) {
     const preset = CODE_TEXT_PRESETS[sanitizeCodeTextPreset(data.codePreset)];
     element.dataset.codePreset = sanitizeCodeTextPreset(data.codePreset);
@@ -9143,6 +9220,34 @@ function applySelectedTextColorChange(shouldRecord = false) {
   }
 }
 
+function applySelectedTextTypingEnabledChange(shouldRecord = true) {
+  if (!isPlainTextElement(selectedObject)) {
+    return;
+  }
+  selectedObject.dataset.textTypingEnabled = String(selectedTextTypingEnabled.checked);
+  selectedTextTypingSpeed.disabled = !selectedTextTypingEnabled.checked;
+  renderTextObject(selectedObject);
+  syncObjectAnimationPreview();
+  setStatus(selectedTextTypingEnabled.checked ? "Text typing animation enabled." : "Text typing animation disabled.");
+  if (shouldRecord) {
+    recordHistory();
+  }
+}
+
+function applySelectedTextTypingSpeedChange(shouldRecord = false) {
+  if (!isPlainTextElement(selectedObject)) {
+    return;
+  }
+  const speed = sanitizeTextTypingSpeed(selectedTextTypingSpeed.value);
+  selectedTextTypingSpeed.value = String(speed);
+  selectedObject.dataset.textTypingSpeed = String(speed);
+  syncObjectAnimationPreview();
+  setStatus(`Text typing speed set to ${speed} chars/s.`);
+  if (shouldRecord) {
+    recordHistory();
+  }
+}
+
 function applySelectedTextAlignChange(align) {
   if (!isPlainTextElement(selectedObject)) {
     return;
@@ -9590,6 +9695,9 @@ for (const input of [selectedMoveFromX, selectedMoveFromY, selectedMoveToX, sele
 }
 selectedTextColor.addEventListener("input", () => applySelectedTextColorChange());
 selectedTextColor.addEventListener("change", () => applySelectedTextColorChange(true));
+selectedTextTypingEnabled.addEventListener("change", () => applySelectedTextTypingEnabledChange(true));
+selectedTextTypingSpeed.addEventListener("input", () => applySelectedTextTypingSpeedChange());
+selectedTextTypingSpeed.addEventListener("change", () => applySelectedTextTypingSpeedChange(true));
 selectedCodeTextSize.addEventListener("input", () => applySelectedCodeTextSizeChange());
 selectedCodeTextSize.addEventListener("change", () => applySelectedCodeTextSizeChange(true));
 selectedCodeTextLatex.addEventListener("change", () => applySelectedCodeTextLatexChange(true));
