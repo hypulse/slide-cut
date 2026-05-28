@@ -2797,6 +2797,73 @@ function getMoveSnapState(state) {
   };
 }
 
+function getResizeSnapState(state, handle) {
+  const canvasWidth = canvas.offsetWidth;
+  const canvasHeight = canvas.offsetHeight;
+  const threshold = MOVE_SNAP_SCREEN_THRESHOLD / Math.max(canvasViewScale, 0.05);
+  const safeAreaTargets = getSafeAreaSnapTargets(canvasWidth, canvasHeight);
+  const xTargets = [0, canvasWidth / 2, canvasWidth, ...safeAreaTargets.x];
+  const yTargets = [0, canvasHeight / 2, canvasHeight, ...safeAreaTargets.y];
+  const resizesWest = handle.includes("w");
+  const resizesEast = handle.includes("e");
+  const resizesNorth = handle.includes("n");
+  const resizesSouth = handle.includes("s");
+  const xMarkers = resizesWest
+    ? [state.x, state.x + state.width / 2]
+    : resizesEast
+      ? [state.x + state.width / 2, state.x + state.width]
+      : [state.x, state.x + state.width / 2, state.x + state.width];
+  const yMarkers = resizesNorth
+    ? [state.y, state.y + state.height / 2]
+    : resizesSouth
+      ? [state.y + state.height / 2, state.y + state.height]
+      : [state.y, state.y + state.height / 2, state.y + state.height];
+  const xSnap = findSnapDelta(xMarkers, xTargets, threshold);
+  const ySnap = findSnapDelta(yMarkers, yTargets, threshold);
+  const snappedState = { ...state };
+
+  if (xSnap) {
+    if (resizesWest) {
+      snappedState.x += xSnap.delta;
+      snappedState.width -= xSnap.delta;
+    } else if (resizesEast) {
+      snappedState.width += xSnap.delta;
+    } else {
+      snappedState.x += xSnap.delta;
+    }
+  }
+
+  if (ySnap) {
+    if (resizesNorth) {
+      snappedState.y += ySnap.delta;
+      snappedState.height -= ySnap.delta;
+    } else if (resizesSouth) {
+      snappedState.height += ySnap.delta;
+    } else {
+      snappedState.y += ySnap.delta;
+    }
+  }
+
+  if (snappedState.width < 16) {
+    if (resizesWest) {
+      snappedState.x += snappedState.width - 16;
+    }
+    snappedState.width = 16;
+  }
+  if (snappedState.height < 16) {
+    if (resizesNorth) {
+      snappedState.y += snappedState.height - 16;
+    }
+    snappedState.height = 16;
+  }
+
+  return {
+    ...snappedState,
+    snapX: xSnap?.guide,
+    snapY: ySnap?.guide,
+  };
+}
+
 function statesEqual(a, b) {
   return (
     a &&
@@ -4194,14 +4261,16 @@ function handlePointerMove(event) {
   const x = activePointer.handle.includes("w") ? state.x + (state.width - width) : state.x;
   const y = activePointer.handle.includes("n") ? state.y + (state.height - height) : state.y;
 
-  hideSnapGuides();
-  applyState(element, {
+  const nextState = {
     ...state,
     x,
     y,
     width,
     height,
-  });
+  };
+  const snappedState = event.altKey ? nextState : getResizeSnapState(nextState, activePointer.handle);
+  applyState(element, snappedState);
+  updateSnapGuides(event.altKey ? null : snappedState);
 }
 
 function handlePointerEnd(event) {
