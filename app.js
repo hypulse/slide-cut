@@ -1075,12 +1075,14 @@ const ANIMATION_IN_PRESETS = {
   fade: { label: "Fade" },
   pop: { label: "Pop" },
   slideUp: { label: "Slide Up" },
+  fadeLeftToRight: { label: "Fade L-R" },
 };
 const ANIMATION_IN_DURATIONS = {
   none: 0,
   fade: 0.45,
   pop: 0.45,
   slideUp: 0.5,
+  fadeLeftToRight: 0.55,
 };
 const ANIMATION_LOOP_PRESETS = {
   none: { label: "None" },
@@ -2405,6 +2407,7 @@ function getObjectAnimationState(object, timeSeconds = 0, durationSeconds = VIDE
     flipY: normalizeFlipFlag(object.flipY),
     opacity: 1,
     scale: 1,
+    revealProgress: 1,
   };
   if (!canAnimateObjectData(object) || !hasObjectAnimation(object)) {
     return base;
@@ -2431,6 +2434,7 @@ function getObjectAnimationState(object, timeSeconds = 0, durationSeconds = VIDE
 
   if (config.animationInDelay > 0 && entranceTime < 0) {
     state.opacity = 0;
+    state.revealProgress = 0;
   } else if (config.animationIn === "fade" && entranceTime < 0.45) {
     state.opacity *= clamp(entranceTime / 0.45, 0, 1);
   } else if (config.animationIn === "pop" && entranceTime < 0.45) {
@@ -2442,6 +2446,10 @@ function getObjectAnimationState(object, timeSeconds = 0, durationSeconds = VIDE
     }
   } else if (config.animationIn === "slideUp" && entranceTime < 0.5) {
     state.y += (1 - easeOutCubic(entranceTime / 0.5)) * 28;
+  } else if (config.animationIn === "fadeLeftToRight" && entranceTime < 0.55) {
+    const progress = clamp(entranceTime / 0.55, 0, 1);
+    state.opacity *= progress;
+    state.revealProgress = easeOutCubic(progress);
   }
 
   const periodFactor = ANIMATION_SPEED_PERIOD_FACTORS[config.animationSpeed] || 1;
@@ -2466,6 +2474,7 @@ function getObjectAnimationState(object, timeSeconds = 0, durationSeconds = VIDE
   }
 
   state.opacity = clamp(state.opacity, 0, 1);
+  state.revealProgress = clamp(state.revealProgress, 0, 1);
   return state;
 }
 
@@ -2684,6 +2693,25 @@ function resetObjectAnimationPreview(element) {
   const state = getState(element);
   element.style.transform = `rotate(${state.rotation}deg)`;
   element.style.opacity = "";
+  element.style.clipPath = "";
+}
+
+function getObjectRevealClipPath(state) {
+  const revealProgress = clamp(numberOr(state.revealProgress, 1), 0, 1);
+  if (revealProgress >= 0.999) {
+    return "";
+  }
+  return `inset(0 ${100 - revealProgress * 100}% 0 0)`;
+}
+
+function applyObjectRevealClip(context, state) {
+  const revealProgress = clamp(numberOr(state.revealProgress, 1), 0, 1);
+  if (revealProgress >= 0.999) {
+    return;
+  }
+  context.beginPath();
+  context.rect(0, 0, Math.max(0, state.width * revealProgress), state.height);
+  context.clip();
 }
 
 function updateObjectAnimationPreview(timeSeconds, durationSeconds) {
@@ -2696,6 +2724,7 @@ function updateObjectAnimationPreview(timeSeconds, durationSeconds) {
     const animatedState = getObjectAnimationState(data, timeSeconds, durationSeconds);
     element.style.transform = getAnimatedObjectTransform(animatedState, data);
     element.style.opacity = String(animatedState.opacity);
+    element.style.clipPath = getObjectRevealClipPath(animatedState);
   }
 }
 
@@ -5260,6 +5289,7 @@ async function drawSlideObjectsForExport(context, objects = [], options = {}) {
       context.rotate((renderState.rotation * Math.PI) / 180);
       context.scale(renderState.scale, renderState.scale);
       context.translate(-renderState.width / 2, -renderState.height / 2);
+      applyObjectRevealClip(context, renderState);
 
       if (object.type === "image") {
         context.globalAlpha = clamp(context.globalAlpha * renderState.opacity, 0, 1);
@@ -7372,6 +7402,7 @@ async function saveCanvasAsPng() {
     context.rotate((state.rotation * Math.PI) / 180);
     context.scale(state.scale, state.scale);
     context.translate(-state.width / 2, -state.height / 2);
+    applyObjectRevealClip(context, state);
 
     if (object.dataset.type === "image") {
       const imageElement = object.querySelector("img");
