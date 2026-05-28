@@ -427,7 +427,14 @@ button.danger:hover {
 
 .menu-audio-group {
   flex: 0 1 auto;
-  max-width: 260px;
+  max-width: 340px;
+}
+
+.top-menu-range {
+  width: 68px;
+  height: 24px;
+  margin: 0 4px;
+  accent-color: var(--accent);
 }
 
 .top-menu-info {

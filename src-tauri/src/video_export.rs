@@ -28,6 +28,7 @@ pub(crate) struct VideoExportPayload {
     fps: Option<u32>,
     fallback_duration_seconds: Option<f64>,
     background_music_path: Option<String>,
+    background_music_volume: Option<f64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -724,9 +725,13 @@ fn mix_background_music(
     video_path: &Path,
     music_path: &Path,
     output_path: &Path,
+    volume: f64,
     export_id: &str,
 ) -> Result<(), String> {
-    let filter = "[0:a]aresample=44100,aformat=channel_layouts=stereo[a0];[1:a]aresample=44100,aformat=channel_layouts=stereo,volume=0.32[a1];[a0][a1]amix=inputs=2:duration=first:dropout_transition=0[a]";
+    let volume = volume.clamp(0.0, 1.0);
+    let filter = format!(
+        "[0:a]aresample=44100,aformat=channel_layouts=stereo[a0];[1:a]aresample=44100,aformat=channel_layouts=stereo,volume={volume:.3}[a1];[a0][a1]amix=inputs=2:duration=first:dropout_transition=0[a]"
+    );
     let mut command = Command::new(ffmpeg);
     command
         .arg("-y")
@@ -2221,7 +2226,14 @@ pub(crate) fn export_video(
                 1,
                 1,
             );
-            mix_background_music(&ffmpeg, &merged_path, music_path, &output_path, &export_id)?;
+            mix_background_music(
+                &ffmpeg,
+                &merged_path,
+                music_path,
+                &output_path,
+                payload.background_music_volume.unwrap_or(0.32),
+                &export_id,
+            )?;
         } else {
             concat_segments(&ffmpeg, &work_dir, &segments, &output_path, &export_id)?;
         }

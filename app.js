@@ -128,6 +128,7 @@ const addCodeTextBox = document.querySelector("#addCodeTextBox");
 const addChatTypingSlide = document.querySelector("#addChatTypingSlide");
 const chooseBackgroundMusic = document.querySelector("#chooseBackgroundMusic");
 const clearBackgroundMusic = document.querySelector("#clearBackgroundMusic");
+const backgroundMusicVolume = document.querySelector("#backgroundMusicVolume");
 const backgroundMusicInfo = document.querySelector("#backgroundMusicInfo");
 const savePng = document.querySelector("#savePng");
 const exportMp4 = document.querySelector("#exportMp4");
@@ -1680,6 +1681,7 @@ const DEFAULT_TTS_SETTINGS = {
 const DEFAULT_SUBTITLE_ENABLED = true;
 const DEFAULT_SUBTITLE_SIZE = 100;
 const DEFAULT_SUBTITLE_Y = 90;
+const DEFAULT_BACKGROUND_MUSIC_VOLUME = 0.32;
 const SUBTITLE_MAX_LINES = 2;
 const VIDEO_EXPORT_FPS = 30;
 const VIDEO_EXPORT_FALLBACK_DURATION = 3;
@@ -6238,7 +6240,14 @@ function normalizeSlideStartSound(value) {
 }
 
 function normalizeProjectBackgroundMusic(value) {
-  return normalizeAudioAsset(value);
+  const audio = normalizeAudioAsset(value);
+  if (!audio) {
+    return null;
+  }
+  return {
+    ...audio,
+    volume: clamp(numberOr(value?.volume, DEFAULT_BACKGROUND_MUSIC_VOLUME), 0, 1),
+  };
 }
 
 function getActiveSlideVideo() {
@@ -6344,7 +6353,7 @@ function updateSlideSoundView() {
 
 function updateBackgroundMusicView() {
   const music = normalizeProjectBackgroundMusic(projectSettingsState.backgroundMusic);
-  if (!backgroundMusicInfo || !clearBackgroundMusic) {
+  if (!backgroundMusicInfo || !clearBackgroundMusic || !backgroundMusicVolume) {
     return;
   }
 
@@ -6352,12 +6361,17 @@ function updateBackgroundMusicView() {
     backgroundMusicInfo.textContent = "No BGM";
     backgroundMusicInfo.title = "";
     clearBackgroundMusic.disabled = true;
+    backgroundMusicVolume.disabled = true;
+    backgroundMusicVolume.value = String(Math.round(DEFAULT_BACKGROUND_MUSIC_VOLUME * 100));
     return;
   }
 
-  backgroundMusicInfo.textContent = music.name;
-  backgroundMusicInfo.title = music.name;
+  const volumePercent = Math.round(music.volume * 100);
+  backgroundMusicInfo.textContent = `${music.name} ${volumePercent}%`;
+  backgroundMusicInfo.title = `${music.name} (${volumePercent}%)`;
   clearBackgroundMusic.disabled = false;
+  backgroundMusicVolume.disabled = false;
+  backgroundMusicVolume.value = String(volumePercent);
 }
 
 function createPreviewElement(tagName, className, text = "") {
@@ -7926,6 +7940,7 @@ async function chooseBackgroundMusicForProject() {
       backgroundMusic: {
         path: importedAsset.path,
         name: importedAsset.name || getFileNameFromPath(path),
+        volume: normalizeProjectBackgroundMusic(projectSettingsState.backgroundMusic)?.volume ?? DEFAULT_BACKGROUND_MUSIC_VOLUME,
       },
     });
     updateBackgroundMusicView();
@@ -7943,6 +7958,24 @@ function clearBackgroundMusicForProject() {
   });
   updateBackgroundMusicView();
   setStatus("Background music removed.");
+  scheduleNativeProjectSave();
+}
+
+function setBackgroundMusicVolumeForProject() {
+  const music = normalizeProjectBackgroundMusic(projectSettingsState.backgroundMusic);
+  if (!music || !backgroundMusicVolume) {
+    updateBackgroundMusicView();
+    return;
+  }
+  projectSettingsState = normalizeProjectSettings({
+    ...projectSettingsState,
+    backgroundMusic: {
+      ...music,
+      volume: clamp(numberOr(backgroundMusicVolume.value, Math.round(DEFAULT_BACKGROUND_MUSIC_VOLUME * 100)) / 100, 0, 1),
+    },
+  });
+  updateBackgroundMusicView();
+  setStatus(`Background music volume set to ${Math.round(projectSettingsState.backgroundMusic.volume * 100)}%.`);
   scheduleNativeProjectSave();
 }
 
@@ -8928,6 +8961,7 @@ async function exportProjectAsMp4() {
       fps: VIDEO_EXPORT_FPS,
       fallbackDurationSeconds: VIDEO_EXPORT_FALLBACK_DURATION,
       backgroundMusicPath: backgroundMusic?.path || null,
+      backgroundMusicVolume: backgroundMusic?.volume ?? DEFAULT_BACKGROUND_MUSIC_VOLUME,
       tts: getTtsSettings(),
       slides: renderedSlides,
     });
@@ -9360,6 +9394,7 @@ closeAppSettings.addEventListener("click", hideAppSettings);
 saveAppSettingsButton.addEventListener("click", saveSettings);
 chooseBackgroundMusic.addEventListener("click", chooseBackgroundMusicForProject);
 clearBackgroundMusic.addEventListener("click", clearBackgroundMusicForProject);
+backgroundMusicVolume.addEventListener("input", () => setBackgroundMusicVolumeForProject());
 chooseExportDir.addEventListener("click", chooseProjectExportDirectory);
 resetExportDir.addEventListener("click", resetProjectExportDirectory);
 appSettings.addEventListener("click", (event) => {
