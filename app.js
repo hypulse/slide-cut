@@ -3,6 +3,9 @@ import { createProjectModel } from "./project-model.js";
 
 const canvas = document.querySelector("#canvas");
 const slideNotes = document.querySelector("#slideNotes");
+const noteSegmentList = document.querySelector("#noteSegmentList");
+const addNoteSegmentButton = document.querySelector("#addNoteSegment");
+const slideNotesSummary = document.querySelector("#slideNotesSummary");
 const slideVideo = document.querySelector("#slideVideo");
 const imageTemplate = document.querySelector("#imageTemplate");
 const textTemplate = document.querySelector("#textTemplate");
@@ -181,6 +184,8 @@ const settingsMiniMaxApiKey = document.querySelector("#settingsMiniMaxApiKey");
 const settingsCanvasWidth = document.querySelector("#settingsCanvasWidth");
 const settingsCanvasHeight = document.querySelector("#settingsCanvasHeight");
 const settingsCanvasColor = document.querySelector("#settingsCanvasColor");
+const settingsSafeAreaSnapEnabled = document.querySelector("#settingsSafeAreaSnapEnabled");
+const settingsSafeAreaPresetButtons = [...document.querySelectorAll("[data-safe-area-preset]")];
 const settingsTtsProvider = document.querySelector("#settingsTtsProvider");
 const settingsTtsModel = document.querySelector("#settingsTtsModel");
 const settingsTtsVoice = document.querySelector("#settingsTtsVoice");
@@ -310,6 +315,8 @@ let projectSettingsState = {
   subtitleFontFamily: "Pretendard",
   subtitleFontWeight: 700,
   subtitleTextEffect: "boldCaption",
+  safeAreaSnapEnabled: false,
+  safeAreaPreset: "reelsShorts",
   exportDir: "",
   backgroundMusic: null,
 };
@@ -1021,6 +1028,23 @@ observeSubtitleSettingsRows();
 const DEFAULT_CANVAS_WIDTH = 1280;
 const DEFAULT_CANVAS_HEIGHT = 720;
 const DEFAULT_CANVAS_COLOR = "#ffffff";
+const DEFAULT_SAFE_AREA_SNAP_ENABLED = false;
+const DEFAULT_SAFE_AREA_PRESET = "reelsShorts";
+const SAFE_AREA_PRESETS = {
+  reelsShorts: {
+    label: "Reels / Shorts",
+    canonicalWidth: 1080,
+    canonicalHeight: 1920,
+    margins: { left: 90, top: 140, right: 180, bottom: 440 },
+  },
+  youtubeVideo: {
+    label: "YouTube 16:9",
+    canonicalWidth: 1920,
+    canonicalHeight: 1080,
+    margins: { left: 192, top: 108, right: 192, bottom: 108 },
+  },
+};
+const SAFE_AREA_PRESET_KEYS = new Set(Object.keys(SAFE_AREA_PRESETS));
 const COLOR_PRESETS = {
   light: { canvasColor: "#ffffff", textColor: "#000000" },
   dark: { canvasColor: "#000000", textColor: "#ffffff" },
@@ -1734,6 +1758,14 @@ function normalizeSubtitleTextEffect(value) {
   return sanitizeTextEffect(value || DEFAULT_SUBTITLE_TEXT_EFFECT);
 }
 
+function normalizeSafeAreaSnapEnabled(value) {
+  return value === undefined ? DEFAULT_SAFE_AREA_SNAP_ENABLED : Boolean(value);
+}
+
+function normalizeSafeAreaPreset(value) {
+  return SAFE_AREA_PRESET_KEYS.has(value) ? value : DEFAULT_SAFE_AREA_PRESET;
+}
+
 function normalizeContinueAfterTts(value) {
   return Boolean(value);
 }
@@ -2443,6 +2475,64 @@ function hideSnapGuides() {
   }
 }
 
+function getScaledSafeAreaRect(canvasWidth = canvas.offsetWidth, canvasHeight = canvas.offsetHeight) {
+  const width = Math.max(1, roundedCanvasSize(canvasWidth || DEFAULT_CANVAS_WIDTH));
+  const height = Math.max(1, roundedCanvasSize(canvasHeight || DEFAULT_CANVAS_HEIGHT));
+  const preset = SAFE_AREA_PRESETS[normalizeSafeAreaPreset(projectSettingsState.safeAreaPreset)] || SAFE_AREA_PRESETS[DEFAULT_SAFE_AREA_PRESET];
+  const scaleX = width / preset.canonicalWidth;
+  const scaleY = height / preset.canonicalHeight;
+  const leftMargin = clamp(Math.round(preset.margins.left * scaleX), 0, Math.max(0, width - 1));
+  const rightMargin = clamp(Math.round(preset.margins.right * scaleX), 0, Math.max(0, width - leftMargin - 1));
+  const topMargin = clamp(Math.round(preset.margins.top * scaleY), 0, Math.max(0, height - 1));
+  const bottomMargin = clamp(Math.round(preset.margins.bottom * scaleY), 0, Math.max(0, height - topMargin - 1));
+  const safeWidth = Math.max(1, width - leftMargin - rightMargin);
+  const safeHeight = Math.max(1, height - topMargin - bottomMargin);
+
+  return {
+    left: leftMargin,
+    top: topMargin,
+    width: safeWidth,
+    height: safeHeight,
+    right: leftMargin + safeWidth,
+    bottom: topMargin + safeHeight,
+  };
+}
+
+function getSafeAreaSnapTargets(canvasWidth, canvasHeight) {
+  if (!projectSettingsState.safeAreaSnapEnabled) {
+    return { x: [], y: [] };
+  }
+
+  const rect = getScaledSafeAreaRect(canvasWidth, canvasHeight);
+  return {
+    x: [rect.left, rect.left + rect.width / 2, rect.right],
+    y: [rect.top, rect.top + rect.height / 2, rect.bottom],
+  };
+}
+
+function updateSafeAreaOverlay() {
+  let overlay = canvas.querySelector(".safe-area-overlay");
+  if (!projectSettingsState.safeAreaSnapEnabled) {
+    overlay?.classList.remove("is-visible");
+    return;
+  }
+
+  if (!overlay) {
+    overlay = document.createElement("div");
+    overlay.className = "safe-area-overlay";
+    overlay.setAttribute("aria-hidden", "true");
+    canvas.append(overlay);
+  }
+
+  const rect = getScaledSafeAreaRect();
+  overlay.style.left = `${rect.left}px`;
+  overlay.style.top = `${rect.top}px`;
+  overlay.style.width = `${rect.width}px`;
+  overlay.style.height = `${rect.height}px`;
+  overlay.dataset.safeAreaPreset = normalizeSafeAreaPreset(projectSettingsState.safeAreaPreset);
+  overlay.classList.add("is-visible");
+}
+
 function updateSnapGuides(snap) {
   const { vertical, horizontal } = getSnapGuideElements();
   const canvasWidth = canvas.offsetWidth;
@@ -2488,8 +2578,9 @@ function getMoveSnapState(state) {
   const threshold = MOVE_SNAP_SCREEN_THRESHOLD / Math.max(canvasViewScale, 0.05);
   const xMarkers = [state.x, state.x + state.width / 2, state.x + state.width];
   const yMarkers = [state.y, state.y + state.height / 2, state.y + state.height];
-  const xSnap = findSnapDelta(xMarkers, [0, canvasWidth / 2, canvasWidth], threshold);
-  const ySnap = findSnapDelta(yMarkers, [0, canvasHeight / 2, canvasHeight], threshold);
+  const safeAreaTargets = getSafeAreaSnapTargets(canvasWidth, canvasHeight);
+  const xSnap = findSnapDelta(xMarkers, [0, canvasWidth / 2, canvasWidth, ...safeAreaTargets.x], threshold);
+  const ySnap = findSnapDelta(yMarkers, [0, canvasHeight / 2, canvasHeight, ...safeAreaTargets.y], threshold);
 
   return {
     ...state,
@@ -4165,6 +4256,259 @@ function splitNotesForTtsSegments(notes) {
     .filter(Boolean);
 }
 
+let isRenderingNoteSegments = false;
+
+function sanitizeNoteSegmentValue(value) {
+  return String(value || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .replace(/\s*\n+\s*/g, " ")
+    .trim();
+}
+
+function splitNotesForEditorSegments(notes) {
+  const cleanText = getExportNotesText(notes);
+  if (!cleanText) {
+    return [];
+  }
+  return cleanText
+    .split(/\n+/)
+    .map(sanitizeNoteSegmentValue)
+    .filter(Boolean);
+}
+
+function getNoteSegmentRows() {
+  return noteSegmentList ? [...noteSegmentList.querySelectorAll(".note-segment-row")] : [];
+}
+
+function getNoteSegmentInputs() {
+  return noteSegmentList ? [...noteSegmentList.querySelectorAll(".note-segment-input")] : [];
+}
+
+function resizeNoteSegmentInput(input) {
+  if (!input) {
+    return;
+  }
+  input.style.height = "0px";
+  const nextHeight = clamp(input.scrollHeight, 28, 82);
+  input.style.height = `${nextHeight}px`;
+  input.style.overflowY = input.scrollHeight > 82 ? "auto" : "hidden";
+}
+
+function updateNoteSegmentSummary() {
+  if (!slideNotesSummary) {
+    return;
+  }
+  const count = getNoteSegmentInputs().filter((input) => input.value.trim()).length;
+  slideNotesSummary.textContent = `${count} subtitle line${count === 1 ? "" : "s"}`;
+}
+
+function renumberNoteSegments() {
+  getNoteSegmentRows().forEach((row, index) => {
+    const marker = row.querySelector(".note-segment-index");
+    if (marker) {
+      marker.textContent = String(index + 1);
+    }
+  });
+}
+
+function collectNoteSegmentText() {
+  return getNoteSegmentInputs()
+    .map((input) => sanitizeNoteSegmentValue(input.value))
+    .filter(Boolean)
+    .join("\n");
+}
+
+function syncSlideNotesFromSegments({ save = false, record = false } = {}) {
+  if (isRenderingNoteSegments) {
+    return;
+  }
+  const nextNotes = collectNoteSegmentText();
+  const changed = slideNotes.value !== nextNotes;
+  slideNotes.value = nextNotes;
+  if (slides[activeSlideIndex]) {
+    slides[activeSlideIndex].notes = nextNotes;
+  }
+  updateNoteSegmentSummary();
+  if (!changed) {
+    return;
+  }
+  if (save) {
+    scheduleNativeProjectSave();
+  }
+  if (record) {
+    recordHistory();
+  }
+}
+
+function focusNoteSegmentInput(input) {
+  if (!input) {
+    return;
+  }
+  input.focus();
+  const cursor = input.value.length;
+  input.setSelectionRange(cursor, cursor);
+}
+
+function createNoteSegmentRow(value = "") {
+  const row = document.createElement("div");
+  row.className = "note-segment-row";
+
+  const marker = document.createElement("span");
+  marker.className = "note-segment-index";
+  marker.setAttribute("aria-hidden", "true");
+
+  const input = document.createElement("textarea");
+  input.className = "note-segment-input";
+  input.rows = 1;
+  input.spellcheck = false;
+  input.placeholder = "Subtitle line";
+  input.value = sanitizeNoteSegmentValue(value);
+  input.addEventListener("input", () => handleNoteSegmentInput(input));
+  input.addEventListener("change", () => syncSlideNotesFromSegments({ record: true }));
+  input.addEventListener("keydown", (event) => handleNoteSegmentKeyDown(event, input));
+  input.addEventListener("paste", (event) => handleNoteSegmentPaste(event, input));
+
+  const removeButton = document.createElement("button");
+  removeButton.className = "note-segment-remove danger";
+  removeButton.type = "button";
+  removeButton.dataset.icon = "trash-2";
+  removeButton.title = "Remove subtitle line";
+  removeButton.setAttribute("aria-label", "Remove subtitle line");
+  removeButton.addEventListener("click", () => removeNoteSegmentRow(row));
+
+  row.append(marker, input, removeButton);
+  return row;
+}
+
+function insertNoteSegmentAfter(row, value = "", { focus = false } = {}) {
+  if (!noteSegmentList) {
+    return null;
+  }
+  const nextRow = createNoteSegmentRow(value);
+  if (row?.nextSibling) {
+    noteSegmentList.insertBefore(nextRow, row.nextSibling);
+  } else {
+    noteSegmentList.append(nextRow);
+  }
+  hydrateButtonIcons(nextRow);
+  renumberNoteSegments();
+  resizeNoteSegmentInput(nextRow.querySelector(".note-segment-input"));
+  updateNoteSegmentSummary();
+  if (focus) {
+    focusNoteSegmentInput(nextRow.querySelector(".note-segment-input"));
+  }
+  return nextRow;
+}
+
+function handleNoteSegmentInput(input) {
+  const normalizedValue = input.value.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  if (normalizedValue.includes("\n")) {
+    const segments = splitNotesForEditorSegments(normalizedValue);
+    input.value = segments[0] || "";
+    let anchorRow = input.closest(".note-segment-row");
+    for (const segment of segments.slice(1)) {
+      anchorRow = insertNoteSegmentAfter(anchorRow, segment);
+    }
+  }
+  resizeNoteSegmentInput(input);
+  syncSlideNotesFromSegments({ save: true });
+}
+
+function handleNoteSegmentKeyDown(event, input) {
+  if (event.key === "Enter" && !event.metaKey && !event.ctrlKey && !event.altKey && !event.isComposing) {
+    event.preventDefault();
+    const start = input.selectionStart ?? input.value.length;
+    const end = input.selectionEnd ?? start;
+    const before = sanitizeNoteSegmentValue(input.value.slice(0, start));
+    const after = sanitizeNoteSegmentValue(input.value.slice(end));
+    input.value = before;
+    resizeNoteSegmentInput(input);
+    insertNoteSegmentAfter(input.closest(".note-segment-row"), after, { focus: true });
+    syncSlideNotesFromSegments({ save: true, record: Boolean(before || after) });
+    return;
+  }
+
+  if (event.key === "Backspace" && !input.value && getNoteSegmentRows().length > 1) {
+    event.preventDefault();
+    removeNoteSegmentRow(input.closest(".note-segment-row"));
+  }
+}
+
+function handleNoteSegmentPaste(event, input) {
+  const pastedText = event.clipboardData?.getData("text") || "";
+  const segments = splitNotesForEditorSegments(pastedText);
+  if (segments.length <= 1) {
+    return;
+  }
+
+  event.preventDefault();
+  const start = input.selectionStart ?? input.value.length;
+  const end = input.selectionEnd ?? start;
+  const prefix = input.value.slice(0, start);
+  const suffix = input.value.slice(end);
+  input.value = sanitizeNoteSegmentValue(`${prefix}${segments[0]}${suffix}`);
+  resizeNoteSegmentInput(input);
+
+  let anchorRow = input.closest(".note-segment-row");
+  for (const segment of segments.slice(1)) {
+    anchorRow = insertNoteSegmentAfter(anchorRow, segment);
+  }
+  syncSlideNotesFromSegments({ save: true, record: true });
+  focusNoteSegmentInput(anchorRow?.querySelector(".note-segment-input"));
+}
+
+function removeNoteSegmentRow(row) {
+  if (!row || !noteSegmentList) {
+    return;
+  }
+  const rows = getNoteSegmentRows();
+  const currentInput = row.querySelector(".note-segment-input");
+  if (rows.length <= 1) {
+    if (currentInput) {
+      currentInput.value = "";
+      resizeNoteSegmentInput(currentInput);
+      focusNoteSegmentInput(currentInput);
+    }
+    syncSlideNotesFromSegments({ save: true, record: true });
+    return;
+  }
+
+  const nextFocusInput =
+    row.previousElementSibling?.querySelector(".note-segment-input") || row.nextElementSibling?.querySelector(".note-segment-input");
+  row.remove();
+  renumberNoteSegments();
+  syncSlideNotesFromSegments({ save: true, record: true });
+  focusNoteSegmentInput(nextFocusInput);
+}
+
+function addNoteSegment(value = "", { focus = true, record = false } = {}) {
+  const rows = getNoteSegmentRows();
+  const row = insertNoteSegmentAfter(rows[rows.length - 1], value, { focus });
+  syncSlideNotesFromSegments({ save: true, record });
+  return row;
+}
+
+function renderNoteSegmentsFromText(notes) {
+  if (!noteSegmentList) {
+    return;
+  }
+  isRenderingNoteSegments = true;
+  const segments = splitNotesForEditorSegments(notes);
+  noteSegmentList.replaceChildren(...(segments.length ? segments : [""]).map((segment) => createNoteSegmentRow(segment)));
+  hydrateButtonIcons(noteSegmentList);
+  renumberNoteSegments();
+  for (const input of getNoteSegmentInputs()) {
+    resizeNoteSegmentInput(input);
+  }
+  slideNotes.value = collectNoteSegmentText();
+  if (slides[activeSlideIndex]) {
+    slides[activeSlideIndex].notes = slideNotes.value;
+  }
+  updateNoteSegmentSummary();
+  isRenderingNoteSegments = false;
+}
+
 function estimateNoteFrameDuration(notes) {
   const text = String(notes || "").trim();
   if (!text) {
@@ -5305,6 +5649,7 @@ function applyCanvasFrame(width, height, color) {
   canvas.style.height = `${safeHeight}px`;
   canvas.style.backgroundColor = safeColor;
   canvas.dataset.canvasColor = safeColor;
+  updateSafeAreaOverlay();
 }
 
 function getCanvasState() {
@@ -5394,6 +5739,7 @@ function loadSlide(index, shouldSaveCurrent = true) {
   clearCanvasObjects();
   applyCanvasFrame(slide.width, slide.height, slide.color);
   slideNotes.value = typeof slide.notes === "string" ? slide.notes : "";
+  renderNoteSegmentsFromText(slideNotes.value);
   slides[activeSlideIndex].video = normalizeSlideVideo(slide.video);
   slides[activeSlideIndex].startSound = normalizeSlideStartSound(slide.startSound);
   updateSlideVideoView();
@@ -6971,6 +7317,25 @@ function normalizeAppSettings(value = {}) {
   };
 }
 
+function setActiveSafeAreaPresetButton(preset) {
+  const safePreset = normalizeSafeAreaPreset(preset);
+  for (const button of settingsSafeAreaPresetButtons) {
+    button.classList.toggle("is-active", button.dataset.safeAreaPreset === safePreset);
+  }
+}
+
+function syncSafeAreaPresetControls() {
+  const disabled = !settingsSafeAreaSnapEnabled.checked;
+  for (const button of settingsSafeAreaPresetButtons) {
+    button.disabled = disabled;
+  }
+}
+
+function getActiveSafeAreaPresetSelection() {
+  const activeButton = settingsSafeAreaPresetButtons.find((button) => button.classList.contains("is-active"));
+  return normalizeSafeAreaPreset(activeButton?.dataset.safeAreaPreset ?? projectSettingsState.safeAreaPreset);
+}
+
 function setActiveSubtitleFontButton(fontFamily, fontWeight) {
   const safeFamily = normalizeSubtitleFontFamily(fontFamily);
   const safeWeight = normalizeSubtitleFontWeight(fontWeight);
@@ -7035,6 +7400,8 @@ function normalizeProjectSettings(value = {}) {
     subtitleFontFamily: normalizeSubtitleFontFamily(value.subtitleFontFamily),
     subtitleFontWeight: normalizeSubtitleFontWeight(value.subtitleFontWeight),
     subtitleTextEffect: normalizeSubtitleTextEffect(value.subtitleTextEffect),
+    safeAreaSnapEnabled: normalizeSafeAreaSnapEnabled(value.safeAreaSnapEnabled),
+    safeAreaPreset: normalizeSafeAreaPreset(value.safeAreaPreset),
     exportDir: typeof value.exportDir === "string" && value.exportDir.trim() ? value.exportDir.trim() : defaultProjectExportDir,
     backgroundMusic: normalizeProjectBackgroundMusic(value.backgroundMusic),
   };
@@ -7057,8 +7424,12 @@ function syncSettingsControls() {
   setActiveSubtitleStyleModeButton(projectSettingsState.subtitleStyleMode);
   setActiveSubtitleFontButton(projectSettingsState.subtitleFontFamily, projectSettingsState.subtitleFontWeight);
   setActiveSubtitleTextEffectButton(projectSettingsState.subtitleTextEffect);
+  settingsSafeAreaSnapEnabled.checked = projectSettingsState.safeAreaSnapEnabled;
+  setActiveSafeAreaPresetButton(projectSettingsState.safeAreaPreset);
+  syncSafeAreaPresetControls();
   settingsExportDir.value = projectSettingsState.exportDir;
   updateBackgroundMusicView();
+  updateSafeAreaOverlay();
   syncColorPresetButtons();
   scheduleSubtitleSettingsRowHeightUpdate();
 }
@@ -7082,6 +7453,8 @@ function getProjectSettingsFromControls() {
     subtitleFontFamily: subtitleFont.subtitleFontFamily,
     subtitleFontWeight: subtitleFont.subtitleFontWeight,
     subtitleTextEffect: subtitleStyle.subtitleTextEffect,
+    safeAreaSnapEnabled: settingsSafeAreaSnapEnabled.checked,
+    safeAreaPreset: getActiveSafeAreaPresetSelection(),
     exportDir: settingsExportDir.value,
     backgroundMusic: projectSettingsState.backgroundMusic,
   });
@@ -7929,17 +8302,8 @@ function applySelectedShapeStyleChange(shouldRecord = false) {
   }
 }
 
-slideNotes.addEventListener("input", () => {
-  if (slides[activeSlideIndex]) {
-    slides[activeSlideIndex].notes = slideNotes.value;
-    scheduleNativeProjectSave();
-  }
-});
-slideNotes.addEventListener("change", () => {
-  if (slides[activeSlideIndex]) {
-    slides[activeSlideIndex].notes = slideNotes.value;
-    recordHistory();
-  }
+addNoteSegmentButton.addEventListener("click", () => {
+  addNoteSegment("", { focus: true });
 });
 
 for (const button of colorPresetButtons) {
@@ -8031,6 +8395,12 @@ settingsSubtitleSize.addEventListener("blur", () => {
 settingsSubtitleY.addEventListener("blur", () => {
   settingsSubtitleY.value = String(normalizeSubtitleY(settingsSubtitleY.value));
 });
+settingsSafeAreaSnapEnabled.addEventListener("change", syncSafeAreaPresetControls);
+for (const button of settingsSafeAreaPresetButtons) {
+  button.addEventListener("click", () => {
+    setActiveSafeAreaPresetButton(button.dataset.safeAreaPreset);
+  });
+}
 for (const button of settingsSubtitleStyleButtons) {
   button.addEventListener("click", () => {
     setActiveSubtitleStyleModeButton(button.dataset.subtitleStyleMode);

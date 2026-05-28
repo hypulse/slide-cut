@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Slide Cut</title>
-    <link rel="stylesheet" href="./styles.css?v=20260528-video-frame-ratio" />
+    <link rel="stylesheet" href="./styles.css?v=20260528-safe-area-snap" />
   </head>
   <body>
     <div class="app-frame">
@@ -372,9 +372,13 @@
         <section class="slide-notes" aria-label="Slide notes">
           <div class="slide-notes-header">
             <h2>Notes</h2>
-            <span>Current slide notes</span>
+            <div class="slide-notes-header-actions">
+              <span id="slideNotesSummary">0 subtitle lines</span>
+              <button id="addNoteSegment" type="button" data-icon="plus" title="Add subtitle line">Add</button>
+            </div>
           </div>
-          <textarea id="slideNotes" spellcheck="false" placeholder="Add presenter notes for this slide."></textarea>
+          <div id="noteSegmentList" class="note-segment-list" aria-label="Subtitle note lines"></div>
+          <textarea id="slideNotes" class="slide-notes-source" spellcheck="false" hidden></textarea>
         </section>
       </section>
 
@@ -542,6 +546,17 @@
             </div>
           </label>
           <label>
+            <span>Safe Area Snap</span>
+            <input id="settingsSafeAreaSnapEnabled" type="checkbox" />
+          </label>
+          <label>
+            <span>Video Type</span>
+            <div id="settingsSafeAreaPreset" class="safe-area-preset-buttons" role="group" aria-label="Safe area video type">
+              <button type="button" data-safe-area-preset="reelsShorts" class="is-active">Reels / Shorts</button>
+              <button type="button" data-safe-area-preset="youtubeVideo">YouTube 16:9</button>
+            </div>
+          </label>
+          <label>
             <span>Speech Provider</span>
             <select id="settingsTtsProvider">
               <option value="openai">OpenAI</option>
@@ -620,6 +635,6 @@
     </div>
 
     <script src="./vendor/lucide.min.js" defer></script>
-    <script type="module" src="./app.js?v=20260528-video-frame-ratio"></script>
+    <script type="module" src="./app.js?v=20260528-safe-area-snap-note-segments"></script>
   </body>
 </html>
