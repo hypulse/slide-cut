@@ -5032,6 +5032,26 @@ function getDynamicSlideDuration(slide) {
   return 0;
 }
 
+function getChatSlideTypography(width, height, textScale) {
+  const safeTextScale = sanitizeChatTextScale(textScale);
+  const questionSize = clamp(Math.round(width * 0.0175 * safeTextScale), 16, 40);
+  const answerSize = clamp(Math.round(width * 0.017 * safeTextScale), 15, 38);
+  return {
+    questionSize,
+    answerSize,
+    questionLineHeight: Math.round(questionSize * 1.36),
+    answerLineHeight: Math.round(answerSize * 1.52),
+    questionPaddingX: Math.round(questionSize * 1.08),
+    questionPaddingY: Math.round(questionSize * 0.62),
+    questionMaxWidth: Math.round(width * 0.68),
+    answerMaxWidth: Math.min(width - Math.round(width * 0.036) * 2, Math.round(width * 0.74)),
+    marginX: Math.round(width * 0.036),
+    topMargin: Math.round(height * 0.022),
+    bottomMargin: Math.round(height * 0.045),
+    messageGap: Math.round(height * 0.075),
+  };
+}
+
 function drawWrappedText(context, text, x, y, maxWidth, lineHeight, maxHeight) {
   const lines = wrapTextLines(context, text, maxWidth + TEXT_PADDING_X * 2);
   let drawn = 0;
@@ -5186,22 +5206,26 @@ function drawChatTypingSlide(context, slide, width, height, timeSeconds, options
   const visibleAnswerCount = clamp(Math.floor((timeSeconds - answerStart) * speed), 0, answerSource.length);
   const questionText = questionSource;
   const answerText = timeSeconds >= answerStart ? answerSource.slice(0, visibleAnswerCount) : "";
-  const marginX = Math.round(width * 0.036);
-  const topMargin = Math.round(height * 0.022);
-  const bottomMargin = Math.round(height * 0.045);
+  const {
+    questionSize,
+    answerSize,
+    questionLineHeight,
+    answerLineHeight,
+    questionPaddingX,
+    questionPaddingY,
+    questionMaxWidth,
+    answerMaxWidth,
+    marginX,
+    topMargin,
+    bottomMargin,
+    messageGap,
+  } = getChatSlideTypography(width, height, textScale);
   const shouldReserveSubtitle = Boolean(options.subtitles || options.reserveSubtitles);
   const subtitleReserve = shouldReserveSubtitle
     ? getSubtitleReservedHeight(context, getSubtitleTextForRender(slide, options), width, height, options)
     : 0;
-  const questionSize = clamp(Math.round(width * 0.0175 * textScale), 16, 40);
-  const answerSize = clamp(Math.round(width * 0.017 * textScale), 15, 38);
-  const questionLineHeight = Math.round(questionSize * 1.36);
-  const answerLineHeight = Math.round(answerSize * 1.52);
-  const questionMaxWidth = Math.round(width * 0.68);
-  const answerMaxWidth = Math.min(width - marginX * 2, Math.round(width * 0.74));
   const viewportY = topMargin;
   const viewportHeight = height - topMargin - bottomMargin;
-  const messageGap = Math.round(height * 0.075);
 
   context.fillStyle = "#ffffff";
   context.fillRect(0, 0, width, height);
@@ -5209,8 +5233,6 @@ function drawChatTypingSlide(context, slide, width, height, timeSeconds, options
 
   context.font = `600 ${questionSize}px "Pretendard"`;
   const questionLines = questionText ? wrapTextLines(context, questionText, questionMaxWidth + TEXT_PADDING_X * 2) : [];
-  const questionPaddingX = Math.round(questionSize * 1.08);
-  const questionPaddingY = Math.round(questionSize * 0.62);
   const questionHeight = questionLines.length ? questionLines.length * questionLineHeight + questionPaddingY * 2 : 0;
   const questionBlockHeight = questionHeight;
 
@@ -5914,13 +5936,27 @@ function renderDynamicSlidePreview(slide) {
   }
   if (kind === "chatTyping") {
     const data = getChatTypingData(slide);
+    const previewWidth = Math.max(1, roundedCanvasSize(slide?.width || canvas.offsetWidth || DEFAULT_CANVAS_WIDTH));
+    const previewHeight = Math.max(1, roundedCanvasSize(slide?.height || canvas.offsetHeight || DEFAULT_CANVAS_HEIGHT));
+    const typography = getChatSlideTypography(previewWidth, previewHeight, data.textScale);
     const surface = createPreviewElement("div", "dynamic-preview-surface chat");
     const chat = createPreviewElement("div", "dynamic-preview-chat");
     const questionBlock = createPreviewElement("div", "dynamic-preview-question-block");
     const question = createPreviewElement("div", "dynamic-preview-bubble question", data.question);
     const answer = createPreviewElement("div", "dynamic-preview-answer", data.answer);
+    surface.style.padding = `${typography.topMargin}px ${typography.marginX}px ${typography.bottomMargin}px`;
+    chat.style.gap = `${typography.messageGap}px`;
+    questionBlock.style.maxWidth = `${typography.questionMaxWidth}px`;
+    question.style.fontSize = `${typography.questionSize}px`;
+    question.style.lineHeight = `${typography.questionLineHeight / typography.questionSize}`;
+    question.style.padding = `${typography.questionPaddingY}px ${typography.questionPaddingX}px`;
+    answer.style.maxWidth = `${typography.answerMaxWidth}px`;
+    answer.style.fontSize = `${typography.answerSize}px`;
+    answer.style.lineHeight = `${typography.answerLineHeight / typography.answerSize}`;
     if (data.question.length < 42 && !data.question.includes("\n")) {
       question.classList.add("is-compact");
+    } else {
+      question.style.borderRadius = `${Math.round(typography.questionSize * 0.92)}px`;
     }
     questionBlock.append(question);
     chat.append(questionBlock, answer);
@@ -8832,6 +8868,7 @@ for (const button of chatTextScaleButtons) {
   button.addEventListener("click", () => {
     syncChatTextScaleButtons(button.dataset.chatTextScale);
     syncChatTypingInputsToSlide({ record: true });
+    setStatus(`GPT slide text size set to ${Math.round(sanitizeChatTextScale(button.dataset.chatTextScale) * 100)}%.`);
   });
 }
 editSelectedText.addEventListener("pointerdown", (event) => {
