@@ -235,6 +235,10 @@
             </div>
           </div>
           <div class="subgroup" data-label="Animation" data-selection-section="animation">
+            <label class="animation-delay-field">
+              <span>In Delay</span>
+              <input id="selectedAnimationInDelay" type="number" min="0" max="60" step="0.1" />
+            </label>
             <div class="field-row">
               <span>In</span>
               <div class="animation-buttons anim-in" role="group" aria-label="Entrance animation">
@@ -245,10 +249,6 @@
                 <button type="button" data-animation-in="fadeLeftToRight">Fade L-R</button>
               </div>
             </div>
-            <label>
-              <span>Delay</span>
-              <input id="selectedAnimationInDelay" type="number" min="0" max="60" step="0.1" />
-            </label>
             <div class="field-row">
               <span>Loop</span>
               <div class="animation-buttons wide" role="group" aria-label="Loop animation">
@@ -260,9 +260,9 @@
                 <button type="button" data-animation-loop="float">Float</button>
               </div>
             </div>
-            <div class="field-row">
-              <span>Speed</span>
-              <div class="animation-buttons" role="group" aria-label="Animation speed">
+            <div class="field-row animation-loop-speed-row">
+              <span>Loop Speed</span>
+              <div class="animation-buttons" role="group" aria-label="Loop animation speed">
                 <button type="button" data-animation-speed="slow">Slow</button>
                 <button type="button" data-animation-speed="normal" class="is-active">Normal</button>
                 <button type="button" data-animation-speed="fast">Fast</button>
@@ -334,6 +334,18 @@
                 <button type="button" data-text-weight="900">900</button>
               </div>
             </label>
+            <label>
+              <span>Text Align</span>
+              <div id="selectedTextAlign" class="text-align-buttons" role="group" aria-label="Text align">
+                <button type="button" data-text-align="left" data-icon="align-left">Left</button>
+                <button type="button" data-text-align="center" data-icon="align-center">Center</button>
+                <button type="button" data-text-align="right" data-icon="align-right">Right</button>
+              </div>
+            </label>
+            <label>
+              <span>Text Color</span>
+              <input id="selectedTextColor" type="color" value="#000000" />
+            </label>
             <label class="stacked-field">
               <span>Text Font</span>
               <div id="selectedTextFont" class="text-font-buttons" role="group" aria-label="Text font">
@@ -356,18 +368,6 @@
             <label class="stacked-field">
               <span>Sticker Style</span>
               <div id="selectedTextStyle" class="text-style-buttons" role="group" aria-label="Sticker style"></div>
-            </label>
-            <label>
-              <span>Text Color</span>
-              <input id="selectedTextColor" type="color" value="#000000" />
-            </label>
-            <label>
-              <span>Text Align</span>
-              <div id="selectedTextAlign" class="text-align-buttons" role="group" aria-label="Text align">
-                <button type="button" data-text-align="left" data-icon="align-left">Left</button>
-                <button type="button" data-text-align="center" data-icon="align-center">Center</button>
-                <button type="button" data-text-align="right" data-icon="align-right">Right</button>
-              </div>
             </label>
           </div>
           <div class="subgroup" data-label="Layer" data-selection-section="layer">

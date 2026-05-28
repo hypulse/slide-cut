@@ -1724,30 +1724,6 @@ select {
 
 .animation-buttons.anim-in {
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  grid-template-areas:
-    "none fade pop"
-    "slide-up slide-up slide-up"
-    "fade-lr fade-lr fade-lr";
-}
-
-.animation-buttons.anim-in [data-animation-in="none"] {
-  grid-area: none;
-}
-
-.animation-buttons.anim-in [data-animation-in="fade"] {
-  grid-area: fade;
-}
-
-.animation-buttons.anim-in [data-animation-in="pop"] {
-  grid-area: pop;
-}
-
-.animation-buttons.anim-in [data-animation-in="slideUp"] {
-  grid-area: slide-up;
-}
-
-.animation-buttons.anim-in [data-animation-in="fadeLeftToRight"] {
-  grid-area: fade-lr;
 }
 
 .animation-buttons.wide {

@@ -342,7 +342,8 @@ const TEXT_ALIGNMENTS = new Set(["left", "center", "right"]);
 const DEFAULT_TEXT_COLOR = "#000000";
 const DEFAULT_TEXT_FONT_FAMILY = "Pretendard";
 const DEFAULT_TEXT_FONT_WEIGHT = 600;
-const DEFAULT_TEXT_EFFECT = "boldCaption";
+const TEXT_EFFECT_NONE = "none";
+const DEFAULT_TEXT_EFFECT = TEXT_EFFECT_NONE;
 const DEFAULT_SUBTITLE_FONT_FAMILY = "Pretendard";
 const DEFAULT_SUBTITLE_FONT_WEIGHT = 700;
 const DEFAULT_SUBTITLE_STYLE_MODE = "standard";
@@ -381,6 +382,11 @@ const VIDEO_FRAME_RATIO_MODES = {
   "4:3": { label: "4:3", ratio: 4 / 3 },
 };
 const TEXT_EFFECT_PRESETS = {
+  none: {
+    label: "No Sticker",
+    fontFamily: DEFAULT_TEXT_FONT_FAMILY,
+    fontWeight: DEFAULT_TEXT_FONT_WEIGHT,
+  },
   cleanCaption: {
     label: "Clean Caption",
     fontFamily: "Pretendard",
@@ -857,6 +863,7 @@ const TEXT_EFFECT_ALIASES = {
   softDiary: "postItNote",
 };
 const TEXT_EFFECT_OPTIONS = Object.keys(TEXT_EFFECT_PRESETS);
+const SUBTITLE_TEXT_EFFECT_OPTIONS = TEXT_EFFECT_OPTIONS.filter((effectKey) => effectKey !== TEXT_EFFECT_NONE);
 let subtitleSettingsRowHeightFrame = 0;
 let subtitleSettingsRowResizeObserver = null;
 
@@ -1019,7 +1026,7 @@ function renderTextEffectButtons() {
 
   if (subtitleStickerContainer) {
     subtitleStickerContainer.replaceChildren(
-      ...TEXT_EFFECT_OPTIONS.map((effectKey) => createTextEffectButton(effectKey, "subtitleTextEffect"))
+      ...SUBTITLE_TEXT_EFFECT_OPTIONS.map((effectKey) => createTextEffectButton(effectKey, "subtitleTextEffect"))
     );
     settingsSubtitleStickerButtons = [
       ...subtitleStickerContainer.querySelectorAll("[data-subtitle-text-effect]"),
@@ -1770,7 +1777,7 @@ function normalizeSubtitleFontWeight(value) {
 }
 
 function normalizeSubtitleTextEffect(value) {
-  return sanitizeTextEffect(value || DEFAULT_SUBTITLE_TEXT_EFFECT);
+  return sanitizeTextEffect(value || DEFAULT_SUBTITLE_TEXT_EFFECT, DEFAULT_SUBTITLE_TEXT_EFFECT);
 }
 
 function normalizeSafeAreaSnapEnabled(value) {
@@ -1806,9 +1813,10 @@ function sanitizeTextFontFamily(value) {
   return TEXT_FONT_FAMILIES.has(value) ? value : DEFAULT_TEXT_FONT_FAMILY;
 }
 
-function sanitizeTextEffect(value) {
+function sanitizeTextEffect(value, fallback = DEFAULT_TEXT_EFFECT) {
+  const fallbackKey = TEXT_EFFECT_PRESETS[fallback] ? fallback : DEFAULT_TEXT_EFFECT;
   const effectKey = TEXT_EFFECT_ALIASES[value] || value;
-  return TEXT_EFFECT_PRESETS[effectKey] ? effectKey : DEFAULT_TEXT_EFFECT;
+  return TEXT_EFFECT_PRESETS[effectKey] ? effectKey : fallbackKey;
 }
 
 function sanitizeTextFontWeight(value, fallback = DEFAULT_TEXT_FONT_WEIGHT) {
@@ -2876,6 +2884,8 @@ function syncSelectedInputs() {
   const selectedImageObjects = selectedObjects.filter((object) => object.dataset.type === "image");
   const hasImageSelection = selectedImageObjects.length > 0;
   const hasAnimationSelection = canAnimateElement(selectedObject);
+  const selectedAnimationData = hasAnimationSelection ? getElementAnimationData(selectedObject) : null;
+  const selectedHasLoopAnimation = sanitizeAnimationLoop(selectedAnimationData?.animationLoop) !== DEFAULT_ANIMATION_LOOP;
   selectedPanel.hidden = !hasSelection;
   selectedPanel.classList.toggle("is-empty", !hasSelection);
   const visibleSections = {
@@ -2918,8 +2928,12 @@ function syncSelectedInputs() {
   for (const button of textAlignButtons) {
     button.disabled = !hasTextSelection;
   }
-  for (const button of [...animationInButtons, ...animationLoopButtons, ...animationSpeedButtons]) {
+  for (const button of [...animationInButtons, ...animationLoopButtons]) {
     button.disabled = !hasAnimationSelection;
+  }
+  for (const button of animationSpeedButtons) {
+    button.disabled = !hasAnimationSelection || !selectedHasLoopAnimation;
+    button.title = selectedHasLoopAnimation ? "Loop animation speed" : "Choose a loop animation first";
   }
   for (const button of [...animationMoveButtons, ...animationMoveEasingButtons, ...animationMovePointButtons]) {
     button.disabled = !hasAnimationSelection;
@@ -2976,7 +2990,7 @@ function syncSelectedInputs() {
   setActiveTextWeightButton(selectedObject.dataset.fontWeight);
   setActiveTextStyleButton(selectedObject.dataset.textEffect || DEFAULT_TEXT_EFFECT);
   setActiveTextAlignButton(selectedObject.dataset.textAlign || "left");
-  const animationData = getElementAnimationData(selectedObject);
+  const animationData = selectedAnimationData || getElementAnimationData(selectedObject);
   const hasMoveAnimation = sanitizeAnimationMove(animationData.animationMove) === "move";
   syncAnimationButtons(animationData);
   selectedAnimationInDelay.value = String(sanitizeAnimationInDelay(animationData.animationInDelay));
