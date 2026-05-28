@@ -1204,7 +1204,7 @@ const SAFE_AREA_PRESETS = {
     label: "Reels / Shorts",
     canonicalWidth: 1080,
     canonicalHeight: 1920,
-    margins: { left: 90, top: 140, right: 180, bottom: 440 },
+    margins: { left: 135, top: 140, right: 135, bottom: 440 },
   },
   youtubeVideo: {
     label: "YouTube 16:9",
