@@ -2311,6 +2311,8 @@ function getElementAnimationData(element) {
     width: state.width,
     height: state.height,
     rotation: state.rotation,
+    flipX: state.flipX,
+    flipY: state.flipY,
     animationIn: element.dataset.animationIn,
     animationInDelay: element.dataset.animationInDelay,
     animationLoop: element.dataset.animationLoop,
@@ -2378,6 +2380,8 @@ function getObjectAnimationState(object, timeSeconds = 0, durationSeconds = VIDE
     width: Math.max(1, numberOr(object.width, 1)),
     height: Math.max(1, numberOr(object.height, 1)),
     rotation: numberOr(object.rotation, 0),
+    flipX: normalizeFlipFlag(object.flipX),
+    flipY: normalizeFlipFlag(object.flipY),
     opacity: 1,
     scale: 1,
   };
