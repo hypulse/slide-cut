@@ -124,6 +124,7 @@ const colorPresetButtons = [...document.querySelectorAll("[data-color-preset]")]
 const pasteImage = document.querySelector("#pasteImage");
 const chooseImage = document.querySelector("#chooseImage");
 const addTextBox = document.querySelector("#addTextBox");
+const addCodeTextBox = document.querySelector("#addCodeTextBox");
 const addGitTypingSlide = document.querySelector("#addGitTypingSlide");
 const addChatTypingSlide = document.querySelector("#addChatTypingSlide");
 const chooseBackgroundMusic = document.querySelector("#chooseBackgroundMusic");
@@ -230,12 +231,16 @@ const selectedMoveToY = document.querySelector("#selectedMoveToY");
 const selectedMoveDuration = document.querySelector("#selectedMoveDuration");
 const selectedAnimationInDelay = document.querySelector("#selectedAnimationInDelay");
 const selectedTextSize = document.querySelector("#selectedTextSize");
+const selectedCodeTextSize = document.querySelector("#selectedCodeTextSize");
+const selectedCodeTextLatex = document.querySelector("#selectedCodeTextLatex");
 const imageFlipButtons = [...document.querySelectorAll("[data-image-flip]")];
 const textSizeButtons = [...document.querySelectorAll("[data-text-size]")];
 const textFontButtons = [...document.querySelectorAll("[data-text-font]")];
 const textWeightButtons = [...document.querySelectorAll("[data-text-weight]")];
 let textStyleButtons = [...document.querySelectorAll("[data-text-style]")];
 const textAlignButtons = [...document.querySelectorAll("[data-text-align]")];
+const codeTextPresetButtons = [...document.querySelectorAll("[data-code-text-preset]")];
+const codeTextFontButtons = [...document.querySelectorAll("[data-code-text-font]")];
 const animationInButtons = [...document.querySelectorAll("[data-animation-in]")];
 const animationLoopButtons = [...document.querySelectorAll("[data-animation-loop]")];
 const animationSpeedButtons = [...document.querySelectorAll("[data-animation-speed]")];
@@ -342,6 +347,13 @@ const TEXT_ALIGNMENTS = new Set(["left", "center", "right"]);
 const DEFAULT_TEXT_COLOR = "#000000";
 const DEFAULT_TEXT_FONT_FAMILY = "Pretendard";
 const DEFAULT_TEXT_FONT_WEIGHT = 600;
+const TEXT_KIND_PLAIN = "plain";
+const TEXT_KIND_CODE = "code";
+const TEXT_KINDS = new Set([TEXT_KIND_PLAIN, TEXT_KIND_CODE]);
+const DEFAULT_CODE_TEXT_PRESET = "editorDark";
+const DEFAULT_CODE_TEXT_FONT_SIZE = 22;
+const DEFAULT_CODE_TEXT_FONT_FAMILY = "JetBrains Mono";
+const DEFAULT_CODE_TEXT_FONT_WEIGHT = 600;
 const TEXT_EFFECT_NONE = "none";
 const DEFAULT_TEXT_EFFECT = TEXT_EFFECT_NONE;
 const DEFAULT_SUBTITLE_FONT_FAMILY = "Pretendard";
@@ -350,6 +362,7 @@ const DEFAULT_SUBTITLE_STYLE_MODE = "standard";
 const DEFAULT_SUBTITLE_TEXT_EFFECT = "boldCaption";
 const SUBTITLE_STYLE_MODES = new Set(["standard", "sticker"]);
 const TEXT_FONT_FAMILIES = new Set([
+  "JetBrains Mono",
   "Pretendard",
   "Gmarket Sans",
   "Jua",
@@ -365,6 +378,158 @@ const TEXT_FONT_FAMILIES = new Set([
   "Poor Story",
   "Bagel Fat One",
 ]);
+const CODE_TEXT_PRESETS = {
+  editorDark: {
+    label: "Dark",
+    backgroundColor: "#1e1e1e",
+    borderColor: "#3a3f4b",
+    textColor: "#d4d4d4",
+    keywordColor: "#569cd6",
+    stringColor: "#ce9178",
+    numberColor: "#b5cea8",
+    commentColor: "#6a9955",
+    lineNumberColor: "#858585",
+    accentColor: "#2a303b",
+    radius: 14,
+    showLineNumbers: true,
+  },
+  editorLight: {
+    label: "Light",
+    backgroundColor: "#fbfbfd",
+    borderColor: "#d7dce5",
+    textColor: "#24292f",
+    keywordColor: "#8250df",
+    stringColor: "#0a7f42",
+    numberColor: "#0550ae",
+    commentColor: "#6e7781",
+    lineNumberColor: "#8c959f",
+    accentColor: "#eef2f7",
+    radius: 14,
+    showLineNumbers: true,
+  },
+  terminal: {
+    label: "Terminal",
+    backgroundColor: "#07110b",
+    borderColor: "#1e3a28",
+    textColor: "#c8facc",
+    keywordColor: "#7ee787",
+    stringColor: "#f2cc60",
+    numberColor: "#79c0ff",
+    commentColor: "#6a9955",
+    lineNumberColor: "#4d7a57",
+    accentColor: "#0e1f15",
+    radius: 8,
+    showLineNumbers: false,
+  },
+  formula: {
+    label: "Math",
+    backgroundColor: "rgba(255, 255, 255, 0.94)",
+    borderColor: "#d3d8e2",
+    textColor: "#111827",
+    keywordColor: "#111827",
+    stringColor: "#111827",
+    numberColor: "#111827",
+    commentColor: "#6b7280",
+    lineNumberColor: "#9ca3af",
+    accentColor: "#f3f4f6",
+    radius: 10,
+    showLineNumbers: false,
+    latex: true,
+  },
+};
+const LATEX_SYMBOLS = {
+  "\\alpha": "α",
+  "\\beta": "β",
+  "\\gamma": "γ",
+  "\\delta": "δ",
+  "\\epsilon": "ε",
+  "\\theta": "θ",
+  "\\lambda": "λ",
+  "\\mu": "μ",
+  "\\pi": "π",
+  "\\rho": "ρ",
+  "\\sigma": "σ",
+  "\\phi": "φ",
+  "\\omega": "ω",
+  "\\Gamma": "Γ",
+  "\\Delta": "Δ",
+  "\\Theta": "Θ",
+  "\\Lambda": "Λ",
+  "\\Pi": "Π",
+  "\\Sigma": "Σ",
+  "\\Phi": "Φ",
+  "\\Omega": "Ω",
+  "\\times": "×",
+  "\\cdot": "·",
+  "\\pm": "±",
+  "\\leq": "≤",
+  "\\geq": "≥",
+  "\\neq": "≠",
+  "\\approx": "≈",
+  "\\infty": "∞",
+  "\\sum": "Σ",
+  "\\prod": "∏",
+  "\\int": "∫",
+  "\\partial": "∂",
+  "\\nabla": "∇",
+  "\\rightarrow": "→",
+  "\\leftarrow": "←",
+  "\\Rightarrow": "⇒",
+  "\\Leftarrow": "⇐",
+};
+const SUPERSCRIPT_CHARS = {
+  0: "⁰",
+  1: "¹",
+  2: "²",
+  3: "³",
+  4: "⁴",
+  5: "⁵",
+  6: "⁶",
+  7: "⁷",
+  8: "⁸",
+  9: "⁹",
+  "+": "⁺",
+  "-": "⁻",
+  "=": "⁼",
+  "(": "⁽",
+  ")": "⁾",
+  n: "ⁿ",
+  i: "ⁱ",
+};
+const SUBSCRIPT_CHARS = {
+  0: "₀",
+  1: "₁",
+  2: "₂",
+  3: "₃",
+  4: "₄",
+  5: "₅",
+  6: "₆",
+  7: "₇",
+  8: "₈",
+  9: "₉",
+  "+": "₊",
+  "-": "₋",
+  "=": "₌",
+  "(": "₍",
+  ")": "₎",
+  a: "ₐ",
+  e: "ₑ",
+  h: "ₕ",
+  i: "ᵢ",
+  j: "ⱼ",
+  k: "ₖ",
+  l: "ₗ",
+  m: "ₘ",
+  n: "ₙ",
+  o: "ₒ",
+  p: "ₚ",
+  r: "ᵣ",
+  s: "ₛ",
+  t: "ₜ",
+  u: "ᵤ",
+  v: "ᵥ",
+  x: "ₓ",
+};
 const FONT_LOAD_SAMPLE_TEXT = "가나다라마바사아자차카타파하 ABC xyz 123";
 const TEXT_FONT_LOAD_SIZE = 32;
 const textFontLoadPromises = new Map();
@@ -1613,7 +1778,11 @@ const { serializeObject, serializeCurrentSlide, cloneProjectValue, normalizeProj
   sanitizeTextAlign,
   sanitizeTextFontFamily,
   sanitizeTextFontWeight,
+  sanitizeTextKind,
   sanitizeTextEffect,
+  sanitizeCodeTextPreset,
+  sanitizeCodeTextFontSize,
+  normalizeCodeTextLatex,
   sanitizeAnimationIn,
   sanitizeAnimationInDelay,
   sanitizeAnimationLoop,
@@ -1825,6 +1994,34 @@ function sanitizeTextEffect(value, fallback = DEFAULT_TEXT_EFFECT) {
 
 function sanitizeTextFontWeight(value, fallback = DEFAULT_TEXT_FONT_WEIGHT) {
   return clamp(numberOr(value, fallback), 100, 900);
+}
+
+function sanitizeTextKind(value) {
+  return TEXT_KINDS.has(value) ? value : TEXT_KIND_PLAIN;
+}
+
+function isCodeTextData(data) {
+  return sanitizeTextKind(data?.textKind) === TEXT_KIND_CODE;
+}
+
+function isCodeTextElement(element) {
+  return element?.dataset.type === "text" && isCodeTextData(element.dataset);
+}
+
+function isPlainTextElement(element) {
+  return element?.dataset.type === "text" && !isCodeTextElement(element);
+}
+
+function sanitizeCodeTextPreset(value) {
+  return CODE_TEXT_PRESETS[value] ? value : DEFAULT_CODE_TEXT_PRESET;
+}
+
+function sanitizeCodeTextFontSize(value) {
+  return sanitizeNumber(value, DEFAULT_CODE_TEXT_FONT_SIZE, 8, 160);
+}
+
+function normalizeCodeTextLatex(value) {
+  return value === true || value === "true" || value === "1";
 }
 
 function sanitizeAnimationIn(value) {
@@ -2045,7 +2242,7 @@ function getObjectLabel(object) {
     return "Image";
   }
   if (object.dataset.type === "text") {
-    return "Text";
+    return isCodeTextElement(object) ? "Code Text" : "Text";
   }
   const kind = object.dataset.shapeKind || "shape";
   return kind.charAt(0).toUpperCase() + kind.slice(1);
@@ -2890,6 +3087,8 @@ function selectObjects(elements) {
 function syncSelectedInputs() {
   const hasSelection = selectedObjects.length > 0;
   const hasTextSelection = selectedObject?.dataset.type === "text";
+  const hasPlainTextSelection = isPlainTextElement(selectedObject);
+  const hasCodeTextSelection = isCodeTextElement(selectedObject);
   const selectedImageObjects = selectedObjects.filter((object) => object.dataset.type === "image");
   const hasImageSelection = selectedImageObjects.length > 0;
   const hasAnimationSelection = canAnimateElement(selectedObject);
@@ -2901,7 +3100,8 @@ function syncSelectedInputs() {
     position: hasSelection,
     image: hasImageSelection,
     animation: hasAnimationSelection,
-    text: hasTextSelection,
+    text: hasPlainTextSelection,
+    codeText: hasCodeTextSelection,
     layer: hasSelection,
     actions: hasSelection,
   };
@@ -2923,19 +3123,25 @@ function syncSelectedInputs() {
     button.disabled = !hasSelection;
   }
   for (const button of textSizeButtons) {
-    button.disabled = !hasTextSelection;
+    button.disabled = !hasPlainTextSelection;
   }
   for (const button of textFontButtons) {
-    button.disabled = !hasTextSelection;
+    button.disabled = !hasPlainTextSelection;
   }
   for (const button of textWeightButtons) {
-    button.disabled = !hasTextSelection;
+    button.disabled = !hasPlainTextSelection;
   }
   for (const button of textStyleButtons) {
-    button.disabled = !hasTextSelection;
+    button.disabled = !hasPlainTextSelection;
   }
   for (const button of textAlignButtons) {
-    button.disabled = !hasTextSelection;
+    button.disabled = !hasPlainTextSelection;
+  }
+  for (const button of codeTextPresetButtons) {
+    button.disabled = !hasCodeTextSelection;
+  }
+  for (const button of codeTextFontButtons) {
+    button.disabled = !hasCodeTextSelection;
   }
   for (const button of [...animationInButtons, ...animationLoopButtons]) {
     button.disabled = !hasAnimationSelection;
@@ -2951,11 +3157,13 @@ function syncSelectedInputs() {
     input.disabled = !hasAnimationSelection;
   }
   duplicateSelected.disabled = !hasSelection;
-  selectedTextColor.disabled = !hasTextSelection;
+  selectedTextColor.disabled = !hasPlainTextSelection;
+  selectedCodeTextSize.disabled = !hasCodeTextSelection;
+  selectedCodeTextLatex.disabled = !hasCodeTextSelection;
   editSelectedText.disabled = !hasTextSelection;
   editSelectedText.hidden = !hasTextSelection;
   selectedActions.classList.toggle("is-text-selection", hasTextSelection);
-  setButtonLabel(editSelectedText, activeTextEditObject === selectedObject ? "Done" : "Edit Text");
+  setButtonLabel(editSelectedText, activeTextEditObject === selectedObject ? "Done" : hasCodeTextSelection ? "Edit Code" : "Edit Text");
   deleteSelected.disabled = !hasSelection;
 
   if (!selectedObject) {
@@ -2969,6 +3177,8 @@ function syncSelectedInputs() {
     setActiveTextWeightButton(DEFAULT_TEXT_FONT_WEIGHT);
     setActiveTextStyleButton(DEFAULT_TEXT_EFFECT);
     setActiveTextAlignButton("left");
+    setActiveCodeTextPresetButton(DEFAULT_CODE_TEXT_PRESET);
+    setActiveCodeTextFontButton(DEFAULT_CODE_TEXT_FONT_FAMILY, DEFAULT_CODE_TEXT_FONT_WEIGHT);
     syncAnimationButtons({
       animationIn: DEFAULT_ANIMATION_IN,
       animationInDelay: DEFAULT_ANIMATION_IN_DELAY,
@@ -2984,6 +3194,8 @@ function syncSelectedInputs() {
     selectedMoveDuration.value = "";
     selectedAnimationInDelay.value = "";
     selectedTextColor.value = defaultTextColor;
+    selectedCodeTextSize.value = String(DEFAULT_CODE_TEXT_FONT_SIZE);
+    selectedCodeTextLatex.checked = false;
     updateStatusBar();
     return;
   }
@@ -2999,6 +3211,8 @@ function syncSelectedInputs() {
   setActiveTextWeightButton(selectedObject.dataset.fontWeight);
   setActiveTextStyleButton(selectedObject.dataset.textEffect || DEFAULT_TEXT_EFFECT);
   setActiveTextAlignButton(selectedObject.dataset.textAlign || "left");
+  setActiveCodeTextPresetButton(selectedObject.dataset.codePreset || DEFAULT_CODE_TEXT_PRESET);
+  setActiveCodeTextFontButton(selectedObject.dataset.fontFamily, selectedObject.dataset.fontWeight);
   const animationData = selectedAnimationData || getElementAnimationData(selectedObject);
   const hasMoveAnimation = sanitizeAnimationMove(animationData.animationMove) === "move";
   syncAnimationButtons(animationData);
@@ -3009,6 +3223,8 @@ function syncSelectedInputs() {
   selectedMoveToY.value = Math.round(hasMoveAnimation ? sanitizeAnimationMoveCoordinate(animationData.animationMoveToY) : state.y);
   selectedMoveDuration.value = String(sanitizeAnimationMoveDuration(animationData.animationMoveDuration));
   selectedTextColor.value = selectedObject.dataset.textColor || defaultTextColor;
+  selectedCodeTextSize.value = String(sanitizeCodeTextFontSize(selectedObject.dataset.codeFontSize));
+  selectedCodeTextLatex.checked = normalizeCodeTextLatex(selectedObject.dataset.codeLatex);
   if (selectedObject.dataset.type === "shape") {
     strokeColor.value = sanitizeColor(selectedObject.dataset.strokeColor, DEFAULT_STROKE_COLOR);
     strokeWidth.value = String(clamp(numberOr(selectedObject.dataset.strokeWidth, DEFAULT_STROKE_WIDTH), 1, 32));
@@ -3088,6 +3304,43 @@ function setActiveTextStyleButton(effectKey) {
   const safeEffect = sanitizeTextEffect(effectKey);
   for (const button of textStyleButtons) {
     button.classList.toggle("is-active", button.dataset.textStyle === safeEffect);
+  }
+}
+
+function setActiveCodeTextPresetButton(presetKey) {
+  const safePreset = sanitizeCodeTextPreset(presetKey);
+  for (const button of codeTextPresetButtons) {
+    button.classList.toggle("is-active", button.dataset.codeTextPreset === safePreset);
+  }
+}
+
+function getClosestCodeTextFontButton(fontFamily, fontWeight) {
+  const safeFamily = sanitizeTextFontFamily(fontFamily || DEFAULT_CODE_TEXT_FONT_FAMILY);
+  const safeWeight = sanitizeTextFontWeight(fontWeight, DEFAULT_CODE_TEXT_FONT_WEIGHT);
+  let closestButton = null;
+  let closestWeightDistance = Infinity;
+  for (const button of codeTextFontButtons) {
+    const buttonFamily = sanitizeTextFontFamily(button.dataset.codeTextFont);
+    if (buttonFamily !== safeFamily) {
+      continue;
+    }
+    const buttonWeight = sanitizeTextFontWeight(button.dataset.codeTextFontWeight, DEFAULT_CODE_TEXT_FONT_WEIGHT);
+    if (buttonWeight === safeWeight) {
+      return button;
+    }
+    const weightDistance = Math.abs(buttonWeight - safeWeight);
+    if (weightDistance < closestWeightDistance) {
+      closestButton = button;
+      closestWeightDistance = weightDistance;
+    }
+  }
+  return closestButton;
+}
+
+function setActiveCodeTextFontButton(fontFamily, fontWeight) {
+  const activeButton = getClosestCodeTextFontButton(fontFamily, fontWeight);
+  for (const button of codeTextFontButtons) {
+    button.classList.toggle("is-active", button === activeButton);
   }
 }
 
@@ -3338,6 +3591,7 @@ function addTextObject(text, statusMessage = "Text pasted. The font is fixed to 
   const element = textTemplate.content.firstElementChild.cloneNode(true);
   element.dataset.id = `object-${++objectSeed}`;
   element.dataset.text = cleanText;
+  element.dataset.textKind = TEXT_KIND_PLAIN;
   element.dataset.textSize = "h3";
   element.dataset.textAlign = "left";
   element.dataset.textColor = defaultTextColor;
@@ -3357,6 +3611,42 @@ function addTextObject(text, statusMessage = "Text pasted. The font is fixed to 
   applyState(element, { ...position, width, height, rotation: 0 });
   selectObject(element);
   setStatus(statusMessage);
+  recordHistory();
+}
+
+function addCodeTextObject(text = 'const title = "Slide Cut";\nconsole.log(title);') {
+  const cleanText = String(text || "").trimEnd();
+  if (!cleanText) {
+    setStatus("No code text to add.");
+    return;
+  }
+
+  const preset = CODE_TEXT_PRESETS[DEFAULT_CODE_TEXT_PRESET];
+  const element = textTemplate.content.firstElementChild.cloneNode(true);
+  element.dataset.id = `object-${++objectSeed}`;
+  element.dataset.text = cleanText;
+  element.dataset.textKind = TEXT_KIND_CODE;
+  element.dataset.textSize = "h3";
+  element.dataset.textAlign = "left";
+  element.dataset.textColor = preset.textColor || DEFAULT_TEXT_COLOR;
+  element.dataset.fontFamily = DEFAULT_CODE_TEXT_FONT_FAMILY;
+  element.dataset.fontWeight = String(DEFAULT_CODE_TEXT_FONT_WEIGHT);
+  element.dataset.textEffect = DEFAULT_TEXT_EFFECT;
+  element.dataset.codePreset = DEFAULT_CODE_TEXT_PRESET;
+  element.dataset.codeFontSize = String(DEFAULT_CODE_TEXT_FONT_SIZE);
+  element.dataset.codeLatex = "false";
+  setDefaultAnimationDataset(element);
+  canvas.append(element);
+  attachObjectEvents(element);
+  wireTextEditor(element);
+  renderTextObject(element);
+
+  const width = Math.min(620, Math.max(360, canvas.offsetWidth * 0.48));
+  const height = Math.min(320, Math.max(180, canvas.offsetHeight * 0.28));
+  const position = centerPosition(width, height);
+  applyState(element, { ...position, width, height, rotation: 0 });
+  selectObject(element);
+  setStatus("Code text box created. Type code, resize freely, or enable LaTeX Math.");
   recordHistory();
 }
 
@@ -3685,6 +3975,11 @@ function renderTextObject(element) {
 
   const context = textCanvas.getContext("2d");
   context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+  if (isCodeTextElement(element)) {
+    drawCodeTextObject(context, element.dataset, width, height, { clear: true });
+    scheduleTextFontRerender(element);
+    return;
+  }
   context.__textColor = element.dataset.textColor || DEFAULT_TEXT_COLOR;
   drawTextLines(context, text, width, height, true, element.dataset.textSize || "h3", element.dataset.textAlign || "left", {
     fontFamily: element.dataset.fontFamily,
@@ -3718,6 +4013,9 @@ function getTextContentHeight(element) {
 }
 
 function fitTextBoxToContent(element) {
+  if (isCodeTextElement(element)) {
+    return false;
+  }
   const state = getState(element);
   const nextHeight = getTextContentHeight(element);
   if (nextHeight === state.height) {
@@ -3739,7 +4037,7 @@ function fitTextBoxToContent(element) {
 function fitTextBoxToContentAfterWidthChange(element, previousWidth) {
   if (
     !element ||
-    element.dataset.type !== "text" ||
+    !isPlainTextElement(element) ||
     element.dataset.isFittingTextHeight === "true" ||
     getState(element).width === previousWidth
   ) {
@@ -3777,6 +4075,19 @@ function wireTextEditor(element) {
   });
 }
 
+function applyCodeTextEditorStyle(element) {
+  const editor = element.querySelector(".text-editor");
+  const codeStyle = getCodeTextRenderData(element.dataset);
+  editor.style.fontSize = `${codeStyle.fontSize}px`;
+  editor.style.lineHeight = `${Math.round(codeStyle.fontSize * 1.48)}px`;
+  editor.style.fontFamily = quoteFontFamily(codeStyle.fontFamily);
+  editor.style.fontWeight = String(codeStyle.fontWeight);
+  editor.style.color = codeStyle.textColor;
+  editor.style.background = codeStyle.backgroundColor || "transparent";
+  editor.style.padding = `${Math.round(codeStyle.fontSize * 0.72)}px ${Math.round(codeStyle.fontSize * 0.88)}px`;
+  editor.style.textAlign = "left";
+}
+
 function startTextEdit(element) {
   if (!element || element.dataset.type !== "text") {
     return;
@@ -3786,7 +4097,6 @@ function startTextEdit(element) {
   }
   selectObject(element);
   const editor = element.querySelector(".text-editor");
-  const preset = getTextPreset(element);
   const state = getState(element);
   if (element.classList.contains("is-editing")) {
     activeTextEditObject = element;
@@ -3800,18 +4110,25 @@ function startTextEdit(element) {
   element.dataset.editStartWidth = String(state.width);
   element.dataset.editStartHeight = String(state.height);
   editor.value = element.dataset.text || "";
-  editor.style.fontSize = `${preset.fontSize}px`;
-  editor.style.lineHeight = `${preset.lineHeight}px`;
-  editor.style.fontFamily = quoteFontFamily(sanitizeTextFontFamily(element.dataset.fontFamily));
-  editor.style.fontWeight = String(sanitizeTextFontWeight(element.dataset.fontWeight));
-  editor.style.color = element.dataset.textColor || DEFAULT_TEXT_COLOR;
-  editor.style.textAlign = sanitizeTextAlign(element.dataset.textAlign);
+  if (isCodeTextElement(element)) {
+    applyCodeTextEditorStyle(element);
+  } else {
+    const preset = getTextPreset(element);
+    editor.style.fontSize = `${preset.fontSize}px`;
+    editor.style.lineHeight = `${preset.lineHeight}px`;
+    editor.style.fontFamily = quoteFontFamily(sanitizeTextFontFamily(element.dataset.fontFamily));
+    editor.style.fontWeight = String(sanitizeTextFontWeight(element.dataset.fontWeight));
+    editor.style.color = element.dataset.textColor || DEFAULT_TEXT_COLOR;
+    editor.style.background = "transparent";
+    editor.style.padding = "";
+    editor.style.textAlign = sanitizeTextAlign(element.dataset.textAlign);
+  }
   window.requestAnimationFrame(() => {
     editor.focus({ preventScroll: true });
     selectEditableContent(editor);
   });
   syncSelectedInputs();
-  setStatus("Editing text. Press Esc or Done to exit.");
+  setStatus(isCodeTextElement(element) ? "Editing code text. Press Esc or Done to exit." : "Editing text. Press Esc or Done to exit.");
 }
 
 function stopTextEdit(element, shouldSetStatus = true) {
@@ -4149,6 +4466,10 @@ function wrapTextLines(context, text, width) {
 }
 
 function drawTextObject(context, object, width, height) {
+  if (isCodeTextElement(object)) {
+    drawCodeTextObject(context, object.dataset, width, height);
+    return;
+  }
   context.__textColor = object.dataset.textColor || DEFAULT_TEXT_COLOR;
   drawTextLines(
     context,
@@ -5160,23 +5481,19 @@ function getSyntaxTokens(line) {
   let cursor = 0;
   for (const match of codePart.matchAll(tokenPattern)) {
     if (match.index > cursor) {
-      tokens.push({ text: codePart.slice(cursor, match.index), color: "#d4d4d4" });
+      tokens.push({ text: codePart.slice(cursor, match.index), color: "#d4d4d4", kind: "plain" });
     }
     const token = match[0];
-    const color =
-      token.startsWith("\"") || token.startsWith("'") || token.startsWith("`")
-        ? "#ce9178"
-        : /^\d/.test(token)
-          ? "#b5cea8"
-          : "#569cd6";
-    tokens.push({ text: token, color });
+    const kind = token.startsWith("\"") || token.startsWith("'") || token.startsWith("`") ? "string" : /^\d/.test(token) ? "number" : "keyword";
+    const color = kind === "string" ? "#ce9178" : kind === "number" ? "#b5cea8" : "#569cd6";
+    tokens.push({ text: token, color, kind });
     cursor = match.index + token.length;
   }
   if (cursor < codePart.length) {
-    tokens.push({ text: codePart.slice(cursor), color: "#d4d4d4" });
+    tokens.push({ text: codePart.slice(cursor), color: "#d4d4d4", kind: "plain" });
   }
   if (commentPart) {
-    tokens.push({ text: commentPart, color: "#6a9955" });
+    tokens.push({ text: commentPart, color: "#6a9955", kind: "comment" });
   }
   return tokens;
 }
@@ -5194,6 +5511,126 @@ function drawCodeLine(context, line, x, y, colorOverride = "") {
     context.fillText(token.text, drawX, y);
     drawX += context.measureText(token.text).width;
   }
+}
+
+function getCodeTextRenderData(data = {}) {
+  const presetKey = sanitizeCodeTextPreset(data.codePreset);
+  const preset = CODE_TEXT_PRESETS[presetKey] || CODE_TEXT_PRESETS[DEFAULT_CODE_TEXT_PRESET];
+  return {
+    ...preset,
+    presetKey,
+    text: typeof data.text === "string" ? data.text : "",
+    fontFamily: sanitizeTextFontFamily(data.fontFamily || DEFAULT_CODE_TEXT_FONT_FAMILY),
+    fontWeight: sanitizeTextFontWeight(data.fontWeight, DEFAULT_CODE_TEXT_FONT_WEIGHT),
+    fontSize: sanitizeCodeTextFontSize(data.codeFontSize),
+    latex: normalizeCodeTextLatex(data.codeLatex),
+  };
+}
+
+function convertScriptCharacters(value, characterMap) {
+  return [...String(value || "")]
+    .map((character) => characterMap[character] || character)
+    .join("");
+}
+
+function convertLatexText(value) {
+  let output = String(value || "");
+  output = output
+    .replace(/\\\((.*?)\\\)/gs, "$1")
+    .replace(/\\\[(.*?)\\\]/gs, "$1")
+    .replace(/\$([^$]+)\$/g, "$1")
+    .replace(/\\frac\s*\{([^{}]+)\}\s*\{([^{}]+)\}/g, (_, numerator, denominator) => `${numerator}⁄${denominator}`)
+    .replace(/\\sqrt\s*\{([^{}]+)\}/g, (_, radicand) => `√(${radicand})`)
+    .replace(/\\(?:left|right)\s*/g, "");
+  for (const [command, symbol] of Object.entries(LATEX_SYMBOLS).sort((a, b) => b[0].length - a[0].length)) {
+    output = output.replaceAll(command, symbol);
+  }
+  return output
+    .replace(/\^\{([^{}]+)\}/g, (_, value) => convertScriptCharacters(value, SUPERSCRIPT_CHARS))
+    .replace(/\^([A-Za-z0-9+\-=()])/g, (_, value) => convertScriptCharacters(value, SUPERSCRIPT_CHARS))
+    .replace(/_\{([^{}]+)\}/g, (_, value) => convertScriptCharacters(value, SUBSCRIPT_CHARS))
+    .replace(/_([A-Za-z0-9+\-=()])/g, (_, value) => convertScriptCharacters(value, SUBSCRIPT_CHARS))
+    .replace(/\\,/g, " ")
+    .replace(/\\;/g, " ")
+    .replace(/~/g, " ");
+}
+
+function drawCodeTextLine(context, line, x, y, style) {
+  let drawX = x;
+  const palette = {
+    plain: style.textColor,
+    keyword: style.keywordColor,
+    string: style.stringColor,
+    number: style.numberColor,
+    comment: style.commentColor,
+  };
+  for (const token of getSyntaxTokens(line)) {
+    context.fillStyle = palette[token.kind] || token.color || style.textColor;
+    context.fillText(token.text, drawX, y);
+    drawX += context.measureText(token.text).width;
+  }
+}
+
+function drawCodeTextObject(context, data, width, height, options = {}) {
+  const style = getCodeTextRenderData(data);
+  const safeWidth = Math.max(1, width);
+  const safeHeight = Math.max(1, height);
+  const fontSize = style.fontSize;
+  const lineHeight = Math.round(fontSize * 1.48);
+  const paddingX = Math.round(fontSize * 0.88);
+  const paddingY = Math.round(fontSize * 0.72);
+  const gutterWidth = style.showLineNumbers && !style.latex ? Math.round(fontSize * 2.6) : 0;
+  const contentX = paddingX + gutterWidth;
+  const contentY = paddingY;
+  const maxLineCount = Math.max(0, Math.floor((safeHeight - paddingY * 2) / lineHeight));
+  const lines = String(style.text || "").split("\n").slice(0, maxLineCount || 0);
+
+  if (options.clear) {
+    context.clearRect(0, 0, safeWidth, safeHeight);
+  }
+
+  context.save();
+  context.globalAlpha = clamp(context.globalAlpha * numberOr(options.opacity, 1), 0, 1);
+  if (style.backgroundColor && style.backgroundColor !== "transparent") {
+    context.fillStyle = style.backgroundColor;
+    fillRoundedRect(context, 0, 0, safeWidth, safeHeight, style.radius);
+  }
+  if (style.borderColor) {
+    context.strokeStyle = style.borderColor;
+    context.lineWidth = 1.5;
+    strokeRoundedRect(context, 0.75, 0.75, safeWidth - 1.5, safeHeight - 1.5, Math.max(1, style.radius - 0.75));
+  }
+  if (style.showLineNumbers && !style.latex && style.accentColor) {
+    context.fillStyle = style.accentColor;
+    context.fillRect(0, 0, Math.max(0, contentX - Math.round(fontSize * 0.45)), safeHeight);
+  }
+
+  context.beginPath();
+  traceRoundedRect(context, 0, 0, safeWidth, safeHeight, style.radius);
+  context.clip();
+  context.beginPath();
+  context.rect(paddingX, paddingY, Math.max(1, safeWidth - paddingX * 2), Math.max(1, safeHeight - paddingY * 2));
+  context.clip();
+  context.textBaseline = "top";
+  context.textAlign = "left";
+  context.font = `${style.fontWeight} ${fontSize}px ${quoteFontFamily(style.fontFamily)}`;
+  for (const [index, rawLine] of lines.entries()) {
+    const y = contentY + index * lineHeight;
+    const line = style.latex ? convertLatexText(rawLine) : rawLine;
+    if (style.showLineNumbers && !style.latex) {
+      context.fillStyle = style.lineNumberColor;
+      context.textAlign = "right";
+      context.fillText(String(index + 1), contentX - Math.round(fontSize * 0.8), y);
+      context.textAlign = "left";
+    }
+    if (style.latex) {
+      context.fillStyle = style.textColor;
+      context.fillText(line, contentX, y);
+    } else {
+      drawCodeTextLine(context, line, contentX, y, style);
+    }
+  }
+  context.restore();
 }
 
 function drawChatTypingSlide(context, slide, width, height, timeSeconds, options = {}) {
@@ -5353,6 +5790,9 @@ async function drawSlideObjectsForExport(context, objects = [], options = {}) {
           throw error;
         }
         drawFlippedFittedImage(context, image, renderState.width, renderState.height, object);
+      } else if (object.type === "text" && isCodeTextData(object)) {
+        context.globalAlpha = clamp(context.globalAlpha * renderState.opacity, 0, 1);
+        drawCodeTextObject(context, object, renderState.width, renderState.height);
       } else if (object.type === "text") {
         context.__textColor = object.textColor || DEFAULT_TEXT_COLOR;
         drawTextLines(
@@ -6055,12 +6495,24 @@ function addTextObjectFromData(data) {
   const element = textTemplate.content.firstElementChild.cloneNode(true);
   element.dataset.id = `object-${++objectSeed}`;
   element.dataset.text = data.text || "";
+  element.dataset.textKind = sanitizeTextKind(data.textKind);
   element.dataset.textSize = data.textSize || "h3";
   element.dataset.textAlign = sanitizeTextAlign(data.textAlign);
   element.dataset.textColor = data.textColor || DEFAULT_TEXT_COLOR;
-  element.dataset.fontFamily = sanitizeTextFontFamily(data.fontFamily);
-  element.dataset.fontWeight = String(sanitizeTextFontWeight(data.fontWeight));
+  element.dataset.fontFamily = sanitizeTextFontFamily(data.fontFamily || (isCodeTextData(element.dataset) ? DEFAULT_CODE_TEXT_FONT_FAMILY : DEFAULT_TEXT_FONT_FAMILY));
+  element.dataset.fontWeight = String(
+    sanitizeTextFontWeight(data.fontWeight, isCodeTextData(element.dataset) ? DEFAULT_CODE_TEXT_FONT_WEIGHT : DEFAULT_TEXT_FONT_WEIGHT)
+  );
   element.dataset.textEffect = sanitizeTextEffect(data.textEffect);
+  if (isCodeTextData(element.dataset)) {
+    const preset = CODE_TEXT_PRESETS[sanitizeCodeTextPreset(data.codePreset)];
+    element.dataset.codePreset = sanitizeCodeTextPreset(data.codePreset);
+    element.dataset.codeFontSize = String(sanitizeCodeTextFontSize(data.codeFontSize));
+    element.dataset.codeLatex = String(normalizeCodeTextLatex(data.codeLatex));
+    if (!data.textColor && preset?.textColor) {
+      element.dataset.textColor = preset.textColor;
+    }
+  }
   setAnimationDatasetFromData(element, data);
   canvas.append(element);
   attachObjectEvents(element);
@@ -6216,6 +6668,8 @@ function renderSlidePreview(slide, previewCanvas, options = {}) {
       context.fillRect(0, 0, object.width, object.height);
       context.strokeStyle = "#93c5fd";
       context.strokeRect(0, 0, object.width, object.height);
+    } else if (object.type === "text" && isCodeTextData(object)) {
+      drawCodeTextObject(context, object, object.width, object.height);
     } else if (object.type === "text") {
       context.__textColor = object.textColor || DEFAULT_TEXT_COLOR;
       drawTextLines(context, object.text || "", object.width, object.height, false, object.textSize || "h3", object.textAlign || "left", object);
@@ -7467,6 +7921,8 @@ async function saveCanvasAsPng() {
       const imageElement = object.querySelector("img");
       const image = await loadImageForRender(imageElement?.dataset.src || imageElement?.src || "");
       drawFlippedFittedImage(context, image, state.width, state.height, state);
+    } else if (object.dataset.type === "text" && isCodeTextElement(object)) {
+      drawCodeTextObject(context, object.dataset, state.width, state.height);
     } else if (object.dataset.type === "text") {
       drawTextObject(context, object, state.width, state.height);
     } else if (object.dataset.type === "shape") {
@@ -8442,7 +8898,7 @@ function setAspectRatioLocked(locked) {
 }
 
 function applySelectedTextSizeChange(sizeKey) {
-  if (!selectedObject || selectedObject.dataset.type !== "text") {
+  if (!isPlainTextElement(selectedObject)) {
     return;
   }
 
@@ -8461,7 +8917,7 @@ function applySelectedTextSizeChange(sizeKey) {
 }
 
 function applySelectedTextFontChange(fontFamily, fontWeight) {
-  if (!selectedObject || selectedObject.dataset.type !== "text") {
+  if (!isPlainTextElement(selectedObject)) {
     return;
   }
 
@@ -8483,7 +8939,7 @@ function applySelectedTextFontChange(fontFamily, fontWeight) {
 }
 
 function applySelectedTextWeightChange(fontWeight) {
-  if (!selectedObject || selectedObject.dataset.type !== "text") {
+  if (!isPlainTextElement(selectedObject)) {
     return;
   }
 
@@ -8502,7 +8958,7 @@ function applySelectedTextWeightChange(fontWeight) {
 }
 
 function applySelectedTextStyleChange(effectKey) {
-  if (!selectedObject || selectedObject.dataset.type !== "text") {
+  if (!isPlainTextElement(selectedObject)) {
     return;
   }
   const safeEffect = sanitizeTextEffect(effectKey);
@@ -8530,7 +8986,7 @@ function applySelectedTextStyleChange(effectKey) {
 }
 
 function applySelectedTextColorChange(shouldRecord = false) {
-  if (!selectedObject || selectedObject.dataset.type !== "text") {
+  if (!isPlainTextElement(selectedObject)) {
     return;
   }
 
@@ -8548,7 +9004,7 @@ function applySelectedTextColorChange(shouldRecord = false) {
 }
 
 function applySelectedTextAlignChange(align) {
-  if (!selectedObject || selectedObject.dataset.type !== "text") {
+  if (!isPlainTextElement(selectedObject)) {
     return;
   }
 
@@ -8561,6 +9017,68 @@ function applySelectedTextAlignChange(align) {
   setStatus(`Text align changed to ${safeAlign}.`);
   renderSlideList();
   recordHistory();
+}
+
+function refreshSelectedCodeTextObject(statusMessage, shouldRecord = true) {
+  if (!isCodeTextElement(selectedObject)) {
+    return;
+  }
+  renderTextObject(selectedObject);
+  syncSelectedInputs();
+  renderSlideList();
+  if (statusMessage) {
+    setStatus(statusMessage);
+  }
+  if (shouldRecord) {
+    recordHistory();
+  }
+}
+
+function applySelectedCodeTextPresetChange(presetKey) {
+  if (!isCodeTextElement(selectedObject)) {
+    return;
+  }
+  const safePreset = sanitizeCodeTextPreset(presetKey);
+  const preset = CODE_TEXT_PRESETS[safePreset] || CODE_TEXT_PRESETS[DEFAULT_CODE_TEXT_PRESET];
+  selectedObject.dataset.codePreset = safePreset;
+  selectedObject.dataset.textColor = preset.textColor || DEFAULT_TEXT_COLOR;
+  selectedObject.dataset.codeLatex = String(Boolean(preset.latex));
+  setActiveCodeTextPresetButton(safePreset);
+  selectedCodeTextLatex.checked = normalizeCodeTextLatex(selectedObject.dataset.codeLatex);
+  applyCodeTextEditorStyle(selectedObject);
+  refreshSelectedCodeTextObject(`Code text preset set to ${preset.label || safePreset}.`);
+}
+
+function applySelectedCodeTextFontChange(fontFamily, fontWeight) {
+  if (!isCodeTextElement(selectedObject)) {
+    return;
+  }
+  const safeFamily = sanitizeTextFontFamily(fontFamily || DEFAULT_CODE_TEXT_FONT_FAMILY);
+  const safeWeight = sanitizeTextFontWeight(fontWeight, DEFAULT_CODE_TEXT_FONT_WEIGHT);
+  selectedObject.dataset.fontFamily = safeFamily;
+  selectedObject.dataset.fontWeight = String(safeWeight);
+  setActiveCodeTextFontButton(safeFamily, safeWeight);
+  applyCodeTextEditorStyle(selectedObject);
+  refreshSelectedCodeTextObject(`Code text font changed to ${safeFamily}.`);
+}
+
+function applySelectedCodeTextSizeChange(shouldRecord = false) {
+  if (!isCodeTextElement(selectedObject)) {
+    return;
+  }
+  const nextSize = sanitizeCodeTextFontSize(selectedCodeTextSize.value);
+  selectedCodeTextSize.value = String(nextSize);
+  selectedObject.dataset.codeFontSize = String(nextSize);
+  applyCodeTextEditorStyle(selectedObject);
+  refreshSelectedCodeTextObject(`Code text size set to ${nextSize}px.`, shouldRecord);
+}
+
+function applySelectedCodeTextLatexChange(shouldRecord = true) {
+  if (!isCodeTextElement(selectedObject)) {
+    return;
+  }
+  selectedObject.dataset.codeLatex = String(selectedCodeTextLatex.checked);
+  refreshSelectedCodeTextObject(selectedCodeTextLatex.checked ? "LaTeX Math enabled for code text." : "LaTeX Math disabled for code text.", shouldRecord);
 }
 
 function applySelectedAnimationChange(kind, value) {
@@ -8814,6 +9332,10 @@ addTextBox.addEventListener("click", () => {
   addTextObject("Text", "Text box created. Type to change its contents.");
   startTextEdit(selectedObject);
 });
+addCodeTextBox.addEventListener("click", () => {
+  addCodeTextObject();
+  startTextEdit(selectedObject);
+});
 addGitTypingSlide.addEventListener("click", () => addDynamicSlide("gitTyping"));
 addChatTypingSlide.addEventListener("click", () => addDynamicSlide("chatTyping"));
 translateSlideButton.addEventListener("click", translateCurrentSlideContent);
@@ -8931,6 +9453,12 @@ for (const button of textStyleButtons) {
 for (const button of textAlignButtons) {
   button.addEventListener("click", () => applySelectedTextAlignChange(button.dataset.textAlign));
 }
+for (const button of codeTextPresetButtons) {
+  button.addEventListener("click", () => applySelectedCodeTextPresetChange(button.dataset.codeTextPreset));
+}
+for (const button of codeTextFontButtons) {
+  button.addEventListener("click", () => applySelectedCodeTextFontChange(button.dataset.codeTextFont, button.dataset.codeTextFontWeight));
+}
 for (const button of animationInButtons) {
   button.addEventListener("click", () => applySelectedAnimationChange("in", button.dataset.animationIn));
 }
@@ -8957,6 +9485,9 @@ for (const input of [selectedMoveFromX, selectedMoveFromY, selectedMoveToX, sele
 }
 selectedTextColor.addEventListener("input", () => applySelectedTextColorChange());
 selectedTextColor.addEventListener("change", () => applySelectedTextColorChange(true));
+selectedCodeTextSize.addEventListener("input", () => applySelectedCodeTextSizeChange());
+selectedCodeTextSize.addEventListener("change", () => applySelectedCodeTextSizeChange(true));
+selectedCodeTextLatex.addEventListener("change", () => applySelectedCodeTextLatexChange(true));
 
 deleteSelected.addEventListener("click", () => {
   deleteSelectedObjects();

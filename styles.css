@@ -1721,7 +1721,9 @@ select {
 .animation-buttons,
 .git-mode-buttons,
 .git-size-buttons,
-.chat-size-buttons {
+.chat-size-buttons,
+.code-text-preset-buttons,
+.code-text-font-buttons {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 3px;
@@ -1733,6 +1735,11 @@ select {
 
 .git-size-buttons {
   grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.code-text-preset-buttons,
+.code-text-font-buttons {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .animation-buttons {
@@ -1875,7 +1882,9 @@ select {
 .git-mode-buttons button,
 .git-size-buttons button,
 .animation-point-buttons button,
-.chat-size-buttons button {
+.chat-size-buttons button,
+.code-text-preset-buttons button,
+.code-text-font-buttons button {
   height: 26px;
   border-radius: 3px;
   padding: 0 4px;
@@ -1888,7 +1897,8 @@ select {
 .text-font-buttons button,
 .text-weight-buttons button,
 .subtitle-font-buttons button,
-.subtitle-sticker-buttons button {
+.subtitle-sticker-buttons button,
+.code-text-font-buttons button {
   font-family: var(--font-ui);
   font-size: 11px;
 }
@@ -1911,7 +1921,9 @@ select {
 .animation-buttons button.is-active,
 .git-mode-buttons button.is-active,
 .git-size-buttons button.is-active,
-.chat-size-buttons button.is-active {
+.chat-size-buttons button.is-active,
+.code-text-preset-buttons button.is-active,
+.code-text-font-buttons button.is-active {
   border-color: var(--accent);
   background: var(--accent-soft);
   color: var(--accent-hover);
@@ -1944,6 +1956,8 @@ select {
 .git-mode-buttons button:disabled,
 .git-size-buttons button:disabled,
 .chat-size-buttons button:disabled,
+.code-text-preset-buttons button:disabled,
+.code-text-font-buttons button:disabled,
 .text-align-buttons button:disabled,
 .image-flip-buttons button:disabled {
   opacity: 0.42;

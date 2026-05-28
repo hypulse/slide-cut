@@ -24,7 +24,11 @@ export function createProjectModel(deps) {
     sanitizeTextAlign,
     sanitizeTextFontFamily,
     sanitizeTextFontWeight,
+    sanitizeTextKind,
     sanitizeTextEffect,
+    sanitizeCodeTextPreset,
+    sanitizeCodeTextFontSize,
+    normalizeCodeTextLatex,
     sanitizeAnimationIn,
     sanitizeAnimationInDelay,
     sanitizeAnimationLoop,
@@ -124,15 +128,24 @@ export function createProjectModel(deps) {
       };
     }
 
+    const textKind = sanitizeTextKind(object.dataset.textKind);
     return {
       ...base,
       text: object.dataset.text || "",
+      textKind,
       textSize: object.dataset.textSize || "h3",
       textAlign: sanitizeTextAlign(object.dataset.textAlign),
       textColor: object.dataset.textColor || DEFAULT_TEXT_COLOR,
       fontFamily: sanitizeTextFontFamily(object.dataset.fontFamily),
       fontWeight: sanitizeTextFontWeight(object.dataset.fontWeight),
       textEffect: sanitizeTextEffect(object.dataset.textEffect),
+      ...(textKind === "code"
+        ? {
+            codePreset: sanitizeCodeTextPreset(object.dataset.codePreset),
+            codeFontSize: sanitizeCodeTextFontSize(object.dataset.codeFontSize),
+            codeLatex: normalizeCodeTextLatex(object.dataset.codeLatex),
+          }
+        : {}),
       ...serializeAnimationData(object),
     };
   }
@@ -209,15 +222,24 @@ export function createProjectModel(deps) {
       };
     }
 
+    const textKind = sanitizeTextKind(object.textKind);
     return {
       ...base,
       text: typeof object.text === "string" ? object.text : "",
+      textKind,
       textSize: TEXT_SIZE_PRESETS[object.textSize] ? object.textSize : "h3",
       textAlign: sanitizeTextAlign(object.textAlign),
       textColor: sanitizeColor(object.textColor, DEFAULT_TEXT_COLOR),
       fontFamily: sanitizeTextFontFamily(object.fontFamily),
       fontWeight: sanitizeTextFontWeight(object.fontWeight),
       textEffect: sanitizeTextEffect(object.textEffect),
+      ...(textKind === "code"
+        ? {
+            codePreset: sanitizeCodeTextPreset(object.codePreset),
+            codeFontSize: sanitizeCodeTextFontSize(object.codeFontSize),
+            codeLatex: normalizeCodeTextLatex(object.codeLatex),
+          }
+        : {}),
       ...normalizeAnimationData(object),
     };
   }

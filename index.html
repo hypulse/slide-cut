@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Slide Cut</title>
-    <link rel="stylesheet" href="./styles.css?v=20260528-safe-area-snap" />
+    <link rel="stylesheet" href="./styles.css?v=20260528-code-text-box" />
   </head>
   <body>
     <div class="app-frame">
@@ -25,6 +25,7 @@
             <button id="pasteImage" type="button" data-icon="clipboard">Paste Image</button>
             <button id="chooseImage" type="button" data-icon="image">Choose Image</button>
             <button id="addTextBox" type="button" data-icon="type">Add Text</button>
+            <button id="addCodeTextBox" type="button" data-icon="square-code">Add Code</button>
           </span>
           <span class="menu-divider" aria-hidden="true"></span>
           <span class="menu-group menu-audio-group" aria-label="Audio">
@@ -370,6 +371,34 @@
               <div id="selectedTextStyle" class="text-style-buttons" role="group" aria-label="Sticker style"></div>
             </label>
           </div>
+          <div class="subgroup" data-label="Code Text" data-selection-section="codeText" hidden>
+            <label>
+              <span>Preset</span>
+              <div id="selectedCodeTextPreset" class="code-text-preset-buttons" role="group" aria-label="Code text preset">
+                <button type="button" data-code-text-preset="editorDark" class="is-active">Dark</button>
+                <button type="button" data-code-text-preset="editorLight">Light</button>
+                <button type="button" data-code-text-preset="terminal">Terminal</button>
+                <button type="button" data-code-text-preset="formula">Math</button>
+              </div>
+            </label>
+            <label>
+              <span>Font</span>
+              <div id="selectedCodeTextFont" class="code-text-font-buttons" role="group" aria-label="Code text font">
+                <button type="button" data-code-text-font="JetBrains Mono" data-code-text-font-weight="600" class="is-active">JetBrains</button>
+                <button type="button" data-code-text-font="Pretendard" data-code-text-font-weight="600">Pretendard</button>
+                <button type="button" data-code-text-font="Noto Sans KR" data-code-text-font-weight="700">Noto</button>
+                <button type="button" data-code-text-font="Mona12" data-code-text-font-weight="400">Mona12</button>
+              </div>
+            </label>
+            <label>
+              <span>Font Size</span>
+              <input id="selectedCodeTextSize" type="number" min="8" max="160" step="1" value="22" />
+            </label>
+            <label class="checkbox-row">
+              <span>LaTeX Math</span>
+              <input id="selectedCodeTextLatex" type="checkbox" />
+            </label>
+          </div>
           <div class="subgroup" data-label="Layer" data-selection-section="layer">
             <div class="arrange-controls icon-only" aria-label="Layer order">
               <button id="sendBackward" type="button" data-icon="step-back" title="Send backward"><span>Backward</span></button>
@@ -661,6 +690,6 @@
     </div>
 
     <script src="./vendor/lucide.min.js" defer></script>
-    <script type="module" src="./app.js?v=20260528-safe-area-snap-note-segments"></script>
+    <script type="module" src="./app.js?v=20260528-code-text-box"></script>
   </body>
 </html>
