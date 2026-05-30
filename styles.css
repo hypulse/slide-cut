@@ -396,26 +396,29 @@ button.danger:hover {
 
 .app-frame {
   display: grid;
-  grid-template-rows: 36px minmax(0, 1fr) 22px;
+  grid-template-rows: auto minmax(0, 1fr) 22px;
   height: 100vh;
 }
 
 .top-menu {
   display: grid;
-  grid-template-columns: 272px minmax(0, auto) minmax(0, 1fr);
+  grid-template-columns: 272px minmax(0, 1fr);
   align-items: center;
   gap: 12px;
-  overflow: hidden;
+  min-height: 36px;
+  overflow: visible;
   border-bottom: 1px solid var(--border-strong);
   background: var(--surface-panel);
-  padding: 0 10px 0 12px;
+  padding: 5px 10px 5px 12px;
 }
 
 .top-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 2px;
   min-width: 0;
+  row-gap: 4px;
 }
 
 .menu-group {
