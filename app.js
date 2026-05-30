@@ -5619,34 +5619,59 @@ function drawCodeTextLine(context, line, x, y, style, colorOverride = "") {
   }
 }
 
-function drawFittedFillText(context, line, x, y, maxWidth) {
-  const width = context.measureText(line).width;
-  if (!Number.isFinite(width) || width <= maxWidth || width <= 1) {
-    context.fillText(line, x, y);
-    return 1;
+function getWrappedCodeLineSegments(context, line, maxWidth) {
+  const text = String(line ?? "");
+  if (!text) {
+    return [{ text: "", startColumn: 0, endColumn: 0 }];
   }
-  const scaleX = clamp(maxWidth / width, 0.01, 1);
-  context.save();
-  context.translate(x, y);
-  context.scale(scaleX, 1);
-  context.fillText(line, 0, 0);
-  context.restore();
-  return scaleX;
+
+  const segments = [];
+  const safeMaxWidth = Math.max(1, maxWidth);
+  let startColumn = 0;
+  while (startColumn < text.length) {
+    let width = 0;
+    let cursor = startColumn;
+    let lastBreakColumn = -1;
+    while (cursor < text.length) {
+      const character = text[cursor];
+      const characterWidth = Math.max(0, context.measureText(character).width);
+      if (cursor > startColumn && width + characterWidth > safeMaxWidth) {
+        break;
+      }
+      width += characterWidth;
+      cursor += 1;
+      if (/\s|[.,;:)}\]]/.test(character)) {
+        lastBreakColumn = cursor;
+      }
+    }
+
+    let endColumn = cursor;
+    if (endColumn < text.length && lastBreakColumn > startColumn) {
+      endColumn = lastBreakColumn;
+    }
+    if (endColumn <= startColumn) {
+      endColumn = Math.min(text.length, startColumn + 1);
+    }
+
+    segments.push({
+      text: text.slice(startColumn, endColumn),
+      startColumn,
+      endColumn,
+    });
+    startColumn = endColumn;
+  }
+
+  return segments;
 }
 
-function drawFittedCodeTextLine(context, line, x, y, maxWidth, style, colorOverride = "") {
-  const width = context.measureText(line).width;
-  if (!Number.isFinite(width) || width <= maxWidth || width <= 1) {
-    drawCodeTextLine(context, line, x, y, style, colorOverride);
-    return 1;
+function cursorBelongsToWrappedSegment(cursorColumn, segment, segmentIndex, segmentCount) {
+  if (segmentCount <= 1) {
+    return true;
   }
-  const scaleX = clamp(maxWidth / width, 0.01, 1);
-  context.save();
-  context.translate(x, y);
-  context.scale(scaleX, 1);
-  drawCodeTextLine(context, line, 0, 0, style, colorOverride);
-  context.restore();
-  return scaleX;
+  if (segmentIndex === segmentCount - 1) {
+    return cursorColumn >= segment.startColumn && cursorColumn <= segment.endColumn;
+  }
+  return cursorColumn >= segment.startColumn && cursorColumn < segment.endColumn;
 }
 
 function drawCodeTextObject(context, data, width, height, options = {}) {
@@ -5674,13 +5699,38 @@ function drawCodeTextObject(context, data, width, height, options = {}) {
   const contentX = paddingX + gutterWidth;
   const contentY = paddingY;
   const maxTextWidth = Math.max(1, safeWidth - contentX - paddingX);
-  const lines = visibleLines;
+  context.font = `${style.fontWeight} ${fontSize}px ${quoteFontFamily(style.fontFamily)}`;
+  const lines = visibleLines.flatMap((lineData, rawIndex) => {
+    const rawLine = gitFrame ? lineData.text : lineData;
+    const line = style.latex ? convertLatexText(rawLine) : rawLine;
+    const segments = getWrappedCodeLineSegments(context, line, maxTextWidth);
+    return segments.map((segment, segmentIndex) => ({
+      lineData,
+      rawIndex,
+      segmentIndex,
+      segmentCount: segments.length,
+      text: segment.text,
+      startColumn: segment.startColumn,
+      endColumn: segment.endColumn,
+    }));
+  });
   const viewportHeight = Math.max(1, safeHeight - paddingY * 2);
+  const activeVisualLineIndex = gitFrame
+    ? Math.max(
+        0,
+        lines.findIndex((line) => {
+          if (line.lineData.cursor) {
+            return cursorBelongsToWrappedSegment(gitFrame.cursorColumn, line, line.segmentIndex, line.segmentCount);
+          }
+          return line.rawIndex === gitFrame.activeLineIndex;
+        })
+      )
+    : 0;
   const scrollOffset = gitFrame
     ? clamp(
-        gitFrame.activeLineIndex * lineHeight - viewportHeight * 0.52,
+        activeVisualLineIndex * lineHeight - viewportHeight * 0.52,
         0,
-        Math.max(0, gitFrame.lines.length * lineHeight - viewportHeight)
+        Math.max(0, lines.length * lineHeight - viewportHeight)
       )
     : 0;
 
@@ -5713,40 +5763,43 @@ function drawCodeTextObject(context, data, width, height, options = {}) {
   context.textBaseline = "top";
   context.textAlign = "left";
   context.font = `${style.fontWeight} ${fontSize}px ${quoteFontFamily(style.fontFamily)}`;
-  for (const [index, lineData] of lines.entries()) {
+  for (const [index, visualLine] of lines.entries()) {
+    const lineData = visualLine.lineData;
     const y = contentY + index * lineHeight - scrollOffset;
     if (y + lineHeight < paddingY || y > safeHeight - paddingY) {
       continue;
     }
-    const rawLine = gitFrame ? lineData.text : lineData;
-    const line = style.latex ? convertLatexText(rawLine) : rawLine;
     if (gitFrame && lineData.changed) {
       context.fillStyle = lineData.pendingOld ? "rgba(248, 81, 73, 0.16)" : "rgba(46, 160, 67, 0.2)";
       context.fillRect(paddingX, y - 2, Math.max(1, safeWidth - paddingX * 2), lineHeight);
       context.fillStyle = lineData.pendingOld ? "#f85149" : "#3fb950";
       context.fillRect(paddingX, y - 2, 3, lineHeight);
     }
-    if (style.showLineNumbers && !style.latex) {
+    if (style.showLineNumbers && !style.latex && visualLine.segmentIndex === 0) {
       context.fillStyle = style.lineNumberColor;
       context.textAlign = "right";
-      context.fillText(String(index + 1), contentX - Math.round(fontSize * 0.8), y);
+      context.fillText(String(visualLine.rawIndex + 1), contentX - Math.round(fontSize * 0.8), y);
       context.textAlign = "left";
     }
     if (style.latex) {
       context.fillStyle = style.textColor;
-      drawFittedFillText(context, line, contentX, y, maxTextWidth);
+      context.fillText(visualLine.text, contentX, y);
     } else {
-      const fitScale = drawFittedCodeTextLine(
+      drawCodeTextLine(
         context,
-        line,
+        visualLine.text,
         contentX,
         y,
-        maxTextWidth,
         style,
         gitFrame && lineData.pendingOld ? "#fca5a5" : ""
       );
-      if (gitFrame && lineData.cursor) {
-        const cursorX = contentX + context.measureText(line.slice(0, gitFrame.cursorColumn)).width * fitScale + 1;
+      if (
+        gitFrame &&
+        lineData.cursor &&
+        cursorBelongsToWrappedSegment(gitFrame.cursorColumn, visualLine, visualLine.segmentIndex, visualLine.segmentCount)
+      ) {
+        const cursorOffsetText = visualLine.text.slice(0, Math.max(0, gitFrame.cursorColumn - visualLine.startColumn));
+        const cursorX = contentX + context.measureText(cursorOffsetText).width + 1;
         context.fillStyle = "#f8fafc";
         context.fillRect(cursorX, y + 1, 2, Math.round(lineHeight * 0.82));
       }
