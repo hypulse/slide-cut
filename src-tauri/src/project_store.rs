@@ -50,6 +50,15 @@ pub(crate) struct ImportImageBlobPayload {
     name: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ImportAudioBlobPayload {
+    project_id: String,
+    data_base64: String,
+    mime_type: Option<String>,
+    name: Option<String>,
+}
+
 #[derive(Debug, Serialize)]
 pub(crate) struct ProjectRecord {
     meta: ProjectMeta,
@@ -229,8 +238,33 @@ fn image_extension_for_mime(mime_type: Option<&str>) -> &'static str {
     }
 }
 
+fn audio_extension_for_mime(mime_type: Option<&str>) -> &'static str {
+    match mime_type.unwrap_or("").trim().to_ascii_lowercase().as_str() {
+        value if value.contains("mp4") || value.contains("aac") => "m4a",
+        value if value.contains("mpeg") || value.contains("mp3") => "mp3",
+        value if value.contains("ogg") => "ogg",
+        value if value.contains("wav") => "wav",
+        _ => "webm",
+    }
+}
+
 fn ensure_image_file_extension(name: Option<&str>, extension: &str) -> String {
     let fallback = format!("clipboard-image.{extension}");
+    let clean_name = name
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| clean_asset_file_name(Path::new(value)))
+        .unwrap_or(fallback);
+    let has_extension = Path::new(&clean_name).extension().is_some();
+    if has_extension {
+        clean_name
+    } else {
+        format!("{clean_name}.{extension}")
+    }
+}
+
+fn ensure_audio_file_extension(name: Option<&str>, extension: &str) -> String {
+    let fallback = format!("narration-recording.{extension}");
     let clean_name = name
         .map(str::trim)
         .filter(|value| !value.is_empty())
@@ -617,6 +651,38 @@ pub(crate) fn import_project_image_blob(
         name: file_name,
         width: dimensions.map(|(width, _)| width),
         height: dimensions.map(|(_, height)| height),
+    })
+}
+
+#[tauri::command]
+pub(crate) fn import_project_audio_blob(
+    app: AppHandle,
+    payload: ImportAudioBlobPayload,
+) -> Result<ProjectAsset, String> {
+    let assets_dir = project_assets_dir(&app, &payload.project_id)?;
+    fs::create_dir_all(&assets_dir).map_err(|error| error.to_string())?;
+
+    let bytes = general_purpose::STANDARD
+        .decode(payload.data_base64.trim())
+        .map_err(|error| format!("오디오 데이터를 읽지 못했습니다: {error}"))?;
+    if bytes.is_empty() {
+        return Err("오디오 데이터가 비어 있습니다.".to_string());
+    }
+
+    let extension = audio_extension_for_mime(payload.mime_type.as_deref());
+    let file_name = ensure_audio_file_extension(payload.name.as_deref(), extension);
+    let asset_name = format!("{}-{}", asset_bytes_hash_key(&bytes), file_name);
+    let destination = assets_dir.join(asset_name);
+    if !destination.exists() {
+        fs::write(&destination, bytes)
+            .map_err(|error| format!("오디오를 프로젝트 assets로 저장하지 못했습니다: {error}"))?;
+    }
+
+    Ok(ProjectAsset {
+        path: destination.to_string_lossy().to_string(),
+        name: file_name,
+        width: None,
+        height: None,
     })
 }
 

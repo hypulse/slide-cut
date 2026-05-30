@@ -35,6 +35,7 @@ const nativeApi = {
   getDefaultExportDir: () => tauriInvoke("get_default_export_dir"),
   saveAppSettings: (settings) => tauriInvoke("save_app_settings", { settings }),
   importImageBlob: (payload) => tauriInvoke("import_project_image_blob", { payload }),
+  importAudioBlob: (payload) => tauriInvoke("import_project_audio_blob", { payload }),
   readAssetDataUrl: (path) => tauriInvoke("read_asset_data_url", { path }),
   exportProjectFile: async (suggestedName, data) => {
     const path = await tauriDialog.save({
@@ -326,6 +327,7 @@ let projectSettingsState = {
   backgroundMusic: null,
 };
 let activeExportJob = null;
+let activeNoteSegmentRecording = null;
 
 const TEXT_PADDING_X = 10;
 const TEXT_PADDING_Y = 8;
@@ -1223,6 +1225,14 @@ const COLOR_PRESETS = {
 };
 const IMAGE_IMPORT_MAX_DIMENSION = 1920;
 const IMAGE_IMPORT_JPEG_QUALITY = 0.88;
+const AUDIO_RECORDING_FORMATS = [
+  { mimeType: "audio/mp4;codecs=mp4a.40.2", extension: "m4a" },
+  { mimeType: "audio/mp4", extension: "m4a" },
+  { mimeType: "audio/webm;codecs=opus", extension: "webm" },
+  { mimeType: "audio/webm", extension: "webm" },
+  { mimeType: "audio/ogg;codecs=opus", extension: "ogg" },
+  { mimeType: "audio/ogg", extension: "ogg" },
+];
 const DEFAULT_STROKE_COLOR = "#ff0000";
 const DEFAULT_STROKE_WIDTH = 4;
 const SHAPE_KINDS = new Set(["line", "arrow", "pen"]);
@@ -3669,6 +3679,17 @@ async function importImageBlobAsset(blob, name = "clipboard-image") {
   });
 }
 
+async function importAudioBlobAsset(blob, name = "narration-recording") {
+  const projectId = await ensureActiveProjectForAsset();
+  const dataBase64 = await blobToBase64(blob);
+  return nativeApi.importAudioBlob({
+    projectId,
+    dataBase64,
+    mimeType: blob.type || "",
+    name,
+  });
+}
+
 async function importImageFileAsset(path) {
   const projectId = await ensureActiveProjectForAsset();
   const importedAsset = await nativeApi.importProjectAsset(projectId, path);
@@ -4865,6 +4886,69 @@ function setNoteSegmentRowAudio(row, audio) {
   updateNoteSegmentAudioView(row);
 }
 
+function getSupportedAudioRecordingFormat() {
+  if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+    return null;
+  }
+  for (const format of AUDIO_RECORDING_FORMATS) {
+    if (!MediaRecorder.isTypeSupported || MediaRecorder.isTypeSupported(format.mimeType)) {
+      return format;
+    }
+  }
+  return { mimeType: "", extension: "webm" };
+}
+
+function getAudioRecordingExtension(mimeType = "", fallback = "webm") {
+  const value = mimeType.toLowerCase();
+  if (value.includes("mp4") || value.includes("aac")) {
+    return "m4a";
+  }
+  if (value.includes("mpeg") || value.includes("mp3")) {
+    return "mp3";
+  }
+  if (value.includes("ogg")) {
+    return "ogg";
+  }
+  if (value.includes("wav")) {
+    return "wav";
+  }
+  return fallback || "webm";
+}
+
+function createNarrationRecordingFileName(extension = "webm") {
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  return `narration-recording-${stamp}.${extension}`;
+}
+
+function updateNoteSegmentRecordingView(row) {
+  if (!row) {
+    return;
+  }
+  const recordButton = row.querySelector("[data-note-segment-audio-action='record']");
+  const isRecording = activeNoteSegmentRecording?.row === row;
+  row.classList.toggle("is-recording", isRecording);
+  if (!recordButton) {
+    return;
+  }
+  const canRecord = Boolean(getSupportedAudioRecordingFormat());
+  recordButton.disabled = !canRecord || Boolean(activeNoteSegmentRecording && !isRecording);
+  recordButton.dataset.icon = isRecording ? "square" : "mic";
+  recordButton.title = !canRecord
+    ? "Direct recording is not available in this desktop webview"
+    : isRecording
+      ? "Stop recording"
+      : "Record narration audio";
+  recordButton.setAttribute("aria-label", recordButton.title);
+  recordButton.querySelector(".button-icon")?.remove();
+  hydrateButtonIcons(recordButton.parentElement || row);
+}
+
+function updateNoteSegmentRecordingViews() {
+  for (const row of getNoteSegmentRows()) {
+    updateNoteSegmentRecordingView(row);
+  }
+}
+
 function updateNoteSegmentAudioView(row) {
   if (!row) {
     return;
@@ -4889,6 +4973,7 @@ function updateNoteSegmentAudioView(row) {
   if (clearButton) {
     clearButton.disabled = !audio;
   }
+  updateNoteSegmentRecordingView(row);
 }
 
 function collectNoteSegments() {
@@ -4948,6 +5033,9 @@ function focusNoteSegmentInput(input) {
 
 async function chooseAudioForNoteSegment(row) {
   try {
+    if (activeNoteSegmentRecording?.row === row) {
+      await stopNoteSegmentRecording({ save: false });
+    }
     const path = await nativeApi.selectAudioFile();
     if (!path || !row) {
       return;
@@ -4969,6 +5057,118 @@ async function chooseAudioForNoteSegment(row) {
   }
 }
 
+async function finishNoteSegmentRecording(recording) {
+  recording.stream.getTracks().forEach((track) => track.stop());
+  if (activeNoteSegmentRecording === recording) {
+    activeNoteSegmentRecording = null;
+  }
+  updateNoteSegmentRecordingViews();
+
+  if (!recording.save) {
+    setStatus("Narration recording discarded.");
+    return;
+  }
+  if (!recording.chunks.length) {
+    setStatus("No narration audio was recorded.");
+    return;
+  }
+
+  try {
+    const mimeType = recording.chunks[0]?.type || recording.recorder.mimeType || recording.format.mimeType || "audio/webm";
+    const blob = new Blob(recording.chunks, { type: mimeType });
+    const extension = getAudioRecordingExtension(blob.type, recording.format.extension);
+    const fileName = createNarrationRecordingFileName(extension);
+    const importedAsset = await importAudioBlobAsset(blob, fileName);
+    setNoteSegmentRowAudio(recording.row, {
+      path: importedAsset.path,
+      name: importedAsset.name || fileName,
+    });
+    syncSlideNotesFromSegments({ save: true, record: true });
+    setStatus("Narration recording saved to this line.");
+  } catch (error) {
+    setStatus(error?.message || "Failed to save narration recording.");
+  }
+}
+
+function stopNoteSegmentRecording({ save = true } = {}) {
+  const recording = activeNoteSegmentRecording;
+  if (!recording) {
+    return Promise.resolve();
+  }
+  recording.save = save;
+  return new Promise((resolve) => {
+    recording.resolve = resolve;
+    if (recording.recorder.state === "inactive") {
+      finishNoteSegmentRecording(recording).finally(resolve);
+      return;
+    }
+    recording.recorder.stop();
+  });
+}
+
+async function startNoteSegmentRecording(row) {
+  if (!row) {
+    return;
+  }
+  if (activeNoteSegmentRecording) {
+    await stopNoteSegmentRecording({ save: activeNoteSegmentRecording.row !== row });
+    if (activeNoteSegmentRecording?.row === row) {
+      return;
+    }
+  }
+
+  const format = getSupportedAudioRecordingFormat();
+  if (!format) {
+    setStatus("This desktop webview does not support direct audio recording.");
+    return;
+  }
+
+  let stream = null;
+  try {
+    if (!activeProjectId) {
+      await saveActiveNativeProject({ forceCreate: true });
+    }
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const recorder = new MediaRecorder(stream, format.mimeType ? { mimeType: format.mimeType } : undefined);
+    const recording = {
+      row,
+      stream,
+      recorder,
+      format,
+      chunks: [],
+      save: true,
+      resolve: null,
+    };
+    activeNoteSegmentRecording = recording;
+    recorder.addEventListener("dataavailable", (event) => {
+      if (event.data?.size) {
+        recording.chunks.push(event.data);
+      }
+    });
+    recorder.addEventListener("stop", () => {
+      finishNoteSegmentRecording(recording).finally(() => recording.resolve?.());
+    });
+    recorder.addEventListener("error", (event) => {
+      setStatus(event.error?.message || "Narration recording failed.");
+    });
+    updateNoteSegmentRecordingViews();
+    recorder.start();
+    setStatus("Recording narration. Press the stop button on this line when done.");
+  } catch (error) {
+    stream?.getTracks().forEach((track) => track.stop());
+    setStatus(error?.message || "Failed to start narration recording.");
+    updateNoteSegmentRecordingViews();
+  }
+}
+
+function toggleNoteSegmentRecording(row) {
+  if (activeNoteSegmentRecording?.row === row) {
+    stopNoteSegmentRecording({ save: true });
+    return;
+  }
+  startNoteSegmentRecording(row);
+}
+
 function playNoteSegmentAudio(row) {
   const audio = getNoteSegmentRowAudio(row);
   if (!audio) {
@@ -4981,6 +5181,9 @@ function playNoteSegmentAudio(row) {
 }
 
 function clearNoteSegmentAudio(row) {
+  if (activeNoteSegmentRecording?.row === row) {
+    stopNoteSegmentRecording({ save: false });
+  }
   if (!getNoteSegmentRowAudio(row)) {
     return;
   }
@@ -5022,6 +5225,15 @@ function createNoteSegmentRow(value = "") {
   attachAudioButton.dataset.noteSegmentAudioAction = "attach";
   attachAudioButton.addEventListener("click", () => chooseAudioForNoteSegment(row));
 
+  const recordAudioButton = document.createElement("button");
+  recordAudioButton.className = "note-segment-audio-button";
+  recordAudioButton.type = "button";
+  recordAudioButton.dataset.icon = "mic";
+  recordAudioButton.dataset.noteSegmentAudioAction = "record";
+  recordAudioButton.title = "Record narration audio";
+  recordAudioButton.setAttribute("aria-label", "Record narration audio");
+  recordAudioButton.addEventListener("click", () => toggleNoteSegmentRecording(row));
+
   const playAudioButton = document.createElement("button");
   playAudioButton.className = "note-segment-audio-button";
   playAudioButton.type = "button";
@@ -5040,7 +5252,7 @@ function createNoteSegmentRow(value = "") {
   clearAudioButton.setAttribute("aria-label", "Remove narration audio");
   clearAudioButton.addEventListener("click", () => clearNoteSegmentAudio(row));
 
-  audioControls.append(audioName, attachAudioButton, playAudioButton, clearAudioButton);
+  audioControls.append(audioName, attachAudioButton, recordAudioButton, playAudioButton, clearAudioButton);
 
   const removeButton = document.createElement("button");
   removeButton.className = "note-segment-remove danger";
@@ -5135,6 +5347,9 @@ function handleNoteSegmentPaste(event, input) {
 function removeNoteSegmentRow(row) {
   if (!row || !noteSegmentList) {
     return;
+  }
+  if (activeNoteSegmentRecording?.row === row) {
+    stopNoteSegmentRecording({ save: false });
   }
   const rows = getNoteSegmentRows();
   const currentInput = row.querySelector(".note-segment-input");

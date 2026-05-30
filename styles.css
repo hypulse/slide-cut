@@ -2228,7 +2228,7 @@ input[type="checkbox"] {
 
 .note-segment-audio {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) repeat(3, 24px);
+  grid-template-columns: minmax(0, 1fr) repeat(4, 24px);
   align-items: center;
   gap: 4px;
   min-width: 0;
@@ -2257,10 +2257,24 @@ input[type="checkbox"] {
   color: var(--accent-hover);
 }
 
+.note-segment-row.is-recording .note-segment-audio-name {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
 .note-segment-audio-button {
   width: 24px;
   height: 28px;
   padding: 0;
+}
+
+.note-segment-audio-button[data-note-segment-audio-action="record"]:not(:disabled) {
+  color: var(--danger);
+}
+
+.note-segment-row.is-recording .note-segment-audio-button[data-note-segment-audio-action="record"] {
+  border-color: var(--danger);
+  background: var(--danger-soft);
 }
 
 .note-segment-audio-button .button-icon {
