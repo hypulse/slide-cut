@@ -2902,6 +2902,8 @@ function statesEqual(a, b) {
 }
 
 function applyState(element, nextState) {
+  const previousWidth = Number(element.dataset.width);
+  const previousHeight = Number(element.dataset.height);
   const state = {
     x: numberOr(nextState.x, 0),
     y: numberOr(nextState.y, 0),
@@ -2930,12 +2932,22 @@ function applyState(element, nextState) {
     image.style.transform = `scale(${state.flipX ? -1 : 1}, ${state.flipY ? -1 : 1})`;
   }
 
+  const dimensionsChanged =
+    !Number.isFinite(previousWidth) ||
+    !Number.isFinite(previousHeight) ||
+    state.width !== previousWidth ||
+    state.height !== previousHeight;
+
   if (element.dataset.type === "text") {
-    renderTextObject(element);
+    if (dimensionsChanged) {
+      renderTextObject(element);
+    }
   }
 
   if (element.dataset.type === "shape") {
-    renderShapeObject(element);
+    if (dimensionsChanged) {
+      renderShapeObject(element);
+    }
   }
 
   if (element === selectedObject) {
